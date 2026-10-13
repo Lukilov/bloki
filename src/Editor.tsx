@@ -1,0 +1,520 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  BlockNoteEditor, BlockNoteSchema, createCodeBlockSpec, defaultBlockSpecs, defaultInlineContentSpecs, defaultStyleSpecs, filterSuggestionItems,
+  insertOrUpdateBlockForSlashMenu,
+} from '@blocknote/core'
+import { SideMenuExtension } from '@blocknote/core/extensions'
+import { en } from '@blocknote/core/locales'
+import {
+  BasicTextStyleButton, BlockColorsItem, BlockTypeSelect, blockTypeSelectItems, ColorStyleButton, CreateLinkButton, DragHandleMenu, FileCaptionButton, FileReplaceButton,
+  FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, RemoveBlockItem, SideMenu, SideMenuController, SuggestionMenuController,
+  useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState, type DefaultReactSuggestionItem,
+} from '@blocknote/react'
+import { BlockNoteView } from '@blocknote/mantine'
+import { withCollaboration } from '@blocknote/core/yjs'
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket'
+import { codeBlockOptions, syntaxHighlighter } from '@blocknote/code-block'
+import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column'
+import {
+  AtSign, Bookmark, CalendarDays, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Link2,
+  ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
+  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting,
+} from 'lucide-react'
+import '@blocknote/core/fonts/inter.css'
+import '@blocknote/mantine/style.css'
+import { api, can, type Comment, type Page, type ViewType } from './api'
+import { iconText, label, useStore } from './store'
+import { newDatabase } from './Database'
+import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate } from './blocks'
+import { copyText, isMac, mod, Popover, shift } from './ui'
+import { pageUrl } from './pageActions'
+
+const base = BlockNoteSchema.create({
+  blockSpecs: {
+    ...defaultBlockSpecs, codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), database: InlineDatabase(), page: PageLink(),
+    toc: TableOfContents(), breadcrumb: Breadcrumb(), embed: Embed(), equation: Equation(),
+  },
+  inlineContentSpecs: { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention },
+  styleSpecs: { ...defaultStyleSpecs, comment: CommentMark },
+})
+export const schema = withMultiColumn(base)
+type Editor = typeof schema.BlockNoteEditor
+type AnyBlock = { id: string; type: string; props: Record<string, unknown>; content?: unknown; children: AnyBlock[] }
+
+/* Notion's names, groups and descriptions for the built-in blocks. */
+const sm = en.slash_menu
+const notionSlash = {
+  ...sm,
+  paragraph: { ...sm.paragraph, title: 'Text', subtext: 'Just start writing with plain text.', group: 'Basic blocks' },
+  check_list: { ...sm.check_list, title: 'To-do list', subtext: 'Track tasks with a to-do list.', aliases: ['todo', 'checkbox', 'task', '[]'], group: 'Basic blocks' },
+  heading: { ...sm.heading, subtext: 'Big section heading.', group: 'Basic blocks', aliases: ['h1', '#'] },
+  heading_2: { ...sm.heading_2, subtext: 'Medium section heading.', group: 'Basic blocks', aliases: ['h2', '##'] },
+  heading_3: { ...sm.heading_3, subtext: 'Small section heading.', group: 'Basic blocks', aliases: ['h3', '###'] },
+  table: { ...sm.table, title: 'Table', subtext: 'Add simple tabular content to your page.', group: 'Basic blocks' },
+  bullet_list: { ...sm.bullet_list, title: 'Bulleted list', subtext: 'Create a simple bulleted list.', group: 'Basic blocks', aliases: ['ul', '-'] },
+  numbered_list: { ...sm.numbered_list, title: 'Numbered list', subtext: 'Create a list with numbering.', group: 'Basic blocks', aliases: ['ol', '1.'] },
+  toggle_list: { ...sm.toggle_list, title: 'Toggle list', subtext: 'Toggles can hide and show content inside.', group: 'Basic blocks', aliases: ['>'] },
+  quote: { ...sm.quote, subtext: 'Capture a quote.', group: 'Basic blocks', aliases: ['"', 'blockquote'] },
+  divider: { ...sm.divider, subtext: 'Visually divide blocks.', group: 'Basic blocks', aliases: ['---', 'hr', 'line'] },
+  image: { ...sm.image, subtext: 'Upload or embed with a link.', group: 'Media' },
+  video: { ...sm.video, subtext: 'Embed from YouTube, Vimeo, or upload.', group: 'Media' },
+  audio: { ...sm.audio, subtext: 'Embed audio or upload.', group: 'Media' },
+  code_block: { ...sm.code_block, title: 'Code', subtext: 'Capture a code snippet.', group: 'Media', aliases: ['```', 'snippet'] },
+  file: { ...sm.file, subtext: 'Upload or embed with a link.', group: 'Media' },
+  toggle_heading: { ...sm.toggle_heading, title: 'Toggle heading 1', subtext: 'Hide content inside a large heading.', group: 'Advanced blocks' },
+  toggle_heading_2: { ...sm.toggle_heading_2, title: 'Toggle heading 2', subtext: 'Hide content inside a medium heading.', group: 'Advanced blocks' },
+  toggle_heading_3: { ...sm.toggle_heading_3, title: 'Toggle heading 3', subtext: 'Hide content inside a small heading.', group: 'Advanced blocks' },
+  emoji: { ...sm.emoji, subtext: 'Search for an emoji to place in text.', group: 'Inline' },
+}
+const dictionary = {
+  ...en,
+  slash_menu: notionSlash,
+  multi_column: multiColumnLocales.en,
+  placeholders: { ...en.placeholders, default: "Write something, or press '/' for commands…", heading: 'Heading', toggleListItem: 'Toggle', bulletListItem: 'List', numberedListItem: 'List', checkListItem: 'To-do', quote: 'Empty quote' },
+}
+const GROUPS = ['Basic blocks', 'Media', 'Database', 'Advanced blocks', 'Inline']
+const ORDER = ['Text', 'Page', 'To-do list', 'Heading 1', 'Heading 2', 'Heading 3', 'Table', 'Bulleted list', 'Numbered list', 'Toggle list', 'Quote', 'Divider', 'Link to page', 'Callout',
+  'Image', 'Bookmark', 'Video', 'Audio', 'Code', 'File', 'Embed']
+/* Notion shows the markdown shortcut next to each block. */
+const HINTS: Record<string, string> = {
+  'Heading 1': '#', 'Heading 2': '##', 'Heading 3': '###', 'To-do list': '[]', 'Bulleted list': '-', 'Numbered list': '1.', 'Toggle list': '>', Quote: '"', Divider: '---',
+  Code: '```', 'Toggle heading 1': '>#', 'Toggle heading 2': '>##', 'Toggle heading 3': '>###', 'Mention a person': '@', 'Mention a page': '[[', 'Block equation': '$$',
+}
+const DROP = new Set(['Heading 4', 'Heading 5', 'Heading 6', 'Page Break'])
+
+/** What the editor needs from the page around it. */
+type Ctx = { page: Page; onComment?: (blockId: string, quote: string, id: string) => void; moveBlock: (block: AnyBlock, anchor: HTMLElement) => void }
+const EditorCtx = createContext<Ctx | null>(null)
+
+const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: Record<string, unknown> }[] = [
+  { label: 'Text', icon: <Type size={16} />, type: 'paragraph' },
+  { label: 'Heading 1', icon: <Heading1 size={16} />, type: 'heading', props: { level: 1, isToggleable: false } },
+  { label: 'Heading 2', icon: <Heading2 size={16} />, type: 'heading', props: { level: 2, isToggleable: false } },
+  { label: 'Heading 3', icon: <Heading3 size={16} />, type: 'heading', props: { level: 3, isToggleable: false } },
+  { label: 'To-do list', icon: <ListTodo size={16} />, type: 'checkListItem' },
+  { label: 'Bulleted list', icon: <List size={16} />, type: 'bulletListItem' },
+  { label: 'Numbered list', icon: <ListOrdered size={16} />, type: 'numberedListItem' },
+  { label: 'Toggle list', icon: <ChevronRight size={16} />, type: 'toggleListItem' },
+  { label: 'Code', icon: <Code2 size={16} />, type: 'codeBlock' },
+  { label: 'Quote', icon: <Quote size={16} />, type: 'quote' },
+  { label: 'Callout', icon: <StickyNote size={16} />, type: 'callout' },
+  { label: 'Toggle heading 1', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 1, isToggleable: true } },
+  { label: 'Toggle heading 2', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 2, isToggleable: true } },
+  { label: 'Toggle heading 3', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 3, isToggleable: true } },
+]
+
+const stripIds = (b: AnyBlock): AnyBlock => ({ ...b, id: undefined as never, children: (b.children ?? []).map(stripIds) })
+function duplicateBlock(editor: Editor, block: AnyBlock) {
+  editor.insertBlocks([stripIds(block) as never], block.id, 'after')
+}
+const plain = (content: unknown) => Array.isArray(content) ? content.map(c => (c as { text?: string }).text ?? '').join('') : ''
+
+function commentOnBlock(editor: Editor, block: AnyBlock, ctx: Ctx) {
+  const id = crypto.randomUUID()
+  // Mark the whole block's text, as Notion does when commenting from the block menu.
+  const content = (block.content as { type: string; styles?: object }[]).map(c => (c.type === 'text' ? { ...c, styles: { ...c.styles, comment: id } } : c))
+  editor.updateBlock(block.id, { content } as never)
+  ctx.onComment?.(block.id, plain(block.content).slice(0, 300), id)
+}
+
+/** The ⋮⋮ block menu, as in Notion. */
+function BlockMenu() {
+  const C = useComponentsContext()!
+  const editor = useBlockNoteEditor() as unknown as Editor
+  const ctx = useContext(EditorCtx)!
+  const block = useExtensionState(SideMenuExtension, { editor: editor as never, selector: (s: { block?: unknown } | undefined) => s?.block }) as AnyBlock | undefined
+  if (!block) return null
+  const Item = C.Generic.Menu.Item
+  const hasText = Array.isArray(block.content)
+  // Notion heads the menu with the block's kind ("Text", "Heading 1"…).
+  const kind = TURN_INTO.find(t => t.type === block.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable)))?.label
+    ?? block.type.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())
+  return (
+    <DragHandleMenu>
+      <C.Generic.Menu.Label>{kind}</C.Generic.Menu.Label>
+      {hasText && editor.isEditable && (
+        <C.Generic.Menu.Root sub position="right" portalElement={null}>
+          <C.Generic.Menu.Trigger sub><Item className="bn-menu-item" subTrigger icon={<Repeat2 size={16} />}>Turn into</Item></C.Generic.Menu.Trigger>
+          <C.Generic.Menu.Dropdown sub className="bn-menu-dropdown">
+            {TURN_INTO.map(t => (
+              <Item key={t.label} className="bn-menu-item" icon={t.icon}
+                checked={block.type === t.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable))}
+                onClick={() => editor.updateBlock(block.id, { type: t.type, props: t.props ?? {} } as never)}>{t.label}</Item>
+            ))}
+          </C.Generic.Menu.Dropdown>
+        </C.Generic.Menu.Root>
+      )}
+      {editor.isEditable && <BlockColorsItem><span className="bn-with-icon"><Palette size={16} /> Color</span></BlockColorsItem>}
+      <C.Generic.Menu.Divider />
+      <Item className="bn-menu-item" icon={<Link2 size={16} />} onClick={() => copyText(`${pageUrl(ctx.page.id)}/b/${block.id}`)}>Copy link to block <span className="bn-hint">{isMac ? '⌘⌃L' : 'Ctrl+Alt+L'}</span></Item>
+      {editor.isEditable && <Item className="bn-menu-item" icon={<Copy size={16} />} onClick={() => duplicateBlock(editor, block)}>Duplicate <span className="bn-hint">{mod}D</span></Item>}
+      {editor.isEditable && (
+        <Item className="bn-menu-item" icon={<CornerUpRight size={16} />} onClick={() => ctx.moveBlock(block, document.querySelector(`[data-id="${block.id}"]`) as HTMLElement)}>Move to <span className="bn-hint">{mod}{shift}P</span></Item>
+      )}
+      {editor.isEditable && <RemoveBlockItem><span className="bn-delete"><Trash2 size={16} /> Delete <span className="bn-hint">Del</span></span></RemoveBlockItem>}
+      {ctx.onComment && hasText && (
+        <>
+          <C.Generic.Menu.Divider />
+          <Item className="bn-menu-item" icon={<MessageSquare size={16} />} onClick={() => commentOnBlock(editor, block, ctx)}>Comment <span className="bn-hint">{mod}{shift}M</span></Item>
+        </>
+      )}
+    </DragHandleMenu>
+  )
+}
+
+function CommentButton() {
+  const C = useComponentsContext()!
+  const editor = useBlockNoteEditor() as unknown as Editor
+  const ctx = useContext(EditorCtx)
+  if (!ctx?.onComment || !selectedText(editor)) return null
+  return (
+    <C.FormattingToolbar.Button mainTooltip="Comment" secondaryTooltip={`${mod}${shift}M`}
+      onClick={() => {
+        const quote = editor.getSelectedText().slice(0, 300)
+        const block = editor.getTextCursorPosition().block
+        const id = crypto.randomUUID()
+        editor.addStyles({ comment: id } as never)
+        ctx.onComment!(block.id, quote, id)
+      }}><span className="bn-with-icon"><MessageSquare size={20} /> Comment</span></C.FormattingToolbar.Button>
+  )
+}
+
+const TYPE_NAMES: Record<string, string> = { Paragraph: 'Text', 'Bullet List': 'Bulleted list', 'Numbered List': 'Numbered list', 'Check List': 'To-do list', 'Toggle List': 'Toggle list', 'Code Block': 'Code' }
+/** Text styles and comments only apply when the selection covers blocks with text (not a whole database or image). */
+const selectedText = (editor: Editor) => (editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block]).some(b => Array.isArray(b.content))
+
+function ClearFormatButton() {
+  const C = useComponentsContext()!
+  const editor = useBlockNoteEditor() as unknown as Editor
+  if (!editor.isEditable || !selectedText(editor)) return null
+  return <C.FormattingToolbar.Button mainTooltip="Clear format" label="Clear format" icon={<RemoveFormatting size={20} />}
+    onClick={() => editor.removeStyles({ bold: true, italic: true, underline: true, strike: true, code: true, textColor: 'default', backgroundColor: 'default' } as never)} />
+}
+
+/** The selection menu, laid out like Notion's: block type, two rows of styles, then Comment, with lines between. */
+function Toolbar() {
+  const editor = useBlockNoteEditor() as unknown as Editor
+  const blocks = editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block]
+  // A selected database (or other block without text or a file) gets no menu, as in Notion.
+  if (!selectedText(editor) && !blocks.some(b => ['image', 'file', 'video', 'audio'].includes(b.type))) return null
+  return (
+    <FormattingToolbar>
+      <BlockTypeSelect key="type" items={blockTypeSelectItems(dictionary as never).filter(i => !['Heading 4', 'Heading 5', 'Heading 6'].includes(i.name)).map(i => ({ ...i, name: TYPE_NAMES[i.name] ?? i.name }))} />
+      <FileCaptionButton key="caption" />
+      <FileReplaceButton key="replace" />
+      <div key="sep1" className="tb-sep" />
+      <ColorStyleButton key="color" />
+      <BasicTextStyleButton key="bold" basicTextStyle="bold" />
+      <BasicTextStyleButton key="italic" basicTextStyle="italic" />
+      <BasicTextStyleButton key="underline" basicTextStyle="underline" />
+      <ClearFormatButton key="clear" />
+      <CreateLinkButton key="link" />
+      <BasicTextStyleButton key="strike" basicTextStyle="strike" />
+      <BasicTextStyleButton key="code" basicTextStyle="code" />
+      <div key="sep2" className="tb-sep" />
+      <CommentButton key="comment" />
+    </FormattingToolbar>
+  )
+}
+
+/* Notion's text and background colours for blocks and highlights. */
+const lightTheme = {
+  fontFamily: 'inherit', borderRadius: 6,
+  colors: {
+    editor: { text: 'rgb(44, 44, 43)', background: 'transparent' }, menu: { text: 'rgb(44, 44, 43)', background: '#ffffff' },
+    tooltip: { text: '#ffffff', background: 'rgb(15, 15, 15)' }, hovered: { text: 'rgb(44, 44, 43)', background: 'rgba(33, 27, 23, 0.051)' },
+    selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(55, 53, 47, 0.35)', background: 'transparent' },
+    shadow: 'rgba(15, 15, 15, 0.1)', border: 'rgba(28, 19, 1, 0.11)', sideMenu: 'rgba(55, 53, 47, 0.35)',
+    highlights: {
+      gray: { text: '#787774', background: '#f1f1ef' }, brown: { text: '#9f6b53', background: '#f4eeee' }, orange: { text: '#d9730d', background: '#fbecdd' },
+      yellow: { text: '#cb912f', background: '#fbf3db' }, green: { text: '#448361', background: '#edf3ec' }, blue: { text: '#337ea9', background: '#e7f3f8' },
+      purple: { text: '#9065b0', background: '#f6f3f9' }, pink: { text: '#c14c8a', background: '#faf1f5' }, red: { text: '#d44c47', background: '#fdebec' },
+    },
+  },
+}
+const darkTheme = {
+  fontFamily: 'inherit', borderRadius: 6,
+  colors: {
+    editor: { text: 'rgb(240, 239, 237)', background: 'transparent' }, menu: { text: 'rgb(240, 239, 237)', background: '#252525' },
+    tooltip: { text: 'rgba(255, 255, 255, 0.9)', background: '#3f3f3f' }, hovered: { text: 'rgb(240, 239, 237)', background: 'rgba(255, 255, 255, 0.055)' },
+    selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(255, 255, 255, 0.28)', background: 'transparent' },
+    shadow: 'rgba(0, 0, 0, 0.4)', border: 'rgba(255, 255, 235, 0.1)', sideMenu: 'rgba(255, 255, 255, 0.28)',
+    highlights: {
+      gray: { text: '#9b9b9b', background: '#2f2f2f' }, brown: { text: '#ba856f', background: '#4a3228' }, orange: { text: '#c77d48', background: '#5c3b23' },
+      yellow: { text: '#ca984d', background: '#564328' }, green: { text: '#529e72', background: '#243d30' }, blue: { text: '#379ad3', background: '#143a4e' },
+      purple: { text: '#9d68d3', background: '#3c2d49' }, pink: { text: '#d15796', background: '#4e2c3c' }, red: { text: '#df5452', background: '#522e2a' },
+    },
+  },
+}
+const viewIcon: Record<ViewType, React.JSX.Element> = { table: <Table size={18} />, board: <Kanban size={18} />, gallery: <LayoutGrid size={18} />, list: <ListIcon size={18} />, calendar: <Calendar size={18} />, timeline: <GanttChart size={18} /> }
+
+const COLLAB_COLORS = ['#e03e3e', '#d9730d', '#cb912f', '#448361', '#337ea9', '#9065b0', '#c14c8a', '#a27763']
+const colorFor = (s: string) => COLLAB_COLORS[[...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLLAB_COLORS.length]
+
+/** One shared Yjs document per open page, synced through the server. */
+function useCollab(pageId: string, enabled: boolean, onReset?: () => void) {
+  const session = useMemo(() => {
+    if (!enabled) return null
+    const doc = new Y.Doc()
+    const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/collab`
+    const provider = new WebsocketProvider(url, pageId, doc, { connect: true })
+    const state = { seed: false, synced: false }
+    // Message 100: the server asks this editor to fill an empty shared doc from the saved page.
+    ;(provider as unknown as { messageHandlers: unknown[] }).messageHandlers[100] = () => { state.seed = true }
+    return { doc, provider, state }
+  }, [pageId, enabled])
+  useEffect(() => {
+    if (!session) return
+    const onClose = (e: CloseEvent | null) => { if (e?.code === 4000) onReset?.() }
+    session.provider.on('connection-close', onClose)
+    return () => { session.provider.off('connection-close', onClose); session.provider.destroy(); session.doc.destroy() }
+  }, [session, onReset])
+  return session
+}
+
+export function PageEditor({ page, dark, editable, onComment, comments = [], openComments, collab = false, onReset }: {
+  page: Page; dark: boolean; editable: boolean
+  onComment?: (blockId: string, quote: string, id: string) => void
+  comments?: Comment[]; openComments?: () => void
+  collab?: boolean; onReset?: () => void
+}) {
+  const store = useStore()
+  const storeRef = useRef(store)
+  storeRef.current = store
+  const timer = useRef<number | undefined>(undefined)
+  const [moving, setMoving] = useState<{ block: AnyBlock; anchor: HTMLElement } | null>(null)
+  const live = useCollab(page.id, collab, onReset)
+  const [synced, setSynced] = useState(!live)
+
+  const opts = { schema, dictionary, extensions: [syntaxHighlighter], dropCursor: { ...multiColumnDropCursor }, uploadFile: api.upload }
+  const editor = useCreateBlockNote((live
+    ? withCollaboration({
+        ...opts,
+        collaboration: {
+          fragment: live.doc.getXmlFragment('document-store'), provider: live.provider,
+          user: { name: store.me?.user.name ?? 'Guest', color: colorFor(store.me?.user.id ?? 'guest') }, showCursorLabels: 'activity',
+        },
+      } as never)
+    : { ...opts, initialContent: page.content?.length ? page.content : undefined }) as never, [page.id, live]) as unknown as Editor
+
+  // Once synced, fill an empty shared doc from the saved page (only the editor the server picked does this).
+  useEffect(() => {
+    if (!live) return
+    const onSync = (isSynced: boolean) => {
+      if (!isSynced) return
+      setSynced(true)
+      if (live.state.seed && !live.doc.getXmlFragment('document-store').length && page.content?.length) {
+        live.state.seed = false
+        editor.replaceBlocks(editor.document, page.content as never)
+      }
+    }
+    if (live.provider.synced) onSync(true)
+    live.provider.on('sync', onSync)
+    return () => live.provider.off('sync', onSync)
+  }, [live, editor, page.content])
+
+  // Flush the pending save when leaving the page.
+  const flush = useRef<() => void>(() => {})
+  useEffect(() => () => flush.current(), [page.id])
+
+  // Undo/redo from the page menu, and jumping to a linked block.
+  useEffect(() => {
+    if (!editable) return
+    const undo = () => editor.undo()
+    const redo = () => editor.redo()
+    addEventListener('bloki:undo', undo)
+    addEventListener('bloki:redo', redo)
+    return () => { removeEventListener('bloki:undo', undo); removeEventListener('bloki:redo', redo) }
+  }, [editor, editable])
+  useEffect(() => {
+    const blockId = location.hash.split('/b/')[1]
+    if (!blockId) return
+    const t = setTimeout(() => {
+      const el = document.querySelector(`[data-id="${CSS.escape(blockId)}"]`)
+      el?.scrollIntoView({ block: 'center' })
+      el?.classList.add('flash')
+    }, 300)
+    return () => clearTimeout(t)
+  }, [page.id])
+
+  const onChange = (_: unknown, ctx?: { getChanges: () => { source: { type: string } }[] }) => {
+    if (!editable) return
+    // In a live session, the person who made a change saves the page; others don't echo it.
+    if (live && ctx && ctx.getChanges().every(c => c.source.type === 'yjs-remote')) return
+    clearTimeout(timer.current)
+    const save = () => {
+      clearTimeout(timer.current); flush.current = () => {}
+      api.update(page.id, { content: editor.document as unknown[], ...(live ? { fromCollab: true } : {}) } as Partial<Page>).catch(e => storeRef.current.setError(e.message))
+    }
+    flush.current = save
+    timer.current = window.setTimeout(save, live ? 800 : 400)
+  }
+
+  const slashItems = useCallback((e: Editor): DefaultReactSuggestionItem[] => {
+    const s = storeRef.current
+    const insertDb = async (view: ViewType, inline: boolean) => {
+      const db = await newDatabase(s, page.id, '', 'private', view)
+      if (inline) insertOrUpdateBlockForSlashMenu(e, { type: 'database', props: { dbId: db.id } } as never)
+      else { insertOrUpdateBlockForSlashMenu(e, { type: 'page', props: { pageId: db.id } } as never); s.go(db.id) }
+    }
+    const insert = (block: object) => () => { insertOrUpdateBlockForSlashMenu(e, block as never) }
+    const custom: DefaultReactSuggestionItem[] = [
+      { title: 'Page', subtext: 'Embed a sub-page inside this page.', group: 'Basic blocks', aliases: ['subpage', 'new page'], icon: <FileText size={18} />,
+        onItemClick: async () => { const child = await s.create({ parent_id: page.id }, false); insertOrUpdateBlockForSlashMenu(e, { type: 'page', props: { pageId: child.id } } as never); s.go(child.id) } },
+      { title: 'Link to page', subtext: 'Link to an existing page.', group: 'Basic blocks', aliases: ['link', 'page link'], icon: <Link2 size={18} />,
+        onItemClick: () => { e.insertInlineContent(['[['] as never) } },
+      { title: 'Callout', subtext: 'Make writing stand out.', group: 'Basic blocks', aliases: ['note', 'tip', 'info'], icon: <StickyNote size={18} />, onItemClick: insert({ type: 'callout' }) },
+      { title: 'Bookmark', subtext: 'Save a link as a visual bookmark.', group: 'Media', aliases: ['link', 'url'], icon: <Bookmark size={18} />, onItemClick: insert({ type: 'embed', props: { mode: 'bookmark' } }) },
+      { title: 'Embed', subtext: 'For YouTube, Vimeo, Figma, Loom, Spotify, Maps and more.', group: 'Media', aliases: ['iframe', 'youtube'], icon: <Globe size={18} />, onItemClick: insert({ type: 'embed', props: { mode: 'embed' } }) },
+      ...(['table', 'board', 'gallery', 'list', 'calendar', 'timeline'] as ViewType[]).map(v => ({
+        title: `${v[0].toUpperCase() + v.slice(1)} view`, subtext: `Add a database in ${v} view.`, group: 'Database', aliases: ['database', 'db', v === 'board' ? 'kanban' : v], icon: viewIcon[v],
+        onItemClick: () => { insertDb(v, true) },
+      })),
+      { title: 'Database - Full page', subtext: 'Add a database as a sub-page.', group: 'Database', aliases: ['database', 'db', 'full page'], icon: <Table size={18} />, onItemClick: () => { insertDb('table', false) } },
+      { title: 'Table of contents', subtext: 'Show an outline of your page.', group: 'Advanced blocks', aliases: ['toc', 'outline'], icon: <ListTree size={18} />, onItemClick: insert({ type: 'toc' }) },
+      { title: 'Block equation', subtext: 'Display a standalone math equation.', group: 'Advanced blocks', aliases: ['math', 'latex', 'tex', 'formula'], icon: <Sigma size={18} />, onItemClick: insert({ type: 'equation' }) },
+      { title: 'Breadcrumb', subtext: 'Show where this page sits.', group: 'Advanced blocks', aliases: ['path', 'location'], icon: <Navigation size={18} />, onItemClick: insert({ type: 'breadcrumb' }) },
+      ...getMultiColumnSlashMenuItems(e as never).map((i, n) => ({ ...i, group: 'Advanced blocks', icon: [<Columns2 size={18} />, <Columns3 size={18} />, <Columns4 size={18} />][n] ?? <Columns4 size={18} /> })),
+      { title: 'Mention a person', subtext: 'Ping someone so they get a notification.', group: 'Inline', aliases: ['@', 'person', 'user'], icon: <AtSign size={18} />, onItemClick: () => e.insertInlineContent(['@'] as never) },
+      { title: 'Mention a page', subtext: 'Link to a page inline.', group: 'Inline', aliases: ['@', 'page'], icon: <FileText size={18} />, onItemClick: () => e.insertInlineContent(['[['] as never) },
+      { title: 'Date or reminder', subtext: 'Insert a date mention.', group: 'Inline', aliases: ['date', 'today', 'reminder'], icon: <CalendarDays size={18} />,
+        onItemClick: () => e.insertInlineContent([{ type: 'date', props: { date: new Date().toISOString().slice(0, 10) } }, ' '] as never) },
+    ]
+    const defaults = getDefaultReactSlashMenuItems(e as never).filter(i => !DROP.has(i.title))
+      .map(i => (i.group === 'Others' ? { ...i, group: 'Inline', icon: i.icon ?? <Smile size={18} /> } : i))
+    // Notion's group and item order.
+    const rank = (i: DefaultReactSuggestionItem) => { const n = ORDER.indexOf(i.title); return n < 0 ? 999 : n }
+    return [...defaults, ...custom]
+      .sort((a, b) => GROUPS.indexOf(a.group ?? '') - GROUPS.indexOf(b.group ?? '') || rank(a) - rank(b))
+      .map(i => ({ ...i, badge: HINTS[i.title] }))
+  }, [page.id])
+
+  const mentionItems = (q: string, pagesOnly = false): DefaultReactSuggestionItem[] => {
+    const s = storeRef.current
+    const ql = q.toLowerCase()
+    const persons = pagesOnly ? [] : [...s.people.values()].filter(p => p.name.toLowerCase().includes(ql)).slice(0, 5)
+      .map(p => ({ title: p.name, subtext: p.email, group: 'People', icon: <span className="avatar">{p.name[0]}</span>, onItemClick: () => editor.insertInlineContent([{ type: 'person', props: { userId: p.id } }, ' '] as never) }))
+    const iso = (d: number) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10)
+    const parsed = q && !Number.isNaN(Date.parse(q)) ? new Date(Date.parse(q)).toISOString().slice(0, 10) : null
+    const dates = pagesOnly ? [] : [...(parsed ? [parsed] : []), iso(0), iso(1), iso(-1)]
+      .filter((d, i, a) => a.indexOf(d) === i && (parsed === d || !ql || formatMentionDate(d).toLowerCase().includes(ql)))
+      .map(d => ({ title: formatMentionDate(d), subtext: d, group: 'Date', icon: <CalendarDays size={16} />, onItemClick: () => editor.insertInlineContent([{ type: 'date', props: { date: d } }, ' '] as never) }))
+    const pages = s.pages.filter(p => !p.trashed && p.id !== page.id && label(p).toLowerCase().includes(ql)).slice(0, 8)
+      .map(p => ({ title: `${iconText(p)} ${label(p)}`, group: 'Link to page', onItemClick: () => editor.insertInlineContent([{ type: 'mention', props: { pageId: p.id } }, ' '] as never) }))
+    const create = can(page, 'edit') ? [{
+      title: `New “${q || 'Untitled'}” sub-page`, group: 'New page', icon: <FileText size={16} />,
+      onItemClick: async () => { const child = await s.create({ parent_id: page.id, title: q }, false); editor.insertInlineContent([{ type: 'mention', props: { pageId: child.id } }, ' '] as never) },
+    }] : []
+    return [...persons, ...dates, ...pages, ...create]
+  }
+
+  const openThreads = useMemo(() => comments.filter(c => !c.thread_id && !c.resolved && c.block_id).map(c => c.id), [comments])
+  const moveBlock = useCallback((block: AnyBlock, anchor: HTMLElement) => setMoving({ block, anchor }), [])
+  const ctx = useMemo<Ctx>(() => ({ page, onComment, moveBlock }), [page, onComment, moveBlock])
+
+  return (
+    <EditorCtx.Provider value={ctx}>
+      {/* Highlight text with an open discussion; resolved ones fade back to plain text. Ids are server-checked UUIDs. */}
+      <style>{openThreads.map(id => `.comment-mark[data-thread="${id}"]{background:var(--comment-bg);border-bottom:2px solid var(--comment-line);cursor:pointer}`).join('\n')}</style>
+      <div className="editor-wrap" onClick={e => {
+        const mark = (e.target as HTMLElement).closest('.comment-mark') as HTMLElement | null
+        if (mark && openThreads.includes(mark.dataset.thread ?? '')) openComments?.()
+      }} onKeyDown={e => {
+        const m = e.metaKey || e.ctrlKey
+        if (m && e.shiftKey && e.key.toLowerCase() === 'm' && onComment) {
+          e.preventDefault(); e.stopPropagation()
+          const block = editor.getTextCursorPosition().block as unknown as AnyBlock
+          const quote = editor.getSelectedText()
+          if (quote) { const id = crypto.randomUUID(); editor.addStyles({ comment: id } as never); onComment(block.id, quote.slice(0, 300), id) }
+          else commentOnBlock(editor, block, ctx)
+        }
+        if (m && !e.shiftKey && e.key.toLowerCase() === 'd' && editable) {
+          e.preventDefault()
+          duplicateBlock(editor, editor.getTextCursorPosition().block as unknown as AnyBlock)
+        }
+        // Notion's block-link shortcut: ⌘⌃L on a Mac (⌘⌥L belongs to the desktop app's "copy link with title").
+        if (m && (isMac ? e.ctrlKey && e.metaKey : e.altKey) && e.code === 'KeyL') {
+          e.preventDefault()
+          copyText(`${pageUrl(page.id)}/b/${editor.getTextCursorPosition().block.id}`)
+          storeRef.current.toast('Copied link to block')
+        }
+      }}>
+        {live && !synced && <div className="sync-note muted small">Connecting…</div>}
+        <BlockNoteView editor={editor as never} theme={dark ? darkTheme : lightTheme} editable={editable && (!live || synced)} onChange={onChange} slashMenu={false} sideMenu={false} formattingToolbar={false}>
+          <SideMenuController sideMenu={props => <SideMenu {...props} dragHandleMenu={BlockMenu} />} />
+          <FormattingToolbarController formattingToolbar={Toolbar} floatingUIOptions={{ useFloatingOptions: { placement: 'bottom-start' } }} />
+          <SuggestionMenuController triggerCharacter="/" getItems={async q => filterSuggestionItems(slashItems(editor), q)} />
+          <SuggestionMenuController triggerCharacter="@" getItems={async q => mentionItems(q)} />
+          <SuggestionMenuController triggerCharacter="[[" getItems={async q => mentionItems(q, true)} />
+        </BlockNoteView>
+      </div>
+      {moving && (
+        <Popover anchor={moving.anchor} onClose={() => setMoving(null)} className="menu-pop" width={320}>
+          <BlockMoveTo page={page} close={() => setMoving(null)} onPick={async target => {
+            // Append the block to the other page, then remove it here.
+            const dest = await api.get(target)
+            await api.update(target, { content: [...(dest.content ?? []), stripIds(moving.block)] })
+            editor.removeBlocks([moving.block.id])
+            storeRef.current.toast(`Moved to ${label(dest)}`)
+            setMoving(null)
+          }} />
+        </Popover>
+      )}
+    </EditorCtx.Provider>
+  )
+}
+
+function BlockMoveTo({ page, onPick, close }: { page: Page; onPick: (id: string) => void; close: () => void }) {
+  const store = useStore()
+  const [q, setQ] = useState('')
+  const targets = store.pages.filter(p => p.id !== page.id && p.kind === 'page' && !p.trashed && can(p, 'edit') && label(p).toLowerCase().includes(q.toLowerCase())).slice(0, 30)
+  return (
+    <div className="move-to">
+      <input autoFocus className="menu-filter" placeholder="Move block to…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Escape' && close()} />
+      {targets.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p.id)}><span className="menu-icon">{iconText(p)}</span><span className="menu-label">{label(p)}</span></button>)}
+      {!targets.length && <div className="menu-note">No results</div>}
+    </div>
+  )
+}
+
+/* ---------- Export / import ---------- */
+
+type Lookup = (id: string) => string
+/** Replace blocks and inline content that only make sense inside the app with plain equivalents. */
+function exportable(blocks: AnyBlock[], title: Lookup): AnyBlock[] {
+  const inline = (content: unknown) => Array.isArray(content) ? content.map((c: { type?: string; props?: Record<string, string>; text?: string; styles?: Record<string, unknown> }) =>
+    c.type === 'mention' ? { type: 'text', text: title(c.props!.pageId), styles: {} }
+      : c.type === 'person' ? { type: 'text', text: '@person', styles: {} }
+      : c.type === 'date' ? { type: 'text', text: `@${formatMentionDate(c.props!.date)}`, styles: {} }
+      : c.type === 'text' ? { ...c, styles: Object.fromEntries(Object.entries(c.styles ?? {}).filter(([k]) => k !== 'comment')) }
+      : c) : content
+  return blocks.flatMap((b): AnyBlock[] => {
+    const kids = exportable(b.children ?? [], title)
+    const p = (text: string): AnyBlock => ({ id: b.id, type: 'paragraph', props: {}, content: [{ type: 'text', text, styles: {} }], children: kids })
+    switch (b.type) {
+      case 'page': case 'database': return [p(`📄 ${title(String(b.props.pageId ?? b.props.dbId))}`)]
+      case 'toc': case 'breadcrumb': return []
+      case 'embed': return b.props.url ? [p(String(b.props.url))] : []
+      case 'equation': return [{ id: b.id, type: 'codeBlock', props: { language: 'latex' }, content: [{ type: 'text', text: String(b.props.latex), styles: {} }], children: [] }]
+      case 'callout': return [{ ...b, type: 'quote', props: {}, content: [{ type: 'text', text: `${b.props.icon} `, styles: {} }, ...(inline(b.content) as unknown[])], children: kids }]
+      case 'columnList': return (b.children ?? []).flatMap(col => exportable(col.children ?? [], title))
+      default: return [{ ...b, content: inline(b.content), children: kids }]
+    }
+  })
+}
+
+let detached: BlockNoteEditor | undefined
+const converter = () => (detached ??= BlockNoteEditor.create())
+const noTitles: Lookup = () => 'Page'
+
+export function toMarkdown(page: Page, title: Lookup = noTitles) {
+  return `# ${label(page)}\n\n` + converter().blocksToMarkdownLossy(exportable((page.content ?? []) as AnyBlock[], title) as never)
+}
+export function toHTML(page: Page, title: Lookup = noTitles) {
+  const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+  return `<h1>${esc(label(page))}</h1>` + converter().blocksToHTMLLossy(exportable((page.content ?? []) as AnyBlock[], title) as never)
+}
+export function fromMarkdown(md: string) {
+  return converter().tryParseMarkdownToBlocks(md)
+}

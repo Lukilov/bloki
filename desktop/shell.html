@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>Bloki</title>
+<style>
+  /* The window frame: a 36px tab bar, and under it a placeholder until the page has drawn itself. */
+  /* Measured on Notion's desktop tab bar; the inactive and hover tab colours in light mode are derived from the measured ones. */
+  :root {
+    --bar: rgb(249, 248, 247); --page: #fff; --line: rgb(240, 239, 237); --tab-hover: rgb(240, 239, 237); --btn-hover: rgba(33, 27, 23, 0.051);
+    --title: rgb(142, 139, 134); --title-active: rgb(44, 44, 43); --icon: rgb(142, 139, 134); --icon-2: rgb(161, 158, 153);
+    --skel: rgba(28, 19, 1, 0.06); --side: rgb(249, 248, 247);
+  }
+  :root[data-theme='dark'] {
+    --bar: rgb(32, 32, 32); --page: rgb(25, 25, 25); --line: rgb(44, 44, 43); --tab-hover: rgb(45, 45, 45); --btn-hover: rgba(255, 255, 243, 0.082);
+    --title: rgb(173, 169, 163); --title-active: rgb(240, 239, 237); --icon: rgb(173, 169, 163); --icon-2: rgb(125, 122, 117);
+    --skel: rgba(255, 255, 255, 0.05); --side: rgb(32, 32, 32);
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { background: var(--page); color: var(--title); font: 500 13px/20px ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; user-select: none; cursor: default; }
+  #bar { height: 36px; display: flex; background: var(--bar); box-shadow: inset 0 -1px 0 var(--line); -webkit-app-region: drag;
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)); }
+  .group { display: flex; align-items: center; gap: 4px; padding: 0 8px; flex: none; }
+  :root[data-platform='darwin'] #nav { padding-left: 81px; }
+  :root[data-fullscreen] #nav { padding-left: 8px; }
+  button { -webkit-app-region: no-drag; font: inherit; color: var(--icon); background: none; border: 0; border-radius: 6px; width: 24px; height: 24px; padding: 0; flex: none; display: grid; place-items: center; }
+  button:hover { background: var(--btn-hover); }
+  button:disabled { opacity: 0.4; background: none; color: var(--icon-2); }
+  svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  #tabs { display: flex; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+  .tab { -webkit-app-region: no-drag; position: relative; height: 36px; flex: 0 1 200px; min-width: 36px; max-width: 200px; box-sizing: border-box; display: flex; align-items: center; padding: 0 16px; overflow: hidden;
+    background: var(--bar); color: var(--title); box-shadow: inset 1px 0 0 var(--line), inset 0 -1px 0 var(--line); }
+  .tab:hover { background: var(--tab-hover); }
+  /* The active tab takes the page colour and has no bottom line, so it runs into the page. */
+  .tab.active { background: var(--page); color: var(--title-active); box-shadow: inset 1px 0 0 var(--line), inset -1px 0 0 var(--line); }
+  .tab .icon { width: 16px; height: 16px; margin-right: 8px; flex: none; display: grid; place-items: center; font-size: 14px; line-height: 16px; opacity: 0.75; }
+  .tab.active .icon { opacity: 1; }
+  .tab .icon svg { width: 16px; height: 16px; }
+  .tab .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .tab.pinned { flex: none; width: 36px; padding: 0; justify-content: center; }
+  .tab.pinned .icon { margin: 0; }
+  .tab.pinned .title, .tab.pinned .close-area { display: none; }
+  /* × fades in on hover over a short gradient, as in Notion. */
+  .close-area { position: absolute; right: 1px; top: 1px; width: 34px; height: 34px; display: grid; place-items: center; background: inherit; opacity: 0; transition: opacity 150ms; }
+  .close-area::before { content: ''; position: absolute; left: -16px; top: 0; width: 16px; height: 34px; background: linear-gradient(90deg, transparent, var(--fade)); }
+  .tab { --fade: var(--bar); } .tab:hover { --fade: var(--tab-hover); } .tab.active { --fade: var(--page); }
+  .tab:hover .close-area { opacity: 1; }
+  .close { width: 20px; height: 20px; color: var(--icon-2); }
+  .close svg { width: 16px; height: 16px; }
+  .tab.dragging { opacity: 0.4; }
+  .tab.loading .title { opacity: 0.6; }
+  #fill { flex: 1; align-self: stretch; }
+  #offline { display: none; align-items: center; gap: 6px; padding: 0 12px; white-space: nowrap; }
+  #offline::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: rgb(235, 87, 87); }
+  :root[data-offline] #offline { display: flex; }
+  #placeholder { position: fixed; inset: 36px 0 0 0; overflow: hidden; background: var(--page); }
+  #placeholder img { display: block; width: 100%; }
+  .skeleton { position: absolute; inset: 0; display: flex; }
+  .skeleton .side { width: 248px; background: var(--side); padding: 14px 10px; box-sizing: border-box; }
+  .skeleton .main { flex: 1; padding: 96px max(96px, calc(50% - 354px)); }
+  .skeleton i { display: block; height: 10px; border-radius: 4px; background: var(--skel); margin: 0 0 14px; }
+  .skeleton .main i:first-child { height: 30px; width: 40%; margin-bottom: 28px; }
+  :root[data-ready] #placeholder { display: none; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <div class="group" id="nav">
+    <button id="back" title="Back (⌘[)" aria-label="Back"><svg viewBox="0 0 20 20"><path d="m12 4.5-5.5 5.5 5.5 5.5"/></svg></button>
+    <button id="forward" title="Forward (⌘])" aria-label="Forward"><svg viewBox="0 0 20 20"><path d="m8 4.5 5.5 5.5L8 15.5"/></svg></button>
+  </div>
+  <div id="tabs" role="tablist"></div>
+  <div class="group"><button id="new" title="New tab (⌘T)" aria-label="New Tab"><svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></svg></button></div>
+  <div id="fill"></div>
+  <div id="offline">No internet connection</div>
+</div>
+<div id="placeholder"></div>
+<script>
+  const root = document.documentElement
+  const tabsEl = document.getElementById('tabs')
+  const placeholder = document.getElementById('placeholder')
+  const send = (cmd, id, arg) => window.blokiShell.send(cmd, id, arg)
+  const closeIcon = '<svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg>'
+  const pageIcon = '<svg viewBox="0 0 16 16"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>'
+  const firstGrapheme = s => [...new Intl.Segmenter().segment(s.trim())][0]?.segment ?? '·'
+  let state = null, dragId = null, snapshot = null
+
+  document.getElementById('back').onclick = () => send('back')
+  document.getElementById('forward').onclick = () => send('forward')
+  document.getElementById('new').onclick = () => send('new')
+  document.getElementById('bar').ondblclick = e => { if (e.target.id === 'fill' || e.target.id === 'bar') send('zoom') }
+
+  const online = () => { if (navigator.onLine) delete root.dataset.offline; else root.dataset.offline = '' }
+  addEventListener('online', online)
+  addEventListener('offline', online)
+  online()
+
+  function drawPlaceholder() {
+    // A picture of the window from last time, else an empty sidebar and page.
+    placeholder.innerHTML = snapshot
+      ? `<img src="${snapshot}" alt="">`
+      : '<div class="skeleton"><div class="side"><i style="width:60%"></i><i style="width:80%"></i><i style="width:70%"></i><i style="width:50%"></i></div><div class="main"><i></i><i></i><i style="width:85%"></i><i style="width:70%"></i></div></div>'
+  }
+
+  function render() {
+    root.dataset.platform = state.platform
+    root.dataset.theme = state.theme
+    if (state.fullscreen) root.dataset.fullscreen = ''; else delete root.dataset.fullscreen
+    if (state.ready) { root.dataset.ready = ''; snapshot = null } else { delete root.dataset.ready; drawPlaceholder() }
+    document.getElementById('back').disabled = !state.canBack
+    document.getElementById('forward').disabled = !state.canForward
+    // The strip asks for full-width tabs and shrinks them only when the window is too narrow.
+    tabsEl.style.flexBasis = state.tabs.reduce((w, t) => w + (t.pinned ? 36 : 200), 0) + 'px'
+    tabsEl.replaceChildren(...state.tabs.map((t, i) => {
+      const el = document.createElement('div')
+      el.className = 'tab' + (t.id === state.active ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.loading ? ' loading' : '')
+      el.role = 'tab'
+      el.title = t.title
+      el.draggable = true
+      el.setAttribute('aria-selected', t.id === state.active)
+      // A page's emoji (the start of its title) is the tab icon; otherwise a plain page.
+      const emoji = /^\p{Extended_Pictographic}/u.test(t.title) ? firstGrapheme(t.title) : ''
+      const icon = document.createElement('span')
+      icon.className = 'icon'
+      if (emoji) icon.textContent = emoji
+      else icon.innerHTML = pageIcon
+      const title = document.createElement('span')
+      title.className = 'title'
+      title.textContent = emoji ? t.title.slice(emoji.length).trim() : t.title
+      const area = document.createElement('div')
+      area.className = 'close-area'
+      const close = document.createElement('button')
+      close.className = 'close'
+      close.title = 'Close tab (⌘W)'
+      close.setAttribute('aria-label', 'Close Tab, ' + t.title)
+      close.innerHTML = closeIcon
+      close.onclick = e => { e.stopPropagation(); send('close', t.id) }
+      area.append(close)
+      el.append(icon, title, area)
+      el.onmousedown = e => { if (e.button === 0) send('activate', t.id) }
+      el.onauxclick = e => { if (e.button === 1) send('close', t.id) }
+      el.oncontextmenu = e => { e.preventDefault(); send('menu', t.id) }
+      el.ondragstart = e => { dragId = t.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move' }
+      el.ondragend = () => { dragId = null; el.classList.remove('dragging') }
+      el.ondragover = e => { if (dragId) e.preventDefault() }
+      el.ondrop = e => { e.preventDefault(); if (dragId && dragId !== t.id) send('move', dragId, i) }
+      return el
+    }))
+  }
+
+  window.blokiShell.onState(s => {
+    if (s.snapshot) snapshot = s.snapshot
+    state = s
+    render()
+  })
+</script>
+</body>
+</html>

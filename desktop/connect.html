@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>Connect to Bloki</title>
+<style>
+  :root { --bg: #fff; --text: rgb(55, 53, 47); --muted: rgba(55, 53, 47, 0.5); --line: rgba(55, 53, 47, 0.16); --input: rgba(242, 241, 238, 0.6); color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #191919; --text: rgba(255, 255, 255, 0.81); --muted: rgba(255, 255, 255, 0.45); --line: rgba(255, 255, 255, 0.13); --input: rgba(255, 255, 255, 0.055); } }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; -webkit-app-region: drag; }
+  form { width: min(360px, 100% - 32px); display: flex; flex-direction: column; gap: 12px; -webkit-app-region: no-drag; }
+  .logo { width: 56px; height: 56px; border-radius: 12px; background: var(--text); color: var(--bg); display: flex; align-items: center; justify-content: center; font: 700 30px/1 Georgia, serif; }
+  h1 { font-size: 24px; margin: 8px 0 0; }
+  p { margin: 0; color: var(--muted); font-size: 14px; }
+  label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  input { font: inherit; color: inherit; background: var(--input); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; outline: none; }
+  input:focus { border-color: rgb(35, 131, 226); box-shadow: rgb(35, 131, 226) 0 0 0 1px inset; }
+  button { font: inherit; font-weight: 500; color: #fff; background: rgb(35, 131, 226); border: none; border-radius: 6px; padding: 8px; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .error { color: rgb(235, 87, 87); font-size: 14px; min-height: 20px; }
+  .hint { font-size: 12px; }
+</style>
+</head>
+<body>
+<form id="form">
+  <div class="logo">B</div>
+  <h1>Connect to Bloki</h1>
+  <p>Enter the address of your Bloki server. You’ll log in on the next screen.</p>
+  <label>Server address<input id="server" autofocus placeholder="bloki.example.com" autocomplete="url" spellcheck="false"></label>
+  <div class="error" id="error"></div>
+  <button id="go">Continue</button>
+  <p class="hint">On this computer, a server started with <code>npm start</code> is at <b>localhost:4321</b>.</p>
+</form>
+<script>
+  const q = new URLSearchParams(location.search)
+  const input = document.getElementById('server')
+  const error = document.getElementById('error')
+  const go = document.getElementById('go')
+  input.value = q.get('server') || ''
+  error.textContent = q.get('error') || ''
+  document.getElementById('form').addEventListener('submit', async e => {
+    e.preventDefault()
+    error.textContent = ''
+    go.disabled = true
+    go.textContent = 'Connecting…'
+    const r = await window.blokiDesktop.connect(input.value)
+    if (r.error) { error.textContent = r.error; go.disabled = false; go.textContent = 'Continue' }
+  })
+</script>
+</body>
+</html>

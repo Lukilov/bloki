@@ -1,0 +1,67 @@
+# Bloki
+
+A self-hosted, Notion-style workspace for personal use: pages, databases, sharing and live co-editing. No paid tiers, no AI.
+Your data is one SQLite file in `data/bloki.db`, and uploads go in `data/files/`.
+
+```bash
+npm install
+npm run build
+npm start          # http://localhost:4321
+```
+
+The first account you create owns the workspace; everyone after that joins through an invite link.
+Development: `npm run dev` (API on :4321, Vite on :5173). Tests: `npm test`. Back up by copying the `data/` folder.
+
+By default the server only listens on this computer. To let other people in, run it behind HTTPS and start it with
+`HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1 npm start` (the reverse proxy must forward WebSockets on `/collab`).
+
+## What's in it
+- **Sidebar**: workspace switcher, Search, Home, Inbox, Favorites/Workspace/Shared/Private sections, page "⋯" menus
+  (favorite, copy link, duplicate, rename, move, trash, open in new tab), drag to nest, resizable and collapsible, Settings, Templates, Trash.
+- **Pages**: icons (emoji, icons, uploads), covers with reposition, Style (Default/Serif/Mono), Small text, Full width, Lock,
+  Customize page, Version history, Export (Markdown, HTML, PDF), Import, backlinks, word count.
+- **Editor**: Notion's `/` menu, `@` people/pages/dates, `[[` page links, block ⋮⋮ menu (Turn into, Color, Copy link to block,
+  Duplicate, Move to, Delete, Comment), formatting toolbar with comments, toggles and toggle headings, callouts, code,
+  tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media.
+- **Comments**: page discussions, comments on selected text, replies, resolve, edit, delete, comment sidebar, Updates sidebar.
+- **Databases**: table, board, gallery, list, calendar and timeline views; filters, sorts, grouping, hidden groups, calculations,
+  column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
+  rollup, formula (Notion 2.0 style), created/edited time and by, and unique IDs.
+- **People**: workspaces, owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
+  Can comment, Can view), general access, publish to web, Inbox notifications with per-person settings.
+- **Live co-editing**: several people on one page at once, with named cursors. View-only people can't change the shared doc.
+- **Settings**: My account, My settings (appearance, week start, start page), My notifications, workspace settings, People, Import.
+
+## Not like Notion
+No AI, teamspaces, synced blocks, database automations/buttons, sub-items/dependencies, web clipper, mobile apps or email sending
+(invites are links you pass on). Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
+
+## Desktop app (macOS, Windows, Linux)
+`desktop/` is an Electron app that opens your Bloki server in its own window, like Notion's desktop app:
+- **Tabs** in a 36px tab bar (tabs 36–200px wide): New Tab ⌘T, Close Tab ⌘W, Close Window ⌘⇧W, Reopen Last Closed Tab ⌘⇧T,
+  next/previous Ctrl+Tab / Ctrl+⇧Tab or ⌘⇧] / ⌘⇧[, ⌘1–⌘8 and ⌘9 for the last tab, drag to reorder, middle-click to close.
+  Right-click a tab to Refresh, Duplicate, Pin/Unpin, Move Tab to New Window, or close it, the others, or those left/right of it.
+  ⌘-click or "Open in New Tab" on a Bloki link opens a tab next to the current one.
+- **Tabs come back** after a restart, window by window (File → Quit/Exit Without Saving Tabs skips that).
+- **Launch picture**: until the page has drawn, the window shows a picture of how it looked when you closed it (kept separately for light and dark), or an empty sidebar and page.
+- **No internet connection** shows in the tab bar while offline.
+- **Command Search**: ⇧⌘K from any app opens a floating search; ↵ opens the page in Bloki, ⌘↵ in a new tab. Turn the shortcut off in the app menu.
+- **Open at Login** in the app menu (installed app only).
+- ⌘L copies the link to the current page, ⌘⌥L a link titled with the page name; ⌘R reloads, ⌘, opens Settings.
+- Back/forward (also mouse buttons and swipes), new windows, spell check, `bloki://<page id>` links, the tab bar follows the page's light/dark theme.
+
+Not yet as in Notion: tab groups / Tab Spaces, dragging a tab into another window.
+On first launch it asks for the server address (it must be `https://`, except `localhost` on the same computer);
+change it later from the workspace menu or the app menu. Nothing of the server runs inside the app.
+
+```bash
+cd desktop
+npm install
+npm start                 # run it
+npm run dist:mac          # .dmg and .zip for Apple silicon and Intel
+npm run dist:win          # Windows installer (.exe, x64 and ARM)
+npm run dist:linux        # .AppImage and .deb (x64 and ARM)
+```
+
+Installers end up in `desktop/dist/`. They aren't code-signed: on macOS right-click the app and choose Open the first time;
+on Windows choose "More info → Run anyway" in SmartScreen.
