@@ -17,7 +17,7 @@
   --side-hover: rgba(33, 27, 23, 0.051);
   --side-active: rgba(33, 27, 23, 0.051);
   --t-gray: #787774; --t-brown: #9f6b53; --t-orange: #d9730d; --t-yellow: #cb912f; --t-green: #448361; --t-blue: #337ea9; --t-purple: #9065b0; --t-pink: #c14c8a; --t-red: #d44c47;
-  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
+  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --empty-icon: var(--faint); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
   --accent: rgb(39, 131, 222);
   --accent-soft: rgba(35, 131, 226, 0.14);
   --danger: rgb(235, 87, 87);
@@ -47,7 +47,7 @@
   --label: rgb(173, 169, 163);
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
-  --gallery-card: rgba(255, 255, 255, 0.055); --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
+  --gallery-card: rgba(255, 255, 255, 0.055); --empty-icon: rgb(95, 94, 89); --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
   --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
@@ -221,7 +221,9 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .panel-tools { display: flex; align-items: center; gap: 2px; }
 .panel-tools button { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .panel-tools select { font-size: 13px; padding: 2px 6px; }
-.inbox-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 48px 32px; color: var(--muted); }
+/* Empty inbox as in Notion: a 32px icon over one line, centred in the panel. */
+.inbox-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 32px; font-size: 14px; color: var(--icon); }
+.inbox-empty svg { color: var(--empty-icon); }
 .notice { display: flex; gap: 10px; padding: 10px 14px; cursor: pointer; position: relative; font-size: 14px; }
 .notice:hover { background: var(--hover); }
 .notice.unread::before { content: ''; position: absolute; left: 4px; top: 18px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }

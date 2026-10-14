@@ -274,8 +274,7 @@ function InboxPanel({ setUnread, close }: { setUnread: (n: number) => void; clos
         ]} />
       </Popover>
       {items === null ? <div className="muted pad">…</div> : !shown.length ? (
-        <div className="inbox-empty"><InboxIcon size={36} strokeWidth={1.2} /><div>{tab === 'inbox' ? 'You’re all caught up' : 'No archived notifications'}</div>
-          <div className="muted small">You’ll be notified here for @mentions, page activity, and page invites.</div></div>
+        <div className="inbox-empty"><InboxIcon size={32} strokeWidth={1.4} /><div>{tab === 'inbox' ? 'You’re all caught up' : 'No archived notifications'}</div></div>
       ) : shown.map(n => (
         <div key={n.id} className={'notice' + (n.read ? '' : ' unread')} onClick={() => {
           if (!n.read) api.updateInbox({ ids: [n.id], read: true }).then(apply)
