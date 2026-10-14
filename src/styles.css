@@ -902,3 +902,17 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 
 .column .new-row { height: 40px; border-radius: 10px; padding: 0 10px; gap: 9px; font-size: 15px; box-shadow: none; color: var(--col-text); }
 .column .new-row:hover { background: var(--hover); }
+
+/* Settings measured on Notion: a near-full-window card, a 224px menu of 28px rows under 12px group labels,
+   48px content padding, medium-weight setting names with 13px descriptions, 28px controls. */
+.dialog.settings { width: min(865px, calc(100vw - 96px)); height: min(914px, calc(100vh - 100px)); background: var(--peek-bg); border-radius: 12px; }
+.settings-tabs { width: 240px; padding: 48px 8px 8px; gap: 2px; background: transparent; }
+.settings-tabs button { height: 28px; padding: 4px 6px; gap: 6px; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.settings-tabs button.active { background: var(--hover); color: var(--text); }
+.settings-tabs .menu-heading { height: 28px; padding: 6px 8px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--muted); }
+.settings-tabs .menu-heading:not(:first-child) { margin-top: 10px; }
+.settings-body { padding: 36px 48px; }
+.set-row > div:first-child > div:first-child { font-weight: 500; }
+.set-row .muted.small { font-size: 13px; line-height: 18px; color: var(--icon); }
+.set-control button { height: 28px; padding: 0 8px; }
+.overlay:has(> .dialog.settings) { align-items: center; padding-top: 0; }
