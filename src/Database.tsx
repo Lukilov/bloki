@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownUp, ArrowUpRight, Calendar, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
-  Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp,
+  Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
@@ -41,6 +41,7 @@ export const coverStyle = (c: string, y = 50) => (!c ? {} : c.startsWith('/files
 /* ---------- filter & sort editors ---------- */
 
 const STATUS_GROUPS: Record<string, string> = { todo: 'To-do', progress: 'In progress', done: 'Complete' }
+const GROUP_ICONS: Record<string, React.ReactNode> = { todo: <CircleDashed />, progress: <CircleDot />, done: <CircleCheck /> }
 const groupOf = (o?: object) => (o as Option | undefined)?.group
 
 function FilterEditor({ f, db, onChange, onRemove }: { f: Filter; db: Page; onChange: (f: Filter) => void; onRemove: () => void }) {
@@ -61,7 +62,7 @@ function FilterEditor({ f, db, onChange, onRemove }: { f: Filter; db: Page; onCh
         ? <div className="filter-options">{options.map((o, i) => (
             <Fragment key={o.id}>
               {/* Status options sit under their group, as in Notion: To-do, In progress, Complete. */}
-              {p.type === 'status' && groupOf(o) && groupOf(o) !== groupOf(options[i - 1]) && <div className="filter-group">{STATUS_GROUPS[groupOf(o)!]}</div>}
+              {p.type === 'status' && groupOf(o) && groupOf(o) !== groupOf(options[i - 1]) && <div className={'filter-group ' + groupOf(o)}>{GROUP_ICONS[groupOf(o)!]}{STATUS_GROUPS[groupOf(o)!]}</div>}
               <div className={'option-row' + (f.value === o.id ? ' on' : '')} onClick={() => onChange({ ...f, value: f.value === o.id ? '' : o.id })}>{p.type === 'status' ? <StatusChip o={o as Option} /> : <Chip o={o} />}{f.value === o.id && <span className="menu-check">✓</span>}</div>
             </Fragment>
           ))}</div>
