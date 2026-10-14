@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregate, applyView, groupRows, matches, newRowDefaults, value, type Ctx } from '../src/db/model.ts'
+import { aggregate, applyView, groupRows, matches, newRowDefaults, value, visibleRange, type Ctx } from '../src/db/model.ts'
 import type { Page, Prop, Schema } from '../src/api.ts'
 
 const page = (id: string, parent: string | null, props: Record<string, unknown> = {}, extra: Partial<Page> = {}): Page => ({
@@ -64,4 +64,12 @@ test('new rows start at the first to-do status', () => {
   ] } as unknown as Schema
   assert.deepEqual(newRowDefaults(schema), { s: 'todo' })
   assert.deepEqual(newRowDefaults({} as Schema), {})
+})
+
+test('long tables render only the rows near the screen', () => {
+  assert.deepEqual(visibleRange(0, 800, 50, 36), [0, 50], 'short lists render whole')
+  assert.deepEqual(visibleRange(0, 720, 1000, 36, 10), [0, 30], 'list at the top: 20 visible + 10 below')
+  assert.deepEqual(visibleRange(-3600, 720, 1000, 36, 10), [90, 130], 'scrolled 100 rows down')
+  assert.deepEqual(visibleRange(-40000, 720, 1000, 36, 10), [1000, 1000], 'scrolled past the end')
+  assert.deepEqual(visibleRange(2000, 720, 1000, 36, 10), [0, 0], 'list still below the screen')
 })

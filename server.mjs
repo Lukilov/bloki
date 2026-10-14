@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, createReadStream, existsSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname, normalize } from 'node:path'
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto'
+import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
 
 const ROOT = import.meta.dirname
@@ -115,6 +116,27 @@ addColumns('pages', [['workspace_id', 'TEXT'], ['workspace_access', 'TEXT'], ['p
 addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT']])
 addColumns('history', [['user_id', 'TEXT']])
 addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"]])
+
+// Full-text search index (FTS5), kept in step with pages by triggers so every write path is covered.
+// The body is the text of the page's blocks, pulled out of the BlockNote JSON by SQLite itself.
+const BODY_TEXT = col => `(SELECT group_concat(value, ' ') FROM json_tree(CASE WHEN json_valid(${col}) THEN ${col} ELSE '[]' END) WHERE key = 'text' AND type = 'text')`
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS search_idx USING fts5(title, body, tokenize = 'unicode61 remove_diacritics 2');
+  CREATE TRIGGER IF NOT EXISTS pages_search_ai AFTER INSERT ON pages BEGIN
+    INSERT INTO search_idx (rowid, title, body) VALUES (NEW.rowid, NEW.title, ${BODY_TEXT('NEW.content')});
+  END;
+  CREATE TRIGGER IF NOT EXISTS pages_search_ad AFTER DELETE ON pages BEGIN
+    DELETE FROM search_idx WHERE rowid = OLD.rowid;
+  END;
+  CREATE TRIGGER IF NOT EXISTS pages_search_au AFTER UPDATE OF title, content ON pages BEGIN
+    DELETE FROM search_idx WHERE rowid = OLD.rowid;
+    INSERT INTO search_idx (rowid, title, body) VALUES (NEW.rowid, NEW.title, ${BODY_TEXT('NEW.content')});
+  END;
+`)
+// Pages written before the index existed are indexed once.
+if (db.prepare('SELECT COUNT(*) AS n FROM search_idx').get().n !== db.prepare('SELECT COUNT(*) AS n FROM pages').get().n) {
+  db.exec(`DELETE FROM search_idx; INSERT INTO search_idx (rowid, title, body) SELECT rowid, title, ${BODY_TEXT('content')} FROM pages`)
+}
 
 /* ---------- Access levels (same ladder as Notion) ---------- */
 
@@ -437,12 +459,14 @@ export function createPage(user, body) {
   const cols = Object.keys(row)
   db.prepare(`INSERT INTO pages (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(row))
   if (priv) db.prepare("INSERT INTO grants VALUES (?, ?, 'full')").run(id, user.id)
+  liveReload(wsId)
   return getPage(user, id)
 }
 
-export function getPage(user, id) {
+export function getPage(user, id, { meta = false } = {}) {
   const level = need(user.id, id, 'view')
-  return { ...decode(db.prepare('SELECT * FROM pages WHERE id = ?').get(id)), access: level, favorite: isFavorite(user.id, id) }
+  // `meta`: just what the sidebar and databases show, without the page's blocks.
+  return { ...decode(db.prepare(`SELECT ${meta ? META : '*'} FROM pages WHERE id = ?`).get(id)), access: level, favorite: isFavorite(user.id, id) }
 }
 
 export function listPages(user) {
@@ -525,17 +549,22 @@ export function updatePage(user, id, body) {
   if ('content' in row) notifyMentions(user, prev, row.content)
   const cols = Object.keys(row)
   db.prepare(`UPDATE pages SET ${cols.map(c => `${c} = ?`).join(',')} WHERE id = ?`).run(...Object.values(row), id)
+  // Trash and moves reshape the tree; anything else changes just this page.
+  if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row) liveReload(prev.workspace_id)
+  else livePages(prev.workspace_id, [id])
   return getPage(user, id)
 }
 
 export function deletePage(user, id) {
   need(user.id, id, 'full')
+  const wsId = db.prepare('SELECT workspace_id FROM pages WHERE id = ?').get(id)?.workspace_id
   const ids = descendants(id)
   for (const pid of ids) collab.reset(pid)
   const marks = ids.map(() => '?').join(',')
   for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM invites WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM pages WHERE id IN (${marks})`).run(...ids)
+  liveReload(wsId)
 }
 
 export function duplicatePage(user, id, parent_id, suffix = ' (copy)') {
@@ -560,20 +589,31 @@ function blockText(json) {
   return [...String(json).matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map(m => { try { return JSON.parse(`"${m[1]}"`) } catch { return m[1] } }).join(' ')
 }
 
+/** Words of a query as an FTS5 expression: every word must match, the last one may be unfinished (prefix). */
+export function ftsQuery(q, titleOnly = false) {
+  const words = String(q).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  if (!words.length) return null
+  const expr = words.map(w => `"${w}"*`).join(' ')
+  return titleOnly ? `title : (${expr})` : expr
+}
+
 export function search(user, q, { titleOnly = false, mine = false } = {}) {
   if (!user.workspaceId) return []
+  const match = ftsQuery(q, titleOnly)
+  if (!match) return []
   const access = accessMap(user.id, user.workspaceId)
-  const like = `%${q.replace(/[%_\\]/g, m => '\\' + m)}%`
+  // Ranked by FTS5's bm25 with title matches weighing ten times body matches, newest first on ties.
+  const words = String(q).toLowerCase().match(/[\p{L}\p{N}]+/gu)
   return db.prepare(`
-    SELECT id, parent_id, kind, title, icon, updated, created_by, content, (title LIKE ? ESCAPE '\\') AS in_title FROM pages
-    WHERE workspace_id = ? AND trashed = 0 AND (title LIKE ? ESCAPE '\\' OR (? = 0 AND content LIKE ? ESCAPE '\\'))
-      AND (? = 0 OR created_by = ? OR updated_by = ?)
-    ORDER BY in_title DESC, updated DESC`).all(like, user.workspaceId, like, Number(titleOnly), like, Number(mine), user.id, user.id)
+    SELECT p.id, p.parent_id, p.kind, p.title, p.icon, p.updated, p.created_by, p.content FROM search_idx s JOIN pages p ON p.rowid = s.rowid
+    WHERE search_idx MATCH ? AND p.workspace_id = ? AND p.trashed = 0 AND (? = 0 OR p.created_by = ? OR p.updated_by = ?)
+    ORDER BY bm25(search_idx, 10.0, 1.0), p.updated DESC LIMIT 500`).all(match, user.workspaceId, Number(mine), user.id, user.id)
     .filter(p => atLeast(access.get(p.id), 'view')).slice(0, 50)
     .map(({ content, ...p }) => {
       const text = blockText(content)
-      const at = text.toLowerCase().indexOf(q.toLowerCase())
-      return { ...p, snippet: at < 0 ? '' : (at > 40 ? '…' : '') + text.slice(Math.max(0, at - 40), at + q.length + 80) }
+      const lower = text.toLowerCase()
+      const at = words.map(w => lower.indexOf(w)).filter(i => i >= 0).sort((a, b) => a - b)[0] ?? -1
+      return { ...p, snippet: at < 0 ? '' : (at > 40 ? '…' : '') + text.slice(Math.max(0, at - 40), at + 120) }
     })
 }
 
@@ -643,6 +683,8 @@ export function setShare(user, id, body) {
       return { ...getShare(user, id), invite: createInvite(user, p.workspace_id, { role: 'guest', page_id: id, level }) }
     }
   }
+  // Who can see what may have changed.
+  liveReload(p.workspace_id)
   return getShare(user, id)
 }
 
@@ -878,7 +920,7 @@ const routes = [
 
   ['GET', /^\/api\/pages$/, c => listPages(c.user)],
   ['POST', /^\/api\/pages$/, async c => createPage(c.user, await c.body())],
-  ['GET', /^\/api\/pages\/([\w-]+)$/, (c, id) => getPage(c.user, id)],
+  ['GET', /^\/api\/pages\/([\w-]+)$/, (c, id) => getPage(c.user, id, { meta: c.url.searchParams.get('meta') === '1' })],
   ['PATCH', /^\/api\/pages\/([\w-]+)$/, async (c, id) => updatePage(c.user, id, await c.body())],
   ['DELETE', /^\/api\/pages\/([\w-]+)$/, (c, id) => { deletePage(c.user, id); return { ok: true } }],
   ['POST', /^\/api\/pages\/([\w-]+)\/duplicate$/, (c, id) => duplicatePage(c.user, id)],
@@ -963,7 +1005,35 @@ export const server = createServer((req, res) => handle(req, res).catch(e => {
   if (!res.headersSent) res.writeHead(e instanceof HttpError ? e.status : 500, { 'content-type': 'application/json' })
   res.end(JSON.stringify({ error: e instanceof HttpError ? e.message : 'Server error.' }))
 }))
-server.on('upgrade', (req, socket, head) => collab.upgrade(req, socket, head))
+/* ---------- Live updates for the sidebar and databases ---------- */
+// One socket per open app. An edited page's id goes only to people who can see it; changes that reshape the
+// tree (new page, trash, move, sharing, delete) just ask everyone in the workspace to refresh, revealing nothing.
+export const liveConns = new Set() // { ws, userId, workspaceId }
+const liveSend = (c, msg) => { try { c.ws.send(JSON.stringify(msg)) } catch { /* closing */ } }
+function livePages(workspaceId, ids) {
+  for (const c of liveConns) {
+    if (c.workspaceId !== workspaceId) continue
+    const visible = ids.filter(id => { try { return atLeast(pageAccess(c.userId, id), 'view') } catch { return false } })
+    if (visible.length) liveSend(c, { type: 'pages', ids: visible })
+  }
+}
+function liveReload(workspaceId) {
+  for (const c of liveConns) if (c.workspaceId === workspaceId) liveSend(c, { type: 'reload' })
+}
+const liveWss = new WebSocketServer({ noServer: true, maxPayload: 1024 })
+function liveUpgrade(req, socket, head) {
+  // Same checks as the editing sockets: same-origin pages with a valid session only.
+  const origin = req.headers.origin && new URL(req.headers.origin).host
+  const user = sessionUser(readCookie(req, 'bloki_session'))
+  if ((origin && origin !== req.headers.host) || !user?.workspaceId) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return }
+  liveWss.handleUpgrade(req, socket, head, ws => {
+    const c = { ws, userId: user.id, workspaceId: user.workspaceId }
+    liveConns.add(c)
+    ws.on('close', () => liveConns.delete(c))
+    ws.on('message', () => {}) // clients only listen
+  })
+}
+server.on('upgrade', (req, socket, head) => (new URL(req.url, 'http://x').pathname === '/live' ? liveUpgrade : collab.upgrade)(req, socket, head))
 
 if (process.argv[1] === import.meta.filename) {
   // Localhost by default. Set HOST=0.0.0.0 (behind HTTPS, with BLOKI_SECURE_COOKIE=1) to let others in.

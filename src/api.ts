@@ -102,6 +102,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   list: () => call<Page[]>('GET', publicRoot ? `public/${publicRoot}/pages` : 'pages'),
   get: (id: string) => call<Page>('GET', publicRoot ? `public/${publicRoot}/pages/${id}` : `pages/${id}`),
+  /** A page without its blocks: what the sidebar and databases need. */
+  meta: (id: string) => call<Page>('GET', `pages/${id}?meta=1`),
   create: (p: Partial<Page> & { section?: 'workspace' | 'private' }) => call<Page>('POST', 'pages', p),
   update: (id: string, p: Partial<Page>) => call<Page>('PATCH', `pages/${id}`, p),
   remove: (id: string) => call('DELETE', `pages/${id}`),

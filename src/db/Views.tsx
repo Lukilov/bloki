@@ -8,7 +8,7 @@ import { iconOf, label, useStore } from '../store'
 import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
-import { aggregate, calcsFor, dateValue, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, type Group } from './model'
+import { aggregate, calcsFor, dateValue, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
 type Store = ReturnType<typeof useStore>
 export type ViewProps = {
@@ -91,14 +91,41 @@ function RowMenu({ row, p, close }: { row: Page; p: ViewProps; close: () => void
   )
 }
 
+/**
+ * Long tables only mount the rows near the screen, with empty space standing in for the rest.
+ * ponytail: assumes rows share the first row's height; wrapped rows of very different heights make the
+ * scrollbar drift a little, measure each row if that ever matters.
+ */
+function useRowWindow(count: number): [number, number, number, React.RefObject<HTMLDivElement | null>] {
+  const ref = useRef<HTMLDivElement>(null)
+  const [state, setState] = useState<[number, number, number]>(() => [0, Math.min(count, 60), 36])
+  useEffect(() => {
+    const update = () => {
+      const el = ref.current
+      if (!el) return
+      const rowH = (el.querySelector('.tr') as HTMLElement | null)?.offsetHeight || 36
+      const [a, b] = visibleRange(el.getBoundingClientRect().top, innerHeight, count, rowH)
+      setState(s => (s[0] === a && s[1] === b && s[2] === rowH ? s : [a, b, rowH]))
+    }
+    update()
+    // Scrolling any ancestor (the page, a peek) moves the table, so listen in the capture phase.
+    document.addEventListener('scroll', update, { capture: true, passive: true })
+    addEventListener('resize', update)
+    return () => { document.removeEventListener('scroll', update, { capture: true }); removeEventListener('resize', update) }
+  }, [count])
+  return [state[0], Math.min(state[1], count), state[2], ref]
+}
+
 function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewProps; rows: Page[]; cols: Prop[]; selected: Set<string>; setSelected: (s: Set<string>) => void; fresh?: string | null }) {
   const store = useStore()
   const [menu, setMenu] = useState<{ el: HTMLElement; row: Page } | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const sorted = !!p.view.sort?.length
+  const [from, to, rowH, ref] = useRowWindow(rows.length)
   return (
-    <>
-      {rows.map(r => (
+    <div ref={ref}>
+      {from > 0 && <div style={{ height: from * rowH }} />}
+      {rows.slice(from, to).map(r => (
         <div key={r.id} className={'tr' + (selected.has(r.id) ? ' selected' : '') + (over === r.id ? ' drop-above' : '')}
           onDragOver={e => { if (!sorted && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
           onDragLeave={() => setOver(null)}
@@ -124,7 +151,8 @@ function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewPro
       <Popover anchor={menu?.el ?? null} onClose={() => setMenu(null)} className="menu-pop" width={220}>
         {menu && <RowMenu row={menu.row} p={p} close={() => setMenu(null)} />}
       </Popover>
-    </>
+      {to < rows.length && <div style={{ height: (rows.length - to) * rowH }} />}
+    </div>
   )
 }
 

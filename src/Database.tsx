@@ -34,9 +34,7 @@ export function newDatabase(store: Store, parent_id: string | null, title = '', 
   return store.create({ parent_id, kind: 'db', title, schema, section: parent_id ? undefined : section }, false)
 }
 
-export const coverStyle = (c: string, y = 50) => (!c ? {} : c.startsWith('/files/') || /^https?:\/\//.test(c)
-  ? { backgroundImage: `url("${c.replace(/["\\]/g, '')}")`, backgroundPosition: `center ${y}%` }
-  : { background: c })
+export { coverStyle } from './ui'
 
 /* ---------- filter & sort editors ---------- */
 

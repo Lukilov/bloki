@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileText, Table2 } from 'lucide-react'
 import { api, publicRoot, type Me, type Page, type Person } from './api'
 import { Icon } from './IconPicker'
@@ -44,8 +44,43 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
   const [toastText, setToast] = useState<string | null>(null)
 
   const reload = useCallback(async () => setPages(await api.list()), [])
+  /** Put one page's latest fields into the list, keeping where it sits in the sidebar. */
+  const merge = useCallback((page: Page) => {
+    const { content: _c, ydoc: _y, ...fields } = page as Page & { content?: unknown; ydoc?: unknown }
+    setPages(ps => ps.some(x => x.id === page.id) ? ps.map(x => (x.id === page.id ? { ...x, ...fields, section: x.section } : x)) : [...ps, fields as Page])
+  }, [])
   const reloadMe = useCallback(async () => { setMe(await api.me()); await reload() }, [reload])
   useEffect(() => { reload().catch(e => setError(e.message)) }, [reload])
+  // Live updates: the server names pages others changed (or asks for a refresh when the tree changed).
+  const pending = useRef({ ids: new Set<string>(), reload: false, timer: 0 })
+  useEffect(() => {
+    if (publicRoot || !me) return
+    let ws: WebSocket | null = null
+    let retry = 0
+    let stopped = false
+    const flush = () => {
+      const p = pending.current
+      const ids = [...p.ids]
+      p.ids.clear(); p.timer = 0
+      if (p.reload) { p.reload = false; reload().catch(() => {}); return }
+      for (const id of ids) api.meta(id).then(merge).catch(() => reload().catch(() => {}))
+    }
+    const connect = () => {
+      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/live`)
+      ws.onopen = () => { retry = 0 }
+      ws.onmessage = e => {
+        const msg = JSON.parse(e.data)
+        const p = pending.current
+        if (msg.type === 'reload') p.reload = true
+        if (msg.type === 'pages') for (const id of msg.ids) p.ids.add(id)
+        // Bursts (typing, bulk edits) collapse into one round of fetches.
+        if (!p.timer) p.timer = window.setTimeout(flush, 250)
+      }
+      ws.onclose = () => { if (!stopped) setTimeout(connect, Math.min(30000, 1000 * 2 ** retry++)) }
+    }
+    connect()
+    return () => { stopped = true; ws?.close(); clearTimeout(pending.current.timer) }
+  }, [me, reload, merge])
   useEffect(() => {
     if (me?.workspaceId) api.people(me.workspaceId).then(setPeople).catch(() => setPeople([]))
   }, [me?.workspaceId])
@@ -76,21 +111,23 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
       patch: async (id, p) => {
         setPages(ps => ps.map(x => (x.id === id ? { ...x, ...p, updated: Date.now() } : x)))
         try {
-          await api.update(id, p)
-          // Trash and moves change what's visible around the page, so pull the list back.
-          await reload()
+          const page = await api.update(id, p)
+          // Trash and moves change what's visible around the page, so those pull the list back;
+          // any other edit only touches this page.
+          if ('trashed' in p || 'parent_id' in p || 'workspace_access' in p) await reload()
+          else merge(page)
         } catch (e) { fail(e) }
       },
       create: async (p, open = true) => {
         try {
           const page = await api.create(p)
-          await reload()
+          merge({ ...page, section: p.parent_id ? undefined : p.section ?? 'workspace' })
           if (open) location.hash = '/' + page.id
           return page
         } catch (e) { fail(e); throw e }
       },
     }
-  }, [pages, current, reload, me, reloadMe, people, error, toastText])
+  }, [pages, current, reload, merge, me, reloadMe, people, error, toastText])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

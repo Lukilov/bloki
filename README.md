@@ -13,7 +13,7 @@ The first account you create owns the workspace; everyone after that joins throu
 Development: `npm run dev` (API on :4321, Vite on :5173). Tests: `npm test`. Back up by copying the `data/` folder.
 
 By default the server only listens on this computer. To let other people in, run it behind HTTPS and start it with
-`HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1 npm start` (the reverse proxy must forward WebSockets on `/collab`).
+`HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1 npm start` (the reverse proxy must forward WebSockets on `/collab` and `/live`).
 
 ## What's in it
 - **Sidebar**: workspace switcher, Search, Home, Inbox, Favorites/Workspace/Shared/Private sections, page "⋯" menus
@@ -30,6 +30,9 @@ By default the server only listens on this computer. To let other people in, run
 - **People**: workspaces, owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
   Can comment, Can view), general access, publish to web, Inbox notifications with per-person settings.
 - **Live co-editing**: several people on one page at once, with named cursors. View-only people can't change the shared doc.
+- **Live sidebar and databases**: edits by others appear without reloading; only the changed page is fetched, and only by people who can see it.
+- **Search**: full-text index (SQLite FTS5) over titles and page text, matching word starts and ignoring accents; titles rank first.
+- **Fast with big databases**: long tables only render the rows on screen; the editor downloads separately from the app shell.
 - **Settings**: My account, My settings (appearance, week start, start page), My notifications, workspace settings, People, Import.
 
 ## Not like Notion

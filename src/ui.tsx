@@ -122,3 +122,8 @@ export function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   useEffect(() => { const t = setTimeout(onDone, 2200); return () => clearTimeout(t) }, [text, onDone])
   return createPortal(<div className="toast">{text}</div>, document.body)
 }
+
+/** CSS for a page cover: an uploaded or linked image (at a vertical offset), or a colour/gradient. */
+export const coverStyle = (c: string, y = 50) => (!c ? {} : c.startsWith('/files/') || /^https?:\/\//.test(c)
+  ? { backgroundImage: `url("${c.replace(/["\\]/g, '')}")`, backgroundPosition: `center ${y}%` }
+  : { background: c })

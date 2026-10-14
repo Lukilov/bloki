@@ -5,7 +5,6 @@ import {
 } from 'lucide-react'
 import { api, can, type Notice, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
-import { fromMarkdown } from './Editor'
 import { WorkspaceMenu } from './Access'
 import { Menu, mod, Popover, timeAgo, usePopover } from './ui'
 import { MoveTo, pageMenuItems, Rename } from './pageActions'
@@ -230,6 +229,8 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
 export function importMarkdown(store: Store, parent_id: string | null = null) {
   const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.md,.markdown,.txt', multiple: true })
   input.onchange = async () => {
+    // The editor (and its Markdown parser) loads on demand, so it stays out of the first download.
+    const { fromMarkdown } = await import('./Editor')
     let last: Page | undefined
     for (const f of Array.from(input.files ?? [])) {
       const text = await f.text()

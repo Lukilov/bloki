@@ -115,6 +115,40 @@ test('search and backlinks hide pages the user cannot see', () => {
   assert.equal(s.backlinks(member, secret.id).length, 1)
 })
 
+test('full-text search: whole words or their start, any accents, titles first, kept in step with edits', () => {
+  const para = text => [{ type: 'paragraph', content: [{ type: 'text', text, styles: {} }] }]
+  const body = s.createPage(owner, { title: 'Notes', section: 'workspace', content: para('Kvačkanje in pletenje ob večerih') })
+  const titled = s.createPage(owner, { title: 'Pletenje', section: 'workspace' })
+  const ids = q => s.search(owner, q).map(p => p.id)
+  assert.deepEqual(ids('pleten'), [titled.id, body.id], 'prefix match, title before body')
+  assert.deepEqual(ids('kvackanje'), [body.id], 'accents are ignored')
+  assert.ok(s.search(owner, 'kvačk')[0].snippet.includes('Kvačkanje'))
+  assert.deepEqual(s.search(owner, 'pleten', { titleOnly: true }).map(p => p.id), [titled.id])
+  assert.deepEqual(ids('pletenje večerih'), [body.id], 'every word must match')
+  assert.deepEqual(ids('"%_*'), [], 'punctuation alone finds nothing and does not break the query')
+  s.updatePage(owner, body.id, { content: para('Zdaj o vrtnarjenju') })
+  assert.deepEqual(ids('kvackanje'), [], 'edited content is re-indexed')
+  assert.deepEqual(ids('vrtnar'), [body.id])
+  s.updatePage(owner, titled.id, { trashed: true })
+  assert.deepEqual(ids('pleten'), [], 'trashed pages are not found')
+  s.deletePage(owner, titled.id)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM search_idx').get().n, db.prepare('SELECT COUNT(*) AS n FROM pages').get().n, 'deleted pages leave the index')
+})
+
+test('live updates: edited pages go only to people who can see them; tree changes ask everyone to refresh', () => {
+  const inbox = new Map()
+  const listen = u => { const msgs = []; const c = { ws: { send: m => msgs.push(JSON.parse(m)) }, userId: u.id, workspaceId: ws }; s.liveConns.add(c); inbox.set(u, { c, msgs }); return msgs }
+  const [o, m, g] = [listen(owner), listen(member), listen(guest)]
+  const priv = s.createPage(owner, { title: 'Owner only', section: 'private' })
+  assert.deepEqual([o, m, g].map(x => x.at(-1)?.type), ['reload', 'reload', 'reload'], 'a new page: everyone refreshes, no ids sent')
+  for (const x of [o, m, g]) x.length = 0
+  s.updatePage(owner, priv.id, { title: 'Still owner only' })
+  assert.deepEqual(o, [{ type: 'pages', ids: [priv.id] }])
+  assert.deepEqual([m.length, g.length], [0, 0], 'others never learn the id of a page they cannot see')
+  assert.equal(s.getPage(owner, priv.id, { meta: true }).content, undefined, 'meta reads leave the blocks out')
+  for (const { c } of inbox.values()) s.liveConns.delete(c)
+})
+
 test('trash cascades; history snapshots; duplicate copies rows', () => {
   const a = s.createPage(owner, { title: 'T', section: 'workspace', content: [] })
   const c = s.createPage(owner, { title: 'C', parent_id: a.id })

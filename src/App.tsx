@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ChevronsRight, Clock, LayoutTemplate, Menu as MenuIcon } from 'lucide-react'
 import { api, setPublicRoot, type Me } from './api'
 import { iconOf, label, parseHash, StoreProvider, useStore } from './store'
 import { applyTemplate, Sidebar } from './Sidebar'
 import { SearchDialog } from './Search'
-import { PageView } from './PageView'
 import { AcceptInvite, AuthScreen, SettingsDialog } from './Access'
-import { coverStyle } from './Database'
+// The page view brings the editor, databases and comments: it downloads in parallel with the app shell.
+const PageView = lazy(() => import('./PageView').then(m => ({ default: m.PageView })))
 import { TEMPLATES } from './templates'
-import { alt, mod, shift, timeAgo, Toast } from './ui'
+import { alt, coverStyle, mod, shift, timeAgo, Toast } from './ui'
 import './styles.css'
 
 const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void } }).blokiDesktop
@@ -134,7 +134,7 @@ function Shell({ dark }: { dark: boolean }) {
   useEffect(() => { document.title = current ? `${current.icon && !current.icon.startsWith('icon:') && !current.icon.includes('/') ? current.icon + ' ' : ''}${label(current)}` : 'Bloki' }, [current])
 
   if (store.published) {
-    return <div className="app"><main>{store.current ? <PageView id={store.current} dark={dark} /> : null}</main></div>
+    return <div className="app"><main><Suspense fallback={null}>{store.current ? <PageView id={store.current} dark={dark} /> : null}</Suspense></main></div>
   }
 
   const sidebar = <Sidebar width={width} setWidth={setWidth} collapse={() => { setCollapsed(true); setPeek(false) }}
@@ -153,7 +153,7 @@ function Shell({ dark }: { dark: boolean }) {
             {peek ? <ChevronsRight size={18} /> : <MenuIcon size={18} />}
           </button>
         )}
-        {store.current ? <PageView id={store.current} dark={dark} sidebarCollapsed={collapsed} /> : <Home />}
+        <Suspense fallback={null}>{store.current ? <PageView id={store.current} dark={dark} sidebarCollapsed={collapsed} /> : <Home />}</Suspense>
       </main>
       {dialog?.kind === 'search' && <SearchDialog close={() => setDialog(null)} />}
       {dialog?.kind === 'settings' && <SettingsDialog initialTab={dialog.tab} close={() => setDialog(null)} />}

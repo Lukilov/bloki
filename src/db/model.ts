@@ -319,3 +319,14 @@ export function groupRows(rows: Page[], p: Prop, schema: Schema, ctx: Ctx): Grou
 export function groupable(p: Prop) {
   return ['select', 'status', 'multi_select', 'person', 'checkbox', 'text', 'date', 'relation', 'url', 'email', 'phone', 'created_by'].includes(p.type)
 }
+
+/**
+ * Which rows of a long list to render: those on screen plus `overscan` either side. `top` is where the list
+ * starts relative to the viewport (negative once scrolled past). Short lists render whole.
+ */
+export function visibleRange(top: number, viewHeight: number, count: number, rowHeight: number, overscan = 20, minCount = 100): [number, number] {
+  if (count <= minCount) return [0, count]
+  const start = Math.max(0, Math.floor(-top / rowHeight) - overscan)
+  const end = Math.min(count, Math.max(start, Math.ceil((viewHeight - top) / rowHeight) + overscan))
+  return [Math.min(start, end), end]
+}
