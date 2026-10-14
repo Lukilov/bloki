@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, ChevronDown, Download, FileText, LogOut, Plus, Server, Settings, SlidersHorizontal, User as UserIcon, UserPlus, Users, X } from 'lucide-react'
+import { Bell, ChevronDown, Download, FileText, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, User as UserIcon, UserPlus, Users, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void } }).blokiDesktop
@@ -17,6 +17,12 @@ function useAction() {
     try { await fn() } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
   return { error, busy, run }
+}
+
+/** Notion's "Copy link" button at the foot of the Share menu. */
+function CopyLinkButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
+  return <button className="share-copy" onClick={() => { navigator.clipboard?.writeText(text); setDone(true) }}><Link2 size={16} />{done ? 'Copied' : 'Copy link'}</button>
 }
 
 function Copy({ text }: { text: string }) {
@@ -351,7 +357,7 @@ function levelsFor(page: Page): Level[] {
   return (['full', 'edit', 'edit_content', 'comment', 'view'] as Level[]).filter(l => l !== 'edit_content' || page.kind === 'db')
 }
 
-export function ShareMenu({ page, close }: { page: Page; close: () => void }) {
+export function ShareMenu({ page }: { page: Page; close: () => void }) {
   const store = useStore()
   const [tab, setTab] = useState<'share' | 'publish'>('share')
   const [share, setShare] = useState<Share | null>(null)
@@ -380,7 +386,6 @@ export function ShareMenu({ page, close }: { page: Page; close: () => void }) {
       <div className="share-tabs">
         <button className={tab === 'share' ? 'active' : ''} onClick={() => setTab('share')}>Share</button>
         <button className={tab === 'publish' ? 'active' : ''} onClick={() => setTab('publish')}>Publish</button>
-        <button className="ghost close" onClick={close}>✕</button>
       </div>
 
       {tab === 'share' && <>
@@ -397,7 +402,7 @@ export function ShareMenu({ page, close }: { page: Page; close: () => void }) {
         <div className="muted small section-label">People with access</div>
         {share.grants.map(g => (
           <div className="share-row" key={g.user_id}>
-            <span><b>{g.name}</b>{g.user_id === store.me?.user.id && ' (you)'} {g.role === 'guest' && <span className="badge">Guest</span>}<div className="muted small">{g.email}</div></span>
+            <span className="share-person"><span className="avatar big">{g.name[0]}</span><span>{g.name}{g.user_id === store.me?.user.id && <span className="muted"> (You)</span>} {g.role === 'guest' && <span className="badge">Guest</span>}<div className="muted small">{g.email}</div></span></span>
             {full ? (
               <select value={g.level} onChange={e => update({ grant: { user_id: g.user_id, level: e.target.value === 'remove' ? null : e.target.value } })}>
                 {levels.map(l => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}
@@ -410,7 +415,7 @@ export function ShareMenu({ page, close }: { page: Page; close: () => void }) {
         <div className="muted small section-label">General access</div>
         <div className="share-row">
           <span>
-            <b>{wsLevel === 'none' ? 'Only people invited' : `Everyone at ${ws?.name ?? 'workspace'}`}</b>
+            <span>{wsLevel === 'none' ? 'Only people invited' : `Everyone at ${ws?.name ?? 'workspace'}`}</span>
             <div className="muted small">{share.workspace_access === null ? 'Inherited from the parent page' : wsLevel === 'none' ? 'Only people listed above can open this page' : 'Workspace members (not guests)'}</div>
           </span>
           {full ? (
@@ -423,7 +428,7 @@ export function ShareMenu({ page, close }: { page: Page; close: () => void }) {
         </div>
         <div className="share-row muted small"><span>Workspace owners</span><span>{wsLevel === 'none' ? 'Only if invited' : 'Full access'}</span></div>
         <div className="muted small share-foot">Your access: {LEVEL_NAMES[share.access]}. Sub-pages inherit these settings unless changed.</div>
-        <Copy text={`${location.origin}/#/${page.id}`} />
+        <div className="share-actions"><CopyLinkButton text={`${location.origin}/#/${page.id}`} /></div>
       </>}
 
       {tab === 'publish' && <>

@@ -503,18 +503,28 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .invite-box { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 8px 0; }
 .copy-row { display: flex; gap: 6px; width: 100%; }
 .copy-row input { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
-.menu.share { width: 440px; max-width: 92vw; padding: 10px 12px; gap: 6px; max-height: 75vh; }
-.share-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-.share-tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 8px; }
-.share-tabs button.active { border-bottom-color: var(--text); }
-.share-tabs .close { margin-left: auto; }
-.invite-row { flex-wrap: nowrap; }
-.invite-row input { flex: 1; min-width: 0; }
-.share-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
-.share-row select { max-width: 170px; }
-.section-label { margin-top: 8px; }
-.share-foot { margin-top: 6px; }
-.menu.share p { margin: 4px 0; font-size: 14px; }
+/* Share menu measured on Notion: 456px, 12px corners, 40px tabs with a 2px underline, 32px controls, 48px people rows. */
+.share-pop { border-radius: 12px; }
+.share { padding: 0 8px 12px; display: flex; flex-direction: column; font-size: 14px; }
+.share-tabs { display: flex; align-items: center; gap: 0; height: 40px; padding: 0 4px; margin: 0 -8px 8px; box-shadow: var(--line) 0 -1px 0 inset; }
+.share-tabs button { position: relative; border: none; height: 28px; padding: 0 8px; border-radius: 6px; font-weight: 500; color: var(--muted); }
+.share-tabs button.active { color: var(--text); }
+.share-tabs button.active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -6px; height: 2px; background: var(--text); }
+.invite-row { flex-wrap: nowrap; padding: 0 8px; }
+.invite-row input { flex: 1; min-width: 0; height: 32px; }
+.invite-row select { height: 32px; }
+.invite-row .primary { height: 32px; padding: 0 12px; font-weight: 500; }
+.share-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px; padding: 0 8px; border-radius: 10px; font-size: 14px; }
+.share-row:hover { background: var(--hover); }
+.share-row select { max-width: 170px; border: none; background: none; color: var(--icon); }
+.share-person { display: flex; align-items: center; gap: 10px; }
+.share-person .avatar.big { width: 32px; height: 32px; font-size: 14px; font-weight: 400; color: var(--icon); }
+.section-label { margin-top: 12px; padding: 0 8px 4px; font-size: 12px; font-weight: 500; color: var(--icon) !important; }
+.share-foot { margin: 8px 8px 0; }
+.share-actions { display: flex; justify-content: flex-end; margin-top: 8px; padding: 0 4px; }
+.share-copy { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: none; border-radius: 6px; font-weight: 500; }
+.share-copy:hover { background: var(--hover); }
+.share p { margin: 4px 8px; font-size: 14px; }
 .row-link { display: block; padding: 6px 8px; font-weight: 500; }
 
 /* BlockNote menus, restyled to Notion's compact menus */

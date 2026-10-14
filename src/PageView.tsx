@@ -171,7 +171,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
             {store.published && <span className="badge">Published with Bloki</span>}
           </div>
         </header>
-        <Popover anchor={pop?.kind === 'share' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={480}><ShareMenu page={meta} close={closePop} /></Popover>
+        <Popover anchor={pop?.kind === 'share' ? pop.el : null} onClose={closePop} align="end" className="share-pop" width={456}><ShareMenu page={meta} close={closePop} /></Popover>
         <Popover anchor={pop?.kind === 'more' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={256}><Menu filter onClose={() => setPop(p => (p?.kind === 'more' ? null : p))} items={moreItems} /></Popover>
         <Popover anchor={pop?.kind === 'move' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={320}><MoveTo page={meta} close={closePop} /></Popover>
 
