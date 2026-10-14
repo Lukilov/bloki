@@ -17,7 +17,7 @@
   --side-hover: rgba(33, 27, 23, 0.051);
   --side-active: rgba(33, 27, 23, 0.051);
   --t-gray: #787774; --t-brown: #9f6b53; --t-orange: #d9730d; --t-yellow: #cb912f; --t-green: #448361; --t-blue: #337ea9; --t-purple: #9065b0; --t-pink: #c14c8a; --t-red: #d44c47;
-  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --empty-icon: var(--faint); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
+  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --empty-icon: var(--faint); --search-bg: var(--card); --search-shadow: var(--shadow); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
   --accent: rgb(39, 131, 222);
   --accent-soft: rgba(35, 131, 226, 0.14);
   --danger: rgb(235, 87, 87);
@@ -47,7 +47,7 @@
   --label: rgb(173, 169, 163);
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
-  --gallery-card: rgba(255, 255, 255, 0.055); --empty-icon: rgb(95, 94, 89); --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
+  --gallery-card: rgba(255, 255, 255, 0.055); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
   --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
@@ -251,17 +251,22 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 
 /* Search */
 .search-overlay { padding-top: 10vh; }
-.dialog.search { padding: 0; width: min(755px, 94vw); display: flex; flex-direction: column; max-height: 72vh; }
-.search-input { display: flex; align-items: center; gap: 10px; padding: 12px 16px; color: var(--muted); box-shadow: var(--line) 0 1px 0; }
-.search-input input { flex: 1; border: none; background: none; font-size: 18px; padding: 0; color: var(--text); box-shadow: none; }
-.dialog.search .chips { padding: 10px 14px 4px; }
-.search-results { flex: 1; overflow: auto; padding: 4px 0 8px; }
-.hit { display: flex; align-items: center; gap: 10px; width: calc(100% - 12px); margin: 0 6px; text-align: left; border: none; border-radius: 6px; padding: 6px 10px; }
+/* Search measured on Notion: frosted 20px-cornered card, 48px search row, 24px filter chips, 36px results. */
+.dialog.search { padding: 0; width: min(755px, 94vw); display: flex; flex-direction: column; max-height: 72vh; border-radius: 20px; background: var(--search-bg); backdrop-filter: blur(40px); box-shadow: var(--search-shadow); }
+.search-input { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; color: var(--icon); }
+.search-input > svg { width: 22px; height: 22px; }
+.search-input input { flex: 1; border: none; background: none; font-size: 16px; padding: 0; color: var(--text); box-shadow: none; }
+.dialog.search .chips { padding: 10px 12px; }
+.dialog.search .chip-btn { height: 24px; padding: 0 8px; gap: 6px; font-size: 14px; color: var(--icon); border: none; background: var(--hover); }
+.search-results { flex: 1; overflow: auto; padding: 0 10px 8px; }
+.search-results .menu-heading { padding: 10px 12px; font-size: 12px; line-height: 14px; color: var(--icon); }
+.hit { display: flex; align-items: center; gap: 9px; width: calc(100% - 8px); min-height: 36px; margin: 0 4px 1px; text-align: left; border: none; border-radius: 12px; padding: 4px 8px; transition: background 20ms ease-in; }
 .hit.sel { background: var(--hover); }
-.hit-icon { display: inline-flex; width: 22px; justify-content: center; flex-shrink: 0; }
+.hit-icon { display: inline-flex; width: 18px; justify-content: center; flex-shrink: 0; color: var(--text); }
+.hit-icon svg { width: 18px; height: 18px; }
 .hit-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.hit-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hit-path { color: var(--muted); font-weight: 400; font-size: 13px; }
+.hit-title { font-weight: 500; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit-path { color: var(--muted); font-weight: 400; font-size: 12px; }
 .hit-snippet { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hit-enter { color: var(--faint); }
 .search-empty { padding: 24px 16px; color: var(--muted); text-align: center; }
