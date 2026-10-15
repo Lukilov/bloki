@@ -31,11 +31,11 @@ export function pageMenuItems(store: Store, page: Page, open: { rename?: () => v
       ? { icon: <StarOff size={16} />, label: 'Remove from Favorites', onClick: () => store.patch(page.id, { favorite: false }) }
       : { icon: <Star size={16} />, label: 'Add to Favorites', onClick: () => store.patch(page.id, { favorite: true }) },
     { divider: true },
-    { icon: <Link2 size={16} />, label: 'Copy link', hint: `${mod}L`, onClick: () => { copyText(pageUrl(page.id)); store.toast('Copied link to clipboard') } },
+    { icon: <Link2 size={16} />, label: 'Copy link', onClick: () => { copyText(pageUrl(page.id)); store.toast('Copied link to clipboard') } },
     { icon: <Copy size={16} />, label: 'Duplicate', hint: `${mod}D`, onClick: () => duplicate(store, page) },
     ...(open.rename && edit ? [{ icon: <PenLine size={16} />, label: 'Rename', hint: `${mod}${shift}R`, onClick: open.rename }] : []),
     ...(can(page, 'full') ? [{ icon: <CornerUpRight size={16} />, label: 'Move to', hint: `${mod}${shift}P`, onClick: open.move }] : []),
-    ...(edit ? [{ icon: <Trash2 size={16} />, label: 'Move to Trash', hint: 'Del', onClick: () => trash(store, page) }] : []),
+    ...(edit ? [{ icon: <Trash2 size={16} />, label: 'Move to Trash', onClick: () => trash(store, page) }] : []),
     { divider: true },
     { icon: <ArrowUpRight size={16} />, label: 'Open in new tab', hint: `${mod}${shift}↵`, onClick: () => open_(pageUrl(page.id)) },
     { divider: true },

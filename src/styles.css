@@ -991,3 +991,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .picker-body .menu-heading { color: var(--icon); padding: 10px 0 6px; }
 .emoji-grid:not(.icons) { grid-template-columns: repeat(12, 32px); }
 .emoji-grid:not(.icons) button { width: 32px; height: 32px; padding: 0; font-size: 24px; }
+
+/* Sidebar row hover controls measured on Notion: + then ⋯ at the right, 20px with 16px icons 2px apart; the
+   expand chevron (12px) takes the icon's place in a 20px box. */
+.item-actions { gap: 2px; }
+.sidebar .item { padding-right: 8px; }
+.item-actions button { width: 20px !important; height: 20px !important; color: var(--icon) !important; }
+.twisty { inset: 1px; color: var(--muted); }

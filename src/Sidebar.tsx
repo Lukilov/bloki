@@ -56,13 +56,13 @@ function PageItem({ page, depth, expanded, toggle }: { page: Page; depth: number
         <span className="item-icon">
           <span className="item-emoji">{iconOf(page)}</span>
           <button className="twisty" aria-label={open ? 'Collapse' : 'Expand'} onClick={e => { e.stopPropagation(); toggle(page.id) }}>
-            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         </span>
         <span className="item-label">{label(page)}</span>
         <span className="item-actions">
-          <button title="Delete, duplicate, and more…" onClick={e => { e.stopPropagation(); openMenu(e.currentTarget) }}><MoreHorizontal size={16} /></button>
           {addable && <button title="Add a page inside" onClick={e => { e.stopPropagation(); toggle(page.id, true); store.create({ parent_id: page.id }) }}><Plus size={16} /></button>}
+          <button title="Delete, duplicate, and more…" onClick={e => { e.stopPropagation(); openMenu(e.currentTarget) }}><MoreHorizontal size={16} /></button>
         </span>
       </div>
       <Popover anchor={menu} onClose={closeMenu} className="menu-pop" width={265}>
