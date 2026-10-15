@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownUp, CornerDownLeft, FileText, Search as SearchIcon, User } from 'lucide-react'
 import { api, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
-import { mod } from './ui'
+import { coverStyle, mod, shift } from './ui'
+
+const desktop = typeof window !== 'undefined' && 'blokiDesktop' in window
 
 type Hit = Pick<Page, 'id' | 'parent_id' | 'kind' | 'title' | 'icon' | 'updated'> & { snippet?: string }
 
@@ -51,6 +53,7 @@ export function SearchDialog({ close, onPick }: { close: () => void; onPick?: (i
   return (
     <div className="overlay search-overlay" onClick={close}>
       <div className="dialog search" onClick={e => e.stopPropagation()}>
+        <div className="search-main">
         <div className="search-input">
           <SearchIcon size={18} />
           <input autoFocus placeholder={`Search ${ws?.name ?? 'your workspace'}…`} value={q} onChange={e => setQ(e.target.value)}
@@ -97,8 +100,23 @@ export function SearchDialog({ close, onPick }: { close: () => void; onPick?: (i
           )}
         </div>
         <div className="search-foot muted small">
-          <span>↑↓ Select</span><span>↵ Open</span><span>{mod}↵ Open in new tab</span>
+          <span>↑↓ Select</span><span>↵ Open</span><span>{mod}↵ Open in new tab</span>{desktop && <span>{shift}{mod}K Command Search</span>}
         </div>
+        </div>
+        {/* Notion previews the highlighted page beside the results when the window is wide enough. */}
+        {sorted[sel] && <Preview page={store.byId.get(sorted[sel].id) ?? sorted[sel]} />}
+      </div>
+    </div>
+  )
+}
+
+function Preview({ page }: { page: Hit & { cover?: string; cover_y?: number } }) {
+  return (
+    <div className="search-preview" aria-hidden>
+      <div className="preview-card">
+        <div className="preview-cover" style={page.cover ? coverStyle(page.cover, page.cover_y) : undefined} />
+        {page.icon && <span className="preview-icon">{iconOf(page, 48)}</span>}
+        <div className={'preview-title' + (page.title ? '' : ' untitled')}>{label(page)}</div>
       </div>
     </div>
   )

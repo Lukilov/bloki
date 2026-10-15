@@ -223,6 +223,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
         <div className="settings-body">
           {tab === 'account' && <>
             <h3>My account</h3>
+            <p className="settings-sub">Your profile, sign-in email and password.</p>
             <Section title="My profile">
               <div className="set-profile">
                 <span className="avatar big">{me.user.name[0]}</span>
@@ -256,6 +257,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'settings' && <>
             <h3>My settings</h3>
+            <p className="settings-sub">How Bloki looks and behaves for you.</p>
             <Section title="Appearance" desc="Customize how Bloki looks on this device.">
               <Row label="Appearance"><select value={theme} onChange={e => theme_(e.target.value)}><option value="system">Use system setting</option><option value="light">Light</option><option value="dark">Dark</option></select></Row>
             </Section>
@@ -271,6 +273,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'notifications' && <>
             <h3>My notifications</h3>
+            <p className="settings-sub">What lands in your Inbox, and when.</p>
             <Section title="Inbox" desc="Choose what shows up in your Inbox.">
               {([['mention', 'Mentions', 'When someone @mentions you in a page'], ['comment', 'Comments', 'Replies and comments on pages you created or discussed'], ['share', 'Invites', 'When a page is shared with you']] as const).map(([k, l, d]) => (
                 <Row key={k} label={l} desc={d}><input type="checkbox" checked={prefs.notify?.[k] !== false} onChange={e => savePrefs({ notify: { ...prefs.notify, [k]: e.target.checked } })} /></Row>
@@ -280,6 +283,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'workspace' && ws && <>
             <h3>Workspace settings</h3>
+            <p className="settings-sub">The name, icon and contents of this workspace.</p>
             <Section title="Name"><input className="wide" value={wsName} disabled={!owner} onChange={e => setWsName(e.target.value)} /><p className="muted small">You can use your organization or company name. Keep it simple.</p></Section>
             <Section title="Icon"><input value={wsIcon} disabled={!owner} maxLength={8} placeholder="Emoji" onChange={e => setWsIcon(e.target.value)} /><p className="muted small">Upload an image or pick an emoji. It will show up in your sidebar and notifications.</p></Section>
             {owner && <button className="primary" disabled={busy} onClick={() => run(async () => { await api.updateWorkspace(ws.id, { name: wsName, icon: wsIcon }); await store.reloadMe(); done('Saved') })}>Update</button>}
@@ -298,6 +302,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'people' && ws && <>
             <h3>People</h3>
+            <p className="settings-sub">Who belongs to this workspace and what each person can do.</p>
             {owner && (
               <Section title="Invite link" desc="Single-use links, valid for 7 days. Send one to each person you invite.">
                 <div className="row">
@@ -337,6 +342,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'import' && <>
             <h3>Import</h3>
+            <p className="settings-sub">Bring pages in from Markdown files.</p>
             <Section title="Import data into this workspace" desc="Markdown and text files become private pages you can then move anywhere.">
               <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import')) }}><FileText size={20} /> Text & Markdown</button>
             </Section>

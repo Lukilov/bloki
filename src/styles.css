@@ -17,7 +17,7 @@
   --side-hover: rgba(33, 27, 23, 0.051);
   --side-active: rgba(33, 27, 23, 0.051);
   --t-gray: #787774; --t-brown: #9f6b53; --t-orange: #d9730d; --t-yellow: #cb912f; --t-green: #448361; --t-blue: #337ea9; --t-purple: #9065b0; --t-pink: #c14c8a; --t-red: #d44c47;
-  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --empty-icon: var(--faint); --search-bg: var(--card); --search-shadow: var(--shadow); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
+  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --tab-on: var(--text); --empty-icon: var(--faint); --search-bg: var(--card); --search-shadow: var(--shadow); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
   --accent: rgb(39, 131, 222);
   --accent-soft: rgba(35, 131, 226, 0.14);
   --danger: rgb(235, 87, 87);
@@ -47,7 +47,7 @@
   --label: rgb(173, 169, 163);
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
-  --gallery-card: rgba(255, 255, 255, 0.055); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
+  --gallery-card: rgba(255, 255, 255, 0.055); --tab-on: rgb(230, 229, 227); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
   --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
@@ -941,3 +941,32 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .view-icon svg { width: 20px; height: 20px; }
 .view-more { width: 24px; height: 24px; padding: 0; border: none; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); border-radius: 6px; }
 .view-more:hover { background: var(--hover-2); }
+
+/* Sidebar tabs measured on Notion: 32px round tabs 2px apart, 22px icons, the chosen one on a soft disc; Search at the right. */
+.side-tabs { display: flex; align-items: center; gap: 2px; height: 32px; margin: 2px 0 8px; }
+.side-tab { position: relative; width: 32px; height: 32px; padding: 0; border: none; border-radius: 9999px; display: grid; place-items: center; color: var(--icon); transition: padding 0.2s ease-out, margin 0.2s ease-out, background 20ms ease-in; }
+.side-tab svg { width: 22px; height: 22px; stroke-width: 1.6; }
+.side-tab:hover { background: var(--hover); }
+.side-tab.on { background: var(--hover); color: var(--tab-on); }
+.side-search { margin-left: auto; margin-right: 4px; }
+.side-tab-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--side); }
+.side-inbox { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Search preview measured on Notion: a 357px page card beside the 600px results, shown when there is room. */
+.search-main { display: flex; flex-direction: column; min-width: 0; flex: 1; max-height: inherit; }
+.search-preview { display: none; }
+@media (min-width: 1080px) {
+  .dialog.search { width: 1006px; flex-direction: row; height: min(700px, 72vh); max-height: none; }
+  .dialog.search .search-main { flex: 0 0 600px; }
+  .search-preview { display: block; flex: 1; padding: 32px 14px 0 25px; }
+}
+.preview-card { position: relative; width: 357px; height: 494px; max-height: calc(100% - 32px); border-radius: 12px; background: var(--bg); box-shadow: var(--peek-shadow); overflow: hidden; }
+.preview-cover { height: 76px; background: var(--side) center / cover no-repeat; }
+.preview-icon { position: absolute; left: 23px; top: 44px; height: 48px; display: flex; align-items: center; font-size: 48px; line-height: 48px; }
+.preview-title { position: absolute; left: 23px; right: 23px; top: 103px; font-size: 20px; font-weight: 600; line-height: 24px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-title.untitled { color: var(--muted); }
+
+/* Settings page heading measured on Notion: a 26px semibold title, a 16px line under it, then the sections. */
+.settings-body h3 { font-size: 26px; font-weight: 600; line-height: 32px; margin: 0 0 8px; padding: 0; border: none; }
+.settings-sub { font-size: 16px; line-height: 24px; color: var(--text); margin: 0 0 44px; }
+.set-section h4 { font-size: 16px; font-weight: 500; line-height: 24px; padding-bottom: 12px; margin: 0 0 16px; }

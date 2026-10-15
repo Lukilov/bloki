@@ -133,7 +133,9 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
   const store = useStore()
   const [expanded, toggle] = useStoredSet('expanded')
   const [collapsed, toggleCollapsed] = useStoredSet('collapsedSections')
-  const [panel, setPanel] = useState<{ kind: 'inbox' | 'trash' | 'help'; el: HTMLElement } | null>(null)
+  const [panel, setPanel] = useState<{ kind: 'trash' | 'help'; el: HTMLElement } | null>(null)
+  // Notion's sidebar tabs: Home shows the page tree, Inbox shows notifications in the sidebar itself.
+  const [tab, setTab] = useState<'home' | 'inbox'>('home')
   const [templates, setTemplates] = useState(false)
   const [unread, setUnread] = useState(0)
   const member = store.me?.role === 'owner' || store.me?.role === 'member'
@@ -181,12 +183,17 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
           <button className="side-icon-btn hover-only" title={`Close sidebar (${mod}\\)`} onClick={collapse}><ChevronsLeft size={18} /></button>
           {member && <button className="side-icon-btn" title="Create a new page" onClick={newPage}><SquarePen size={17} /></button>}
         </div>
-        <NavRow icon={<Search size={17} />} label="Search" hint={`${mod}K`} onClick={openSearch} />
-        <NavRow icon={<Home size={17} />} label="Home" active={!store.current} onClick={() => store.go(null)} />
-        <NavRow icon={<InboxIcon size={17} />} label="Inbox" badge={unread} active={panel?.kind === 'inbox'} onClick={e => setPanel(panel?.kind === 'inbox' ? null : { kind: 'inbox', el: e.currentTarget })} />
+        <div className="side-tabs" role="tablist" aria-label="Sidebar navigation">
+          {/* Clicking Home again opens the Home page, so it stays one click away. */}
+          <button role="tab" aria-selected={tab === 'home'} className={'side-tab' + (tab === 'home' ? ' on' : '')} title="Home" onClick={() => (tab === 'home' ? store.go(null) : setTab('home'))}><Home size={22} /></button>
+          <button role="tab" aria-selected={tab === 'inbox'} className={'side-tab' + (tab === 'inbox' ? ' on' : '')} title="Inbox" onClick={() => setTab('inbox')}>
+            <InboxIcon size={22} />{!!unread && <span className="side-tab-dot" aria-label={`${unread} unread`} />}
+          </button>
+          <button className="side-tab side-search" title={`Search (${mod}K)`} onClick={openSearch}><Search size={22} /></button>
+        </div>
       </div>
 
-      <div className="tree">
+      {tab === 'inbox' ? <div className="side-inbox"><InboxPanel setUnread={setUnread} close={() => setTab('home')} /></div> : <div className="tree">
         {favorites.length > 0 && <Section id="favorites" title="Favorites" pages={favorites} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />}
         <Section id="workspace" title="Workspace" pages={roots.filter(p => p.section === 'workspace')} drop={member ? 'workspace' : undefined}
           add={member ? () => store.create({ section: 'workspace' }) : undefined} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
@@ -200,7 +207,7 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
           {member && <NavRow icon={<LayoutTemplate size={17} />} label="Templates" onClick={() => setTemplates(true)} />}
           <NavRow icon={<Trash2 size={17} />} label="Trash" active={panel?.kind === 'trash'} onClick={e => setPanel(panel?.kind === 'trash' ? null : { kind: 'trash', el: e.currentTarget })} />
         </div>
-      </div>
+      </div>}
 
       <div className="side-foot">
         {store.me?.role === 'owner' ? <NavRow icon={<UserPlus size={17} />} label="Invite members" onClick={() => openSettings('people')} /> : <span />}
@@ -209,7 +216,6 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
 
       <div className="side-resizer" onMouseDown={resize} onDoubleClick={() => setWidth(248)} title="Drag to resize" />
 
-      {panel?.kind === 'inbox' && <Popover anchor={panel.el} side="right" onClose={() => setPanel(null)} className="side-panel" width={400}><InboxPanel setUnread={setUnread} close={() => setPanel(null)} /></Popover>}
       {panel?.kind === 'trash' && <Popover anchor={panel.el} side="right" onClose={() => setPanel(null)} className="side-panel" width={414}><TrashPanel close={() => setPanel(null)} /></Popover>}
       {panel?.kind === 'help' && (
         <Popover anchor={panel.el} onClose={() => setPanel(null)} className="menu-pop" width={240} align="end">
