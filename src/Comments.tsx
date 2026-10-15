@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowUp, Check, Link2, MessageSquare, MoreHorizontal, PenLine, RotateCcw, Trash2, X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { ArrowUp, Check, FileText, Link2, ListFilter, MessageSquare, MoreHorizontal, PenLine, RotateCcw, Trash2, X } from 'lucide-react'
 import { api, can, type Comment, type Page } from './api'
 import { useStore } from './store'
 import { copyText, Menu, Popover, timeAgo, usePopover } from './ui'
@@ -36,7 +36,7 @@ function Composer({ placeholder, onSend, autoFocus, initial = '', onCancel }: { 
   )
 }
 
-function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoot: boolean; setAll: (c: Comment[]) => void }) {
+function CommentRow({ c, page, isRoot, setAll, quote }: { c: Comment; page: Page; isRoot: boolean; setAll: (c: Comment[]) => void; quote?: ReactNode }) {
   const store = useStore()
   const [menu, open, close] = usePopover()
   const [editing, setEditing] = useState(false)
@@ -47,7 +47,7 @@ function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoo
       <div className="comment-head">
         <Avatar name={c.name} size={24} />
         <b>{c.name}</b>
-        <span className="muted small">{timeAgo(c.created)}</span>
+        <span className="muted small">{timeAgo(c.created).replace(/ ago$/, '')}</span>
         <span className="comment-actions">
           {isRoot && can(page, 'comment') && (
             <button className="ghost" title={c.resolved ? 'Re-open' : 'Resolve'} onClick={() => run(api.updateComment(c.id, { resolved: !c.resolved }))}>
@@ -64,6 +64,7 @@ function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoo
           ...(mine || can(page, 'full') ? [{ icon: <Trash2 size={16} />, label: isRoot ? 'Delete discussion' : 'Delete comment', danger: true, onClick: () => run(api.updateComment(c.id, { delete: true })) }] : []),
         ]} />
       </Popover>
+      {quote && <div className="discussion-quote">{quote}</div>}
       {editing
         ? <Composer autoFocus placeholder="Edit comment…" initial={c.body} onCancel={() => setEditing(false)} onSend={async t => { setAll(await api.updateComment(c.id, { body: t })); setEditing(false) }} />
         : <div className="comment-body">{c.body}</div>}
@@ -71,12 +72,11 @@ function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoo
   )
 }
 
-export function Discussion({ t, page, setAll, compact, noReply }: { t: Thread; page: Page; setAll: (c: Comment[]) => void; compact?: boolean; noReply?: boolean }) {
+export function Discussion({ t, page, setAll, compact, noReply, quote }: { t: Thread; page: Page; setAll: (c: Comment[]) => void; compact?: boolean; noReply?: boolean; quote?: ReactNode }) {
   const [replying, setReplying] = useState(!compact)
   return (
     <div className={'discussion' + (t.root.resolved ? ' resolved' : '')}>
-      {t.root.quote && <div className="discussion-quote">{t.root.quote}</div>}
-      <CommentRow c={t.root} page={page} isRoot setAll={setAll} />
+      <CommentRow c={t.root} page={page} isRoot setAll={setAll} quote={quote ?? t.root.quote} />
       {t.replies.map(r => <CommentRow key={r.id} c={r} page={page} isRoot={false} setAll={setAll} />)}
       {can(page, 'comment') && !t.root.resolved && !noReply && (replying
         ? <Composer placeholder="Reply…" onSend={async text => setAll(await api.addComment(page.id, text, { thread_id: t.root.id }))} />
@@ -107,16 +107,26 @@ export function CommentsPanel({ page, all, setAll, close, draft, clearDraft }: {
   draft: { blockId: string; quote: string; id: string } | null; clearDraft: () => void
 }) {
   const [tab, setTab] = useState<'open' | 'resolved'>('open')
+  const [filter, openFilter, closeFilter] = usePopover()
   const list = threads(all).filter(t => (tab === 'open' ? !t.root.resolved : t.root.resolved)).reverse()
+  // Notion groups discussions under day headings and quotes the page for page-level comments.
+  const day = (t: number) => { const d = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(t).setHours(0, 0, 0, 0)) / 864e5); return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : new Date(t).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) }
+  const pageQuote = <><FileText size={14} /> {page.title || 'Untitled'}</>
   return (
     <aside className="right-panel">
       <div className="panel-head">
-        <b>Comments</b>
+        <b>{tab === 'open' ? 'All discussions' : 'Resolved discussions'}</b>
         <span className="panel-tools">
-          <select value={tab} onChange={e => setTab(e.target.value as 'open')}><option value="open">Open</option><option value="resolved">Resolved</option></select>
+          <button className={'ghost' + (tab === 'resolved' ? ' on' : '')} title="Filter" onClick={e => openFilter(e.currentTarget)}><ListFilter size={16} /></button>
           <button className="ghost" title="Close" onClick={close}><X size={16} /></button>
         </span>
       </div>
+      <Popover anchor={filter} onClose={closeFilter} className="menu-pop" width={200} align="end">
+        <Menu onClose={closeFilter} items={[
+          { label: 'Open', checked: tab === 'open', onClick: () => setTab('open') },
+          { label: 'Resolved', checked: tab === 'resolved', onClick: () => setTab('resolved') },
+        ]} />
+      </Popover>
       {draft && (
         <div className="discussion">
           <div className="discussion-quote">{draft.quote}</div>
@@ -129,7 +139,12 @@ export function CommentsPanel({ page, all, setAll, close, draft, clearDraft }: {
           <div>{tab === 'open' ? 'No open comments yet' : 'No resolved comments'}</div>
           <div className="muted small">Open comments on this page will appear here</div></div>
       )}
-      {list.map(t => <Discussion key={t.root.id} t={t} page={page} setAll={setAll} compact />)}
+      {list.map((t, i) => (
+        <div key={t.root.id}>
+          {(i === 0 || day(list[i - 1].root.created) !== day(t.root.created)) && <div className="panel-group">{day(t.root.created)}</div>}
+          <Discussion t={t} page={page} setAll={setAll} quote={t.root.block_id ? undefined : pageQuote} />
+        </div>
+      ))}
     </aside>
   )
 }
