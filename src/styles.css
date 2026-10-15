@@ -448,21 +448,29 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .tex.block { display: block; }
 
 /* ---------- Comments ---------- */
-.page-discussions { margin: 4px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.page-discussions { margin: 11px 0 12px; display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--line); }
+/* Page comment composer measured on Notion: 24px avatar, text 6px after it, 8px above and 12px below, a rule underneath. */
+.page-discussions > .composer { padding: 8px 0 12px; }
 .discussion { padding: 10px 14px 6px; border-bottom: 1px solid var(--line); }
 .page-discussions .discussion { padding: 6px 0; border: none; }
 .discussion.resolved { opacity: 0.6; }
 .discussion-quote { border-left: 3px solid var(--comment-line); padding-left: 8px; margin-bottom: 8px; color: var(--text-2); font-size: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .comment { padding: 4px 0; }
-.comment-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+/* Posted comment measured on Notion: 24px avatar, name 14px/500, time 12px, body 14/20 at 32px. */
+.comment-head { display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 24px; }
+.comment-head b { font-weight: 500; }
+.comment-head .small { font-size: 12px; }
 .comment-actions { margin-left: auto; display: flex; opacity: 0; }
 .comment:hover .comment-actions { opacity: 1; }
-.comment-actions button { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
-.comment-body { white-space: pre-wrap; padding-left: 30px; font-size: 14px; }
-.composer { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
-.composer textarea { flex: 1; resize: none; border: none; background: none; padding: 2px 0; font-size: 14px; box-shadow: none !important; overflow: hidden; }
-.send { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: none; display: inline-flex; align-items: center; justify-content: center; background: var(--hover-2); color: var(--muted); }
-.send.ready { background: var(--accent); color: #fff; }
+.comment-actions button { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); }
+.comment-body { white-space: pre-wrap; padding-left: 32px; font-size: 14px; line-height: 20px; }
+.composer { display: flex; align-items: flex-start; gap: 6px; padding: 6px 0; }
+.composer .avatar, .comment-head .avatar { font-size: 11px !important; }
+.composer textarea { flex: 1; resize: none; border: none; background: none; padding: 3px 0 0; font-size: 14px; box-shadow: none !important; overflow: hidden; }
+/* Notion's send button: an 18px filled circle in a 24px hit area, grey until there is text, then blue. */
+.send { width: 24px; height: 24px; padding: 3px; border-radius: 50%; border: none; display: inline-flex; align-items: center; justify-content: center; background: var(--muted) content-box; color: var(--bg); }
+.send:hover { background: var(--muted) content-box; }
+.send.ready, .send.ready:hover { background: var(--accent) content-box; color: #fff; }
 .reply-btn { color: var(--muted); font-size: 14px; padding: 4px 0 4px 30px; }
 
 /* ---------- Dialogs: history, export ---------- */

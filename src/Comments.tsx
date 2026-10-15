@@ -24,14 +24,14 @@ function Composer({ placeholder, onSend, autoFocus, initial = '', onCancel }: { 
   }
   return (
     <div className="composer">
-      <Avatar name={store.me?.user.name} />
+      <Avatar name={store.me?.user.name} size={24} />
       <textarea rows={1} autoFocus={autoFocus} placeholder={placeholder} value={text}
         onChange={e => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }}
         onKeyDown={e => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
           if (e.key === 'Escape') onCancel?.()
         }} />
-      <button className={'send' + (text.trim() ? ' ready' : '')} disabled={!text.trim() || busy} title="Send" onClick={send}><ArrowUp size={14} /></button>
+      <button className={'send' + (text.trim() ? ' ready' : '')} disabled={!text.trim() || busy} title="Send" onClick={send}><ArrowUp size={12} strokeWidth={2.5} /></button>
     </div>
   )
 }
@@ -45,7 +45,7 @@ function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoo
   return (
     <div className="comment">
       <div className="comment-head">
-        <Avatar name={c.name} />
+        <Avatar name={c.name} size={24} />
         <b>{c.name}</b>
         <span className="muted small">{timeAgo(c.created)}</span>
         <span className="comment-actions">
@@ -71,14 +71,14 @@ function CommentRow({ c, page, isRoot, setAll }: { c: Comment; page: Page; isRoo
   )
 }
 
-export function Discussion({ t, page, setAll, compact }: { t: Thread; page: Page; setAll: (c: Comment[]) => void; compact?: boolean }) {
+export function Discussion({ t, page, setAll, compact, noReply }: { t: Thread; page: Page; setAll: (c: Comment[]) => void; compact?: boolean; noReply?: boolean }) {
   const [replying, setReplying] = useState(!compact)
   return (
     <div className={'discussion' + (t.root.resolved ? ' resolved' : '')}>
       {t.root.quote && <div className="discussion-quote">{t.root.quote}</div>}
       <CommentRow c={t.root} page={page} isRoot setAll={setAll} />
       {t.replies.map(r => <CommentRow key={r.id} c={r} page={page} isRoot={false} setAll={setAll} />)}
-      {can(page, 'comment') && !t.root.resolved && (replying
+      {can(page, 'comment') && !t.root.resolved && !noReply && (replying
         ? <Composer placeholder="Reply…" onSend={async text => setAll(await api.addComment(page.id, text, { thread_id: t.root.id }))} />
         : <button className="ghost reply-btn" onClick={() => setReplying(true)}>Reply…</button>)}
     </div>
@@ -88,13 +88,14 @@ export function Discussion({ t, page, setAll, compact }: { t: Thread; page: Page
 /** Discussions shown under the page title (comments not tied to text). */
 export function PageDiscussions({ page, all, setAll, composing, setComposing }: { page: Page; all: Comment[]; setAll: (c: Comment[]) => void; composing: boolean; setComposing: (b: boolean) => void }) {
   const open = threads(all).filter(t => !t.root.block_id && !t.root.resolved)
+  // Like Notion, the composer stays under page comments once there are any.
   if (!open.length && !composing) return null
   return (
     <div className="page-discussions">
-      {open.map(t => <Discussion key={t.root.id} t={t} page={page} setAll={setAll} compact />)}
-      {composing && can(page, 'comment') && (
-        <Composer autoFocus placeholder="Add a comment…" onCancel={() => setComposing(false)}
-          onSend={async text => { setAll(await api.addComment(page.id, text)); setComposing(false) }} />
+      {open.map(t => <Discussion key={t.root.id} t={t} page={page} setAll={setAll} compact noReply />)}
+      {can(page, 'comment') && (
+        <Composer autoFocus={composing} placeholder="Add a comment…" onCancel={() => setComposing(false)}
+          onSend={async text => setAll(await api.addComment(page.id, text))} />
       )}
     </div>
   )
