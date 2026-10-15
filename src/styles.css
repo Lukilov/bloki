@@ -17,7 +17,7 @@
   --side-hover: rgba(33, 27, 23, 0.051);
   --side-active: rgba(33, 27, 23, 0.051);
   --t-gray: #787774; --t-brown: #9f6b53; --t-orange: #d9730d; --t-yellow: #cb912f; --t-green: #448361; --t-blue: #337ea9; --t-purple: #9065b0; --t-pink: #c14c8a; --t-red: #d44c47;
-  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --tab-on: var(--text); --empty-icon: var(--faint); --search-bg: var(--card); --search-shadow: var(--shadow); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
+  --board-card: #ffffff; --board-card-shadow: var(--shadow-sm); --gallery-card: #ffffff; --code-bg: rgba(28, 19, 1, 0.03); --tab-on: var(--text); --empty-icon: var(--faint); --search-bg: var(--card); --search-shadow: var(--shadow); --peek-bg: #ffffff; --peek-shadow: var(--shadow); --grid-line: var(--line); --pill-on: var(--accent-soft); --weekend: rgba(28, 19, 1, 0.03);
   --accent: rgb(39, 131, 222);
   --accent-soft: rgba(35, 131, 226, 0.14);
   --danger: rgb(235, 87, 87);
@@ -47,7 +47,7 @@
   --label: rgb(173, 169, 163);
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
-  --gallery-card: rgba(255, 255, 255, 0.055); --tab-on: rgb(230, 229, 227); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
+  --gallery-card: rgba(255, 255, 255, 0.055); --code-bg: rgba(252, 252, 252, 0.03); --tab-on: rgb(230, 229, 227); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
   --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
@@ -64,7 +64,7 @@
   --shadow-sm: rgba(15, 15, 15, 0.2) 0 0 0 1px, rgba(15, 15, 15, 0.2) 0 2px 4px;
   --comment-bg: rgba(255, 212, 0, 0.12);
   --comment-line: rgba(255, 212, 0, 0.55);
-  --c-gray: #2f2f2f; --c-brown: #4a3228; --c-orange: #5c3b23; --c-yellow: #564328; --c-green: #243d30;
+  --c-gray: rgb(56, 56, 54); --c-brown: #4a3228; --c-orange: #5c3b23; --c-yellow: #564328; --c-green: #243d30;
   --c-blue: #143a4e; --c-purple: #3c2d49; --c-pink: #4e2c3c; --c-red: #522e2a;
   --opt-gray: rgb(55, 55, 55); --opt-brown: rgb(74, 50, 40); --opt-orange: rgb(92, 59, 35); --opt-yellow: rgb(86, 67, 40);
   --opt-green: rgb(36, 61, 48); --opt-blue: rgb(20, 58, 78); --opt-purple: rgb(60, 45, 73); --opt-pink: rgb(78, 44, 60); --opt-red: rgb(82, 46, 42);
@@ -411,8 +411,9 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .page-mention .mention-title { text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 2px; font-weight: 500; }
 .mention.gone { color: var(--muted); }
 .mention.person, .mention.date-mention { color: var(--text-2); }
-.callout { display: flex; gap: 8px; width: 100%; padding: 16px 16px 16px 12px; border-radius: 4px; background: var(--c-gray); }
-.callout-icon { border: none; padding: 0 2px; display: inline-flex; height: 24px; align-items: center; }
+/* Callout measured on Notion: 10px corners, 21.6px emoji 14px in, text 45px in, 66px tall for one line. */
+.callout { display: flex; gap: 9px; width: 100%; padding: 21px 16px 21px 14px; border-radius: 10px; background: var(--c-gray); }
+.callout-icon { border: none; padding: 0 2px; display: inline-flex; height: 24px; align-items: center; font-size: 21.6px; margin-top: -2px; }
 .callout-body { flex: 1; min-width: 0; }
 .inline-db { width: 100%; }
 .page-block { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 2px; border-radius: 4px; cursor: pointer; }
@@ -970,3 +971,12 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .settings-body h3 { font-size: 26px; font-weight: 600; line-height: 32px; margin: 0 0 8px; padding: 0; border: none; }
 .settings-sub { font-size: 16px; line-height: 24px; color: var(--text); margin: 0 0 44px; }
 .set-section h4 { font-size: 16px; font-weight: 500; line-height: 24px; padding-bottom: 12px; margin: 0 0 16px; }
+
+/* Toggle, quote and code measured on Notion: toggle text 30px in like list items; quote bar 3px in the text
+   colour with text 25px in; code on a faint 10px-cornered panel in a 0.85em monospace stack. */
+.bn-editor [data-content-type='toggleListItem'] .bn-inline-content { margin-left: 6px; }
+.bn-editor [data-content-type='quote'] blockquote { color: var(--text); border-left: 3px solid currentColor; padding-left: 22px; }
+.bn-editor .bn-block-content[data-content-type='codeBlock'] { background: var(--code-bg); border-radius: 10px; color: var(--text); padding: 0; }
+.bn-editor [data-content-type='codeBlock'] > pre { padding: 36px 22px !important; font-family: SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace; font-size: 0.85em; line-height: 1.5; }
+.bn-editor [data-content-type='codeBlock'] > pre code { font: inherit; }
+.bn-editor [data-content-type='codeBlock'] > div > select { color: var(--muted); }
