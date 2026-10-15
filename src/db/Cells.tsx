@@ -369,7 +369,7 @@ export function Cell({ prop, row, db, readOnly, wrap, className = '', placeholde
         {placeholder && (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) && <span className="cell-placeholder">{placeholder}</span>}
       </div>
       <Popover anchor={anchor} onClose={close} className={'menu-pop cell-pop' + (['text', 'title', 'number', 'url', 'email', 'phone'].includes(prop.type) ? ' text-pop' : '')}
-        width={['text', 'title', 'number', 'url', 'email', 'phone'].includes(prop.type) ? Math.max(anchor?.getBoundingClientRect().width ?? 240, 240) : prop.type === 'date' ? 280 : ['select', 'status'].includes(prop.type) ? 240 : wide ? 300 : 280}>
+        width={['text', 'title', 'number', 'url', 'email', 'phone'].includes(prop.type) ? Math.max(anchor?.getBoundingClientRect().width ?? 240, 240) : prop.type === 'date' ? 248 : ['select', 'status'].includes(prop.type) ? 240 : wide ? 300 : 280}>
         {editor}
       </Popover>
     </>

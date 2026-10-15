@@ -37,6 +37,7 @@
   color-scheme: light;
 }
 :root[data-theme='dark'] {
+  --field-bg: rgba(252, 252, 252, 0.03); --switch-off: rgba(202, 204, 206, 0.3);
   --bg: #191919;
   --side: #202020;
   /* Measured on Notion's dark theme (2026): warm greys */
@@ -685,19 +686,29 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .option-more { margin-left: auto; color: var(--muted); padding: 0 2px; opacity: 0; display: inline-flex; }
 .option-row:hover .option-more, .option-row.on .option-more { opacity: 1; }
 .mini-select { margin-left: auto; font-size: 12px; padding: 0 4px; }
-.date-picker { padding: 8px 0; }
-.date-fields { display: flex; flex-direction: column; gap: 4px; padding: 0 10px 8px; }
-.date-fields input.on { box-shadow: var(--accent) 0 0 0 1px inset; border-color: var(--accent); }
-.cal-mini-head { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; font-size: 14px; }
-.cal-mini-head button { padding: 2px 4px; font-size: 12px; color: var(--muted); }
-.cal-mini { display: grid; grid-template-columns: repeat(7, 1fr); padding: 4px 8px; gap: 1px; }
-.cal-mini .dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; }
-.cal-mini .day { border: none; padding: 0; height: 32px; border-radius: 4px; font-size: 13px; }
-.cal-mini .day.other { color: var(--faint); }
-.cal-mini .day.today { color: var(--danger); font-weight: 600; }
-.cal-mini .day.range { background: var(--accent-soft); border-radius: 0; }
-.cal-mini .day.sel { background: var(--accent); color: #fff; border-radius: 4px; }
-.toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 14px; font-size: 14px; }
+/* Date picker measured on Notion: 248px wide, a 224x28 field, 28px days on a 32px grid, 30x18 switches. */
+.date-picker { padding: 12px 0 6px; }
+.date-fields { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 8px; }
+.date-fields input { height: 28px; padding: 0 8px; border: none; border-radius: 6px; font-size: 14px; background: var(--field-bg, rgba(242, 241, 238, 0.6)); box-shadow: var(--line) 0 0 0 1px inset; }
+.date-fields input.on { box-shadow: var(--accent) 0 0 0 1px inset, rgba(35, 131, 226, 0.3) 0 0 0 2px; }
+.cal-mini-head { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 0 14px; height: 32px; font-size: 14px; }
+.cal-mini-head b { font-weight: 500; }
+.cal-mini-head span { display: flex; align-items: center; gap: 2px; }
+.cal-mini-head button { padding: 0 4px; height: 20px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted); display: inline-flex; align-items: center; }
+.cal-mini { display: grid; grid-template-columns: repeat(7, 32px); padding: 0 12px 6px; }
+.cal-mini .dow { font-size: 12px; color: var(--muted); text-align: center; line-height: 18px; padding: 4px 0 2px; }
+.cal-mini .day { border: none; padding: 0; width: 28px; height: 28px; margin: 2px; border-radius: 6px; font-size: 14px; line-height: 28px; }
+.cal-mini .day.other { color: var(--muted); }
+.cal-mini .day.today { color: var(--danger); font-weight: 500; }
+.cal-mini .day.range { background: var(--accent-soft); }
+.cal-mini .day.sel, .cal-mini .day.sel:hover { background: var(--accent); color: #fff; }
+.date-picker .menu-divider { margin: 6px 12px; }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 12px; min-height: 29px; font-size: 14px; cursor: pointer; }
+.toggle-row input[type=checkbox] { appearance: none; margin: 0; flex: none; width: 30px; height: 18px; padding: 2px; border-radius: 44px; background: var(--switch-off, rgba(135, 131, 120, 0.3)); cursor: pointer; transition: background 200ms; }
+.toggle-row input[type=checkbox]::before { content: ''; display: block; width: 14px; height: 14px; border-radius: 44px; background: #fff; transition: transform 200ms ease-out; }
+.toggle-row input[type=checkbox]:checked { background: var(--accent); }
+.toggle-row input[type=checkbox]:checked::before { transform: translateX(12px); }
+.date-picker > .menu-item { margin: 0 4px; }
 .files-editor { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
 .prop-editor .prop-name-row { display: flex; align-items: center; gap: 6px; padding: 4px 10px 8px; }
 .prop-name-row input { flex: 1; }
