@@ -2,13 +2,14 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import {
   ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, EyeOff, Filter as FilterIcon, GripVertical, Maximize2, MoreHorizontal, Plus, Trash2, X,
   ArrowLeftToLine, ArrowRightToLine, WrapText,
+  Group as GroupIcon,
 } from 'lucide-react'
 import { api, type Page, type Prop, type View } from '../api'
 import { iconOf, label, useStore } from '../store'
 import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
-import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
-import { aggregate, calcsFor, dateValue, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
+import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
+import { aggregate, calcsFor, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
 type Store = ReturnType<typeof useStore>
 export type ViewProps = {
@@ -37,19 +38,25 @@ function HeaderMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () =>
   const { db, view, setView } = p
   const all = db.schema.props ?? []
   const idx = all.findIndex(x => x.id === prop.id)
+  const actions = propertyActions(store, db, prop, close, p.perm.structure ? () => setView({ hidden: [...(view.hidden ?? []), prop.id] }) : undefined)
   const insert = (at: number) => { const n = newProp('text'); store.patch(db.id, { schema: { ...db.schema, props: [...all.slice(0, at), n, ...all.slice(at)] } }); close() }
   return (
     <div className="header-menu">
-      {p.perm.structure && <PropertyEditor prop={prop} db={db} close={close} onHide={prop.id !== 'title' ? () => setView({ hidden: [...(view.hidden ?? []), prop.id] }) : undefined} />}
+      {p.perm.structure && <PropertyEditor prop={prop} db={db} close={close} inHeader />}
       <Menu onClose={close} items={[
         ...(p.perm.structure ? [{ divider: true } as const] : []),
         { icon: <FilterIcon size={15} />, label: 'Filter', onClick: () => p.addFilter(prop.id) },
         { icon: <ArrowUp size={15} />, label: 'Sort ascending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'asc' }] }) },
         { icon: <ArrowDown size={15} />, label: 'Sort descending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'desc' }] }) },
-        { icon: <WrapText size={15} />, label: view.wrap ? 'Unwrap text' : 'Wrap text', onClick: () => setView({ wrap: !view.wrap }) },
-        ...(p.perm.structure && prop.id !== 'title' ? [
-          { icon: <ArrowLeftToLine size={15} />, label: 'Insert left', onClick: () => insert(idx) },
+        // Notion's order: Filter, Sort, Group, wrapping, then inserting columns either side.
+        ...(groupable(prop) ? [{ icon: <GroupIcon size={15} />, label: 'Group', checked: view.groupBy === prop.id, onClick: () => setView({ groupBy: view.groupBy === prop.id ? undefined : prop.id }) }] : []),
+        ...(actions.hide ? [actions.hide] : []),
+        { icon: <WrapText size={15} />, label: view.wrap ? 'Unwrap content' : 'Wrap content', onClick: () => setView({ wrap: !view.wrap }) },
+        ...(p.perm.structure ? [
+          // The Name column always comes first in Bloki, so it only gets "Insert right".
+          ...(prop.id !== 'title' ? [{ icon: <ArrowLeftToLine size={15} />, label: 'Insert left', onClick: () => insert(idx) }] : []),
           { icon: <ArrowRightToLine size={15} />, label: 'Insert right', onClick: () => insert(idx + 1) },
+          ...(actions.duplicate ? [{ divider: true } as const, actions.duplicate, actions.remove!] : []),
         ] : []),
       ]} />
     </div>
@@ -222,7 +229,7 @@ export function TableView(p: ViewProps) {
           {cols.map(c => <div key={c.id} data-col={c.id} style={{ width: width(c.id) }}><CalcCell prop={c} p={p} rows={p.rows} /></div>)}
         </div>
       </div>
-      <Popover anchor={head?.el ?? null} onClose={() => setHead(null)} className="menu-pop" width={290}>
+      <Popover anchor={head?.el ?? null} onClose={() => setHead(null)} className="menu-pop" width={244}>
         {head && <HeaderMenu prop={cols.find(c => c.id === head.prop.id) ?? head.prop} p={p} close={() => setHead(null)} />}
       </Popover>
       <Popover anchor={add} onClose={closeAdd} className="menu-pop" width={260}>

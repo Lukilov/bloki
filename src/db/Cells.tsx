@@ -433,7 +433,18 @@ function FormulaEditor({ prop, db, onSave }: { prop: Prop; db: Page; onSave: (f:
 }
 
 /** Edit a property's name, type and settings. */
-export function PropertyEditor({ prop, db, close, onHide }: { prop: Prop; db: Page; close: () => void; onHide?: () => void }) {
+/** Hide, duplicate and delete for a property (none for the Name column). */
+export function propertyActions(store: ReturnType<typeof useStore>, db: Page, prop: Prop, close: () => void, onHide?: () => void) {
+  const props = db.schema.props ?? []
+  if (prop.id === 'title') return { hide: null, duplicate: null, remove: null }
+  return {
+    hide: onHide ? { icon: <ListChecks size={15} />, label: 'Hide', danger: false, onClick: () => { onHide(); close() } } : null,
+    duplicate: { icon: <Copy size={15} />, label: 'Duplicate property', danger: false, onClick: () => { store.patch(db.id, { schema: { ...db.schema, props: [...props.slice(0, props.indexOf(prop) + 1), { ...prop, id: uid(), name: prop.name + ' (1)' }, ...props.slice(props.indexOf(prop) + 1)] } }); close() } },
+    remove: { icon: <Trash2 size={15} />, label: 'Delete property', danger: true, onClick: () => { if (confirm(`Delete the “${prop.name}” property?`)) { store.patch(db.id, { schema: { ...db.schema, props: props.filter(p => p.id !== prop.id) } }); close() } } },
+  }
+}
+
+export function PropertyEditor({ prop, db, close, onHide, inHeader }: { prop: Prop; db: Page; close: () => void; onHide?: () => void; inHeader?: boolean }) {
   const store = useStore()
   const [name, setName] = useState(prop.name)
   const [pop, setPop] = useState<{ kind: 'type' | 'formula' | 'number' | 'relation' | 'rollup-rel' | 'rollup-prop' | 'rollup-fn'; el: HTMLElement } | null>(null)
@@ -500,12 +511,13 @@ export function PropertyEditor({ prop, db, close, onHide }: { prop: Prop; db: Pa
             <span className="menu-icon"><Plus size={14} /></span><span className="menu-label">Add an option</span></button>
         </>
       )}
-      <div className="menu-divider" />
-      {onHide && !isTitle && <button className="menu-item" onClick={() => { onHide(); close() }}><span className="menu-icon"><ListChecks size={15} /></span><span className="menu-label">Hide in view</span></button>}
-      {!isTitle && <button className="menu-item" onClick={() => { store.patch(db.id, { schema: { ...db.schema, props: [...props.slice(0, props.indexOf(prop) + 1), { ...prop, id: uid(), name: prop.name + ' (1)' }, ...props.slice(props.indexOf(prop) + 1)] } }); close() }}>
-        <span className="menu-icon"><Copy size={15} /></span><span className="menu-label">Duplicate property</span></button>}
-      {!isTitle && <button className="menu-item danger" onClick={() => { if (confirm(`Delete the “${prop.name}” property?`)) { store.patch(db.id, { schema: { ...db.schema, props: props.filter(p => p.id !== prop.id) } }); close() } }}>
-        <span className="menu-icon"><Trash2 size={15} /></span><span className="menu-label">Delete property</span></button>}
+      {/* In the column menu these sit lower down, as in Notion; elsewhere they close the editor. */}
+      {!inHeader && <>
+        <div className="menu-divider" />
+        {Object.values(propertyActions(store, db, prop, close, onHide)).filter(Boolean).map(a => (
+          <button key={a!.label} className={'menu-item' + (a!.danger ? ' danger' : '')} onClick={a!.onClick}><span className="menu-icon">{a!.icon}</span><span className="menu-label">{a!.label}</span></button>
+        ))}
+      </>}
 
       <Popover anchor={pop?.kind === 'type' ? pop.el : null} side="right" onClose={() => setPop(null)} className="menu-pop" width={260}>
         <TypePicker current={prop.type} onPick={t => { const n = newProp(t, prop.name); save({ type: t, options: prop.options ?? n.options, format: n.format, formula: prop.formula ?? n.formula }); setPop(null) }} />
