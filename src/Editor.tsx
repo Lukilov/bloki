@@ -24,7 +24,7 @@ import {
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
 import { api, can, type Comment, type Page, type ViewType } from './api'
-import { iconText, label, useStore } from './store'
+import { ancestors, iconText, label, useStore } from './store'
 import { newDatabase } from './Database'
 import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate } from './blocks'
 import { copyText, isMac, mod, Popover, shift } from './ui'
@@ -394,19 +394,20 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
     const s = storeRef.current
     const ql = q.toLowerCase()
     const persons = pagesOnly ? [] : [...s.people.values()].filter(p => p.name.toLowerCase().includes(ql)).slice(0, 5)
-      .map(p => ({ title: p.name, subtext: p.email, group: 'People', icon: <span className="avatar">{p.name[0]}</span>, onItemClick: () => editor.insertInlineContent([{ type: 'person', props: { userId: p.id } }, ' '] as never) }))
+      .map(p => ({ title: p.name, group: 'People', icon: <span className="avatar">{p.name[0]}</span>, onItemClick: () => editor.insertInlineContent([{ type: 'person', props: { userId: p.id } }, ' '] as never) }))
     const iso = (d: number) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10)
     const parsed = q && !Number.isNaN(Date.parse(q)) ? new Date(Date.parse(q)).toISOString().slice(0, 10) : null
-    const dates = pagesOnly ? [] : [...(parsed ? [parsed] : []), iso(0), iso(1), iso(-1)]
+    // Notion offers only Today until you type; then tomorrow/yesterday match too.
+    const dates = pagesOnly ? [] : [...(parsed ? [parsed] : []), iso(0), ...(ql ? [iso(1), iso(-1)] : [])]
       .filter((d, i, a) => a.indexOf(d) === i && (parsed === d || !ql || formatMentionDate(d).toLowerCase().includes(ql)))
-      .map(d => ({ title: formatMentionDate(d), subtext: d, group: 'Date', icon: <CalendarDays size={16} />, onItemClick: () => editor.insertInlineContent([{ type: 'date', props: { date: d } }, ' '] as never) }))
+      .map(d => ({ title: formatMentionDate(d), group: 'Date', icon: <CalendarDays size={16} />, onItemClick: () => editor.insertInlineContent([{ type: 'date', props: { date: d } }, ' '] as never) }))
     const pages = s.pages.filter(p => !p.trashed && p.id !== page.id && label(p).toLowerCase().includes(ql)).slice(0, 8)
-      .map(p => ({ title: `${iconText(p)} ${label(p)}`, group: 'Link to page', onItemClick: () => editor.insertInlineContent([{ type: 'mention', props: { pageId: p.id } }, ' '] as never) }))
+      .map(p => ({ title: `${iconText(p)} ${label(p)}`, subtext: ancestors(s.byId, p.parent_id).map(label).join(' / ') || undefined, group: 'Link to page', onItemClick: () => editor.insertInlineContent([{ type: 'mention', props: { pageId: p.id } }, ' '] as never) }))
     const create = can(page, 'edit') ? [{
       title: `New “${q || 'Untitled'}” sub-page`, group: 'New page', icon: <FileText size={16} />,
       onItemClick: async () => { const child = await s.create({ parent_id: page.id, title: q }, false); editor.insertInlineContent([{ type: 'mention', props: { pageId: child.id } }, ' '] as never) },
     }] : []
-    return [...persons, ...dates, ...pages, ...create]
+    return [...dates, ...persons, ...pages, ...create]
   }
 
   const openThreads = useMemo(() => comments.filter(c => !c.thread_id && !c.resolved && c.block_id).map(c => c.id), [comments])
@@ -444,9 +445,10 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
         <BlockNoteView editor={editor as never} theme={dark ? darkTheme : lightTheme} editable={editable && (!live || synced)} onChange={onChange} slashMenu={false} sideMenu={false} formattingToolbar={false}>
           <SideMenuController sideMenu={props => <SideMenu {...props} dragHandleMenu={BlockMenu} />} />
           <FormattingToolbarController formattingToolbar={Toolbar} floatingUIOptions={{ useFloatingOptions: { placement: 'bottom-start' } }} />
-          <SuggestionMenuController triggerCharacter="/" getItems={async q => filterSuggestionItems(slashItems(editor), q)} />
-          <SuggestionMenuController triggerCharacter="@" getItems={async q => mentionItems(q)} />
-          <SuggestionMenuController triggerCharacter="[[" getItems={async q => mentionItems(q, true)} />
+          {/* data-suggest lets CSS give the @ / [[ menu Notion's denser mention layout. */}
+          <SuggestionMenuController triggerCharacter="/" getItems={async q => { document.documentElement.dataset.suggest = 'slash'; return filterSuggestionItems(slashItems(editor), q) }} />
+          <SuggestionMenuController triggerCharacter="@" getItems={async q => { document.documentElement.dataset.suggest = 'mention'; return mentionItems(q) }} />
+          <SuggestionMenuController triggerCharacter="[[" getItems={async q => { document.documentElement.dataset.suggest = 'mention'; return mentionItems(q, true) }} />
         </BlockNoteView>
       </div>
       {moving && (

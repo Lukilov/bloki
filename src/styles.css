@@ -574,6 +574,13 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .bn-container .bn-mt-suggestion-menu-item-title { font-size: 14px !important; font-weight: 400 !important; line-height: 1.2 !important; color: var(--text) !important; }
 .bn-container .bn-mt-suggestion-menu-item-subtitle { display: none !important; }
 .bn-container .bn-mt-suggestion-menu-item-section[data-position='right'] { margin-left: auto; }
+/* @ menu measured on Notion: 330px, 28px rows (45px with a page path), a rule between groups. */
+[data-suggest='mention'] .bn-container .bn-suggestion-menu { width: 330px; max-height: 380px; }
+[data-suggest='mention'] .bn-container .bn-suggestion-menu-item { min-height: 28px !important; }
+[data-suggest='mention'] .bn-container .bn-suggestion-menu-item:has(.bn-mt-suggestion-menu-item-subtitle:not(:empty)) { min-height: 45px !important; }
+[data-suggest='mention'] .bn-container .bn-mt-suggestion-menu-item-subtitle:not(:empty) { display: block !important; font-size: 12px !important; line-height: 17px !important; color: var(--muted) !important; margin: 2px 0 0 !important; }
+[data-suggest='mention'] .bn-container .bn-suggestion-menu-label { padding: 10px 12px 10px !important; }
+[data-suggest='mention'] .bn-container .bn-suggestion-menu-item + .bn-suggestion-menu-label { margin: 8px 12px 0 !important; padding: 12px 0 10px !important; border-top: 1px solid var(--line); }
 .bn-container .bn-mt-suggestion-menu-item-section[data-position='right'] > * { background: none !important; color: var(--muted) !important; font-size: 12px !important; font-weight: 400 !important; padding: 0 !important; text-transform: none !important; }
 .bn-container .bn-menu-item { font-size: 14px !important; height: 28px !important; min-height: 28px; padding: 0 8px !important; border-radius: 6px !important; margin: 0 4px 1px; color: var(--text) !important; width: calc(100% - 8px); transition: background 20ms ease-in; }
 .bn-container .bn-menu-item .mantine-Menu-itemSection[data-position='left'] { margin-right: 8px; }
