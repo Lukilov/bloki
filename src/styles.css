@@ -1003,3 +1003,6 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .twisty { inset: 1px; color: var(--muted); }
 
 .side-panel { height: 414px; }
+
+/* Option picker field measured on Notion: 39px, a faint fill and a line under it; status/select pickers are 240px. */
+.picker-field { min-height: 39px; padding: 4px 12px; background: var(--code-bg); }
