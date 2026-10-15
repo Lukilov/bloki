@@ -928,3 +928,16 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .set-row .muted.small { font-size: 13px; line-height: 18px; color: var(--icon); }
 .set-control button { height: 28px; padding: 0 8px; }
 .overlay:has(> .dialog.settings) { align-items: center; padding-top: 0; }
+
+/* View switcher measured on Notion: a 32px pill for the current view, a 290px menu of 28px view rows. */
+.view-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 6px 10px; border: none; border-radius: 9999px; background: var(--hover); font-size: 14px; font-weight: 500; color: var(--text); }
+.view-pill > svg:first-child { width: 20px; height: 20px; }
+.view-pill-caret { color: var(--muted); }
+.view-pill .tab-rename { width: 120px; }
+.view-row { display: flex; align-items: center; height: 28px; margin: 0 4px; padding: 0 4px 0 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.view-row:hover, .view-row.on { background: var(--hover); }
+.view-grip { width: 16px; display: inline-flex; color: var(--icon); margin-right: 10px; cursor: grab; }
+.view-icon { width: 20px; display: inline-flex; margin-right: 8px; }
+.view-icon svg { width: 20px; height: 20px; }
+.view-more { width: 24px; height: 24px; padding: 0; border: none; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); border-radius: 6px; }
+.view-more:hover { background: var(--hover-2); }

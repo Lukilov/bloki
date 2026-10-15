@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownUp, ArrowUpRight, Calendar, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
-  Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
+  GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
@@ -79,6 +79,43 @@ function PropertyList({ db, onPick, filter }: { db: Page; onPick: (p: Prop) => v
     <div className="menu-list">
       <input className="menu-filter" autoFocus placeholder="Filter by…" value={q} onChange={e => setQ(e.target.value)} />
       {all.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p)}><span className="menu-icon">{typeIcon(p)}</span><span className="menu-label">{p.name}</span></button>)}
+    </div>
+  )
+}
+
+/** The view menu under the view pill: search, views (drag to reorder, ⋯ for options), New view. */
+function ViewList({ views, current, canEdit, pick, more, reorder, add }: {
+  views: View[]; current: string; canEdit: boolean
+  pick: (id: string) => void; more: (id: string, el: HTMLElement) => void; reorder: (views: View[]) => void; add: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [drag, setDrag] = useState<string | null>(null)
+  const shown = views.filter(v => v.name.toLowerCase().includes(q.toLowerCase()))
+  const drop = (target: string) => {
+    if (!drag || drag === target) return
+    const moved = views.find(v => v.id === drag)!
+    const rest = views.filter(v => v.id !== drag)
+    rest.splice(rest.findIndex(v => v.id === target), 0, moved)
+    reorder(rest)
+  }
+  return (
+    <div className="menu-list">
+      <input className="menu-filter" autoFocus placeholder="Search for a view…" value={q} onChange={e => setQ(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && shown[0]) pick(shown[0].id) }} />
+      {shown.map(v => (
+        <div key={v.id} className={'view-row' + (v.id === current ? ' on' : '')} draggable={canEdit && !q}
+          onDragStart={() => setDrag(v.id)} onDragEnd={() => setDrag(null)} onDragOver={e => drag && e.preventDefault()} onDrop={() => drop(v.id)}
+          onClick={() => pick(v.id)}>
+          <span className="view-grip">{canEdit && <GripVertical size={16} />}</span>
+          <span className="view-icon">{VIEW_ICONS[v.type]}</span>
+          <span className="menu-label">{v.name}</span>
+          {canEdit && <button className="view-more" title="View options" onClick={e => { e.stopPropagation(); more(v.id, e.currentTarget) }}><MoreHorizontal size={16} /></button>}
+        </div>
+      ))}
+      {canEdit && <>
+        <div className="menu-divider" />
+        <button className="menu-item" onClick={add}><span className="menu-icon"><Plus size={16} /></span><span className="menu-label">New view</span></button>
+      </>}
     </div>
   )
 }
@@ -214,7 +251,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
   const store = useStore()
   const db = store.byId.get(id)
   const [viewId, setViewId] = useState<string>()
-  const [pop, setPop] = useState<{ kind: 'add-view' | 'tab' | 'filter-add' | 'filter' | 'sort' | 'settings' | 'new'; el: HTMLElement; index?: number } | null>(null)
+  const [pop, setPop] = useState<{ kind: 'add-view' | 'views' | 'tab' | 'filter-add' | 'filter' | 'sort' | 'settings' | 'new'; el: HTMLElement; index?: number } | null>(null)
   const [query, setQuery] = useState<string | null>(null)
   const [peek, setPeek] = useState<Page | null>(null)
   const [local, setLocal] = useState<Partial<View>>({})
@@ -300,16 +337,15 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
         </div>
       )}
       <div className="db-bar">
+        {/* As in Notion: one pill for the current view; the other views, and adding one, sit in its menu. */}
         <div className="db-tabs">
-          {views.map(v => (
-            <button key={v.id} className={'tab' + (v.id === view.id ? ' active' : '')} onClick={e => (v.id === view.id && perm.structure ? setPop({ kind: 'tab', el: e.currentTarget }) : setViewId(v.id))}>
-              {VIEW_ICONS[v.type]}
-              {renaming === v.id
-                ? <input autoFocus className="tab-rename" defaultValue={v.name} onClick={e => e.stopPropagation()} onBlur={e => { setSchema({ ...schema, views: views.map(x => (x.id === v.id ? { ...x, name: e.target.value || x.name } : x)) }); setRenaming(null) }} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-                : <span>{v.name}</span>}
-            </button>
-          ))}
-          {perm.structure && <button className="tab add" title="Add view" onClick={e => setPop({ kind: 'add-view', el: e.currentTarget })}><Plus size={14} /></button>}
+          <button className="view-pill" onClick={e => setPop({ kind: 'views', el: e.currentTarget })}>
+            {VIEW_ICONS[view.type]}
+            {renaming === view.id
+              ? <input autoFocus className="tab-rename" defaultValue={view.name} onClick={e => e.stopPropagation()} onBlur={e => { setSchema({ ...schema, views: views.map(x => (x.id === view.id ? { ...x, name: e.target.value || x.name } : x)) }); setRenaming(null) }} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+              : <span>{view.name}</span>}
+            <ChevronDown size={16} className="view-pill-caret" />
+          </button>
         </div>
         <div className="db-tools">
           <button className={'icon-btn' + (filters.length ? ' on-accent' : '')} title="Filter" onClick={e => (filters.length ? setPop({ kind: 'filter-add', el: e.currentTarget }) : setPop({ kind: 'filter-add', el: e.currentTarget }))}><FilterIcon size={15} /></button>
@@ -361,6 +397,13 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
             <button key={t} onClick={() => { addView(t); closePop() }}>{VIEW_ICONS[t]}<span>{VIEW_NAMES[t]}</span></button>
           ))}
         </div>
+      </Popover>
+      <Popover anchor={pop?.kind === 'views' ? pop.el : null} onClose={closePop} className="menu-pop" width={290}>
+        <ViewList views={views} current={view.id} canEdit={perm.structure}
+          pick={id => { setViewId(id); closePop() }}
+          more={(id, el) => { setViewId(id); setTimeout(() => setPop({ kind: 'tab', el }), 0) }}
+          reorder={next => setSchema({ ...schema, views: next })}
+          add={() => { const el = pop!.el; setTimeout(() => setPop({ kind: 'add-view', el }), 0) }} />
       </Popover>
       <Popover anchor={pop?.kind === 'tab' ? pop.el : null} onClose={closePop} className="menu-pop" width={220}>
         <Menu onClose={closePop} items={[
