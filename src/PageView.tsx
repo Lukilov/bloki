@@ -38,6 +38,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [backlinks, setBacklinks] = useState<Pick<Page, 'id' | 'title' | 'icon'>[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [panel, setPanel] = useState<'comments' | 'updates' | null>(null)
+  useEffect(() => { if (panel) dispatchEvent(new CustomEvent('bloki:narrow', { detail: 380 })) }, [panel])
   const [draft, setDraft] = useState<{ blockId: string; quote: string; id: string } | null>(null)
   const [composing, setComposing] = useState(false)
   const [modal, setModal] = useState<'history' | 'export' | null>(null)

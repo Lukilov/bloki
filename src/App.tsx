@@ -124,11 +124,14 @@ function Shell({ dark }: { dark: boolean }) {
     }
     const shortcuts = () => setDialog({ kind: 'shortcuts' })
     const settings = () => setDialog({ kind: 'settings' })
+    // As in Notion, a side panel or peek that would squeeze the page below 480px hides the sidebar.
+    const narrow = (e: Event) => { if (innerWidth - width - (e as CustomEvent<number>).detail < 480) { setCollapsed(true); setPeek(false) } }
+    addEventListener('bloki:narrow', narrow)
     addEventListener('keydown', on)
     addEventListener('bloki:shortcuts', shortcuts)
     addEventListener('bloki:settings', settings)
-    return () => { removeEventListener('keydown', on); removeEventListener('bloki:shortcuts', shortcuts); removeEventListener('bloki:settings', settings) }
-  }, [store, dark])
+    return () => { removeEventListener('keydown', on); removeEventListener('bloki:shortcuts', shortcuts); removeEventListener('bloki:settings', settings); removeEventListener('bloki:narrow', narrow) }
+  }, [store, dark, width])
 
   const current = store.current ? store.byId.get(store.current) : undefined
   useEffect(() => { document.title = current ? `${current.icon && !current.icon.startsWith('icon:') && !current.icon.includes('/') ? current.icon + ' ' : ''}${label(current)}` : 'Bloki' }, [current])

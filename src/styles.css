@@ -501,7 +501,7 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
   .bn-editor { padding-inline: 24px !important; }
   .title-input { font-size: 32px; }
   .edited { display: none; }
-  .right-panel { position: fixed; right: 0; z-index: 50; width: 100%; }
+  .right-panel { position: fixed; right: 0; z-index: 75; width: 100%; }
 }
 @media print {
   .sidebar, .topbar, .sidebar-toggle, .head-actions, .bn-side-menu, .right-panel, .page-discussions { display: none !important; }
