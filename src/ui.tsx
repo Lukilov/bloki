@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type Anchor = HTMLElement | { x: number; y: number }
@@ -66,8 +66,22 @@ export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () =>
   const [q, setQ] = useState('')
   const [sub, setSub] = useState<{ el: HTMLElement; render: () => ReactNode } | null>(null)
   const shown = items.filter(i => !q || ('label' in i && typeof i.label === 'string' && i.label.toLowerCase().includes(q.toLowerCase())))
+  const list = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (!filter) list.current?.focus({ preventScroll: true }) }, [filter])
+  // Notion's menu keys: ↑/↓ move one highlight (shared with hover), Enter picks, → opens a submenu, ← leaves it.
+  const keys = (e: KeyEvent) => {
+    const btns = [...list.current!.querySelectorAll<HTMLButtonElement>(':scope > .menu-item:not(:disabled)')]
+    const at = btns.indexOf(document.activeElement as HTMLButtonElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const d = e.key === 'ArrowDown' ? 1 : -1
+      btns[at < 0 ? (d > 0 ? 0 : btns.length - 1) : (at + d + btns.length) % btns.length]?.focus()
+    } else if (e.key === 'Enter' && at < 0 && filter && btns[0]) { e.preventDefault(); btns[0].click() }
+    else if (e.key === 'ArrowRight' && at >= 0 && btns[at].dataset.sub) { e.preventDefault(); btns[at].click() }
+    else if (filter && e.key.length === 1 && !e.metaKey && !e.ctrlKey) list.current!.querySelector<HTMLInputElement>('.menu-filter')?.focus()
+  }
   return (
-    <div className="menu-list">
+    <div className="menu-list" ref={list} tabIndex={-1} onKeyDown={keys}>
       {filter && <input className="menu-filter" autoFocus placeholder="Search actions…" value={q} onChange={e => setQ(e.target.value)} />}
       {shown.map((i, n) => {
         if ('divider' in i) return q ? null : <div key={n} className="menu-divider" />
@@ -75,7 +89,8 @@ export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () =>
         if ('note' in i) return q ? null : <div key={n} className="menu-note">{i.note}</div>
         return (
           <button key={n} className={'menu-item' + (i.danger ? ' danger' : '')} disabled={i.disabled}
-            onMouseEnter={e => setSub(i.submenu ? { el: e.currentTarget, render: i.submenu } : null)}
+            data-sub={i.submenu ? '' : undefined}
+            onMouseEnter={e => { e.currentTarget.focus({ preventScroll: true }); setSub(i.submenu ? { el: e.currentTarget, render: i.submenu } : null) }}
             onClick={e => {
               if (i.submenu) { setSub({ el: e.currentTarget, render: i.submenu }); return }
               i.onClick?.()
@@ -89,7 +104,9 @@ export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () =>
           </button>
         )
       })}
-      {sub && <Popover anchor={sub.el} side="right" onClose={() => setSub(null)}>{sub.render()}</Popover>}
+      {sub && <Popover anchor={sub.el} side="right" onClose={() => setSub(null)}>
+        <div onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); sub.el.focus(); setSub(null) } }}>{sub.render()}</div>
+      </Popover>}
     </div>
   )
 }

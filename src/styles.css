@@ -119,7 +119,9 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
   display: flex; align-items: center; gap: 8px; width: calc(100% - 8px); margin: 0 4px 1px; padding: 0 8px; min-height: 28px; transition: background 20ms ease-in;
   border: none; border-radius: 6px; text-align: left; font-size: 14px; color: var(--text);
 }
-.menu-item.danger:hover { color: var(--danger); }
+.menu-item.danger:hover, .menu-item.danger:focus { color: var(--danger); }
+.menu-item:focus { background: var(--hover); outline: none; }
+.menu-list:focus { outline: none; }
 .menu-icon { display: inline-flex; width: 20px; justify-content: center; color: var(--text); flex-shrink: 0; font-size: 16px; }
 /* Menu icons are 20px in Notion; Lucide's 2px stroke is thinned to keep the weight. */
 .menu-icon svg { width: 20px; height: 20px; stroke-width: 1.6; }
