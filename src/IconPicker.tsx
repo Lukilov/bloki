@@ -41,6 +41,12 @@ export function Icon({ value, size = 18 }: { value: string; size?: number }) {
 type EmojiData = { categories: { id: string; emojis: string[] }[]; emojis: Record<string, { id: string; name: string; keywords: string[]; skins: { native: string }[] }> }
 let emojiData: Promise<EmojiData> | null = null
 const loadEmoji = () => (emojiData ??= import('@emoji-mart/data/sets/15/native.json').then(m => m.default as unknown as EmojiData))
+/** A random emoji (flags excluded), as Notion puts on a page when you press "Add icon". */
+export async function randomEmoji(): Promise<string> {
+  const data = await loadEmoji()
+  const ids = data.categories.filter(c => c.id !== 'flags').flatMap(c => c.emojis)
+  return data.emojis[ids[Math.floor(Math.random() * ids.length)]].skins[0].native
+}
 const CATEGORY_NAMES: Record<string, string> = { people: 'People', nature: 'Animals and nature', foods: 'Food and drink', activity: 'Activity', places: 'Travel and places', objects: 'Objects', symbols: 'Symbols', flags: 'Flags' }
 
 function recent(): string[] {

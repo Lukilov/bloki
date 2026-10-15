@@ -980,3 +980,14 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .bn-editor [data-content-type='codeBlock'] > pre { padding: 36px 22px !important; font-family: SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace; font-size: 0.85em; line-height: 1.5; }
 .bn-editor [data-content-type='codeBlock'] > pre code { font: inherit; }
 .bn-editor [data-content-type='codeBlock'] > div > select { color: var(--muted); }
+
+/* Icon picker measured on Notion: 28px tabs, a 12-column grid of 32px cells with 24px emoji, 12px side margins. */
+.picker-tabs { padding: 0 8px; }
+.picker-tabs button { height: 28px; padding: 0 8px; }
+.picker-remove { color: rgb(142, 139, 134) !important; }
+.picker-search { padding: 8px 12px; }
+.picker-search > button { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.picker-body { padding: 0 12px 8px; }
+.picker-body .menu-heading { color: var(--icon); padding: 10px 0 6px; }
+.emoji-grid:not(.icons) { grid-template-columns: repeat(12, 32px); }
+.emoji-grid:not(.icons) button { width: 32px; height: 32px; padding: 0; font-size: 24px; }

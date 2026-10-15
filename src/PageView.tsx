@@ -9,7 +9,7 @@ import { PageEditor, toHTML, toMarkdown } from './Editor'
 import { coverStyle, Database, RowProperties } from './Database'
 import { personName, ShareMenu } from './Access'
 import { CommentsPanel, PageDiscussions } from './Comments'
-import { CoverPicker, GRADIENTS, IconPicker } from './IconPicker'
+import { CoverPicker, GRADIENTS, IconPicker, randomEmoji } from './IconPicker'
 import { copyText, Menu, mod, Popover, shift, timeAgo, type Item } from './ui'
 import { duplicate, MoveTo, pageUrl, trash } from './pageActions'
 import { importMarkdown } from './Sidebar'
@@ -42,6 +42,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [composing, setComposing] = useState(false)
   const [modal, setModal] = useState<'history' | 'export' | null>(null)
   const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks'; el: HTMLElement } | null>(null)
+  const iconBtn = useRef<HTMLButtonElement>(null)
+  const [pickIcon, setPickIcon] = useState(false)
   const [reposition, setReposition] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
   const closePop = useCallback(() => setPop(null), [])
@@ -69,6 +71,9 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     addEventListener('keydown', on)
     return () => removeEventListener('keydown', on)
   }, [id, meta, store])
+
+  // Once the new icon is on the page, open the picker on it.
+  useEffect(() => { if (pickIcon && meta?.icon && iconBtn.current) { setPop({ kind: 'icon', el: iconBtn.current }); setPickIcon(false) } }, [pickIcon, meta?.icon])
 
   if (missing || (store.pages.length && !meta)) return <NoAccess />
   if (!meta || !page) return <div className="empty" />
@@ -198,10 +203,11 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
 
         <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')}>
           <div className="page-head">
-            {meta.icon && <button className="page-icon" disabled={!edit} onClick={openPop('icon')}>{iconOf(meta, 78)}</button>}
+            {meta.icon && <button ref={iconBtn} className="page-icon" disabled={!edit} onClick={openPop('icon')}>{iconOf(meta, 78)}</button>}
             {edit && (
               <div className="head-actions">
-                {!meta.icon && <button onClick={openPop('icon')}><Smile size={15} /> Add icon</button>}
+                {/* As in Notion: a random emoji goes on at once, with the picker open on it to change it. */}
+                {!meta.icon && <button onClick={async () => { set({ icon: await randomEmoji() }); setPickIcon(true) }}><Smile size={15} /> Add icon</button>}
                 {!meta.cover && <button onClick={() => set({ cover: GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)] })}><ImageIcon size={15} /> Add cover</button>}
                 {can(meta, 'comment') && <button onClick={() => setComposing(true)}><MessageSquare size={15} /> Add comment</button>}
               </div>
