@@ -8,7 +8,7 @@ import { AcceptInvite, AuthScreen, SettingsDialog } from './Access'
 // The page view brings the editor, databases and comments: it downloads in parallel with the app shell.
 const PageView = lazy(() => import('./PageView').then(m => ({ default: m.PageView })))
 import { TEMPLATES } from './templates'
-import { alt, coverStyle, mod, shift, timeAgo, Toast } from './ui'
+import { alt, coverStyle, mod, shift, timeAgo, Toast, Tooltips } from './ui'
 import './styles.css'
 
 const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void } }).blokiDesktop
@@ -159,6 +159,7 @@ function Shell({ dark }: { dark: boolean }) {
       {dialog?.kind === 'settings' && <SettingsDialog initialTab={dialog.tab} close={() => setDialog(null)} />}
       {dialog?.kind === 'shortcuts' && <Shortcuts close={() => setDialog(null)} />}
       {store.error && <div className="toast error" onClick={() => store.setError(null)}>{store.error} <b>✕</b></div>}
+      <Tooltips />
       {store.toastText && <Toast text={store.toastText} onDone={() => store.toast('')} />}
     </div>
   )

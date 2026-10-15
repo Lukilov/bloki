@@ -123,6 +123,39 @@ export function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   return createPortal(<div className="toast">{text}</div>, document.body)
 }
 
+/** Notion-style tooltips for every [title]: shown 200ms after hover, 6px below (or above near the bottom).
+ *  The native title moves to data-tip so the OS tooltip doesn't double up; aria-label keeps the name. */
+export function Tooltips() {
+  const [tip, setTip] = useState<{ text: string; x: number; y: number; above: boolean } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let timer = 0, cur: HTMLElement | null = null
+    const hide = () => { clearTimeout(timer); cur = null; setTip(null) }
+    const over = (e: PointerEvent) => {
+      const el = (e.target as Element).closest?.('[title],[data-tip]') as HTMLElement | null
+      if (el === cur) return
+      hide()
+      if (!el) return
+      if (el.title) { el.dataset.tip = el.title; if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.title); el.removeAttribute('title') }
+      if (!el.dataset.tip) return
+      cur = el
+      timer = window.setTimeout(() => {
+        if (!cur?.isConnected) return
+        const r = cur.getBoundingClientRect(), above = r.bottom + 40 > innerHeight
+        setTip({ text: cur.dataset.tip!, x: r.left + r.width / 2, y: above ? r.top - 6 : r.bottom + 6, above })
+      }, 200)
+    }
+    addEventListener('pointerover', over)
+    for (const ev of ['pointerdown', 'keydown', 'scroll', 'blur']) addEventListener(ev, hide, true)
+    return () => { hide(); removeEventListener('pointerover', over); for (const ev of ['pointerdown', 'keydown', 'scroll', 'blur']) removeEventListener(ev, hide, true) }
+  }, [])
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el && tip) el.style.left = Math.min(Math.max(8, tip.x - el.offsetWidth / 2), innerWidth - el.offsetWidth - 8) + 'px'
+  }, [tip])
+  return tip && createPortal(<div ref={ref} className="tooltip" role="tooltip" style={{ top: tip.y, transform: tip.above ? 'translateY(-100%)' : undefined }}>{tip.text}</div>, document.body)
+}
+
 /** CSS for a page cover: an uploaded or linked image (at a vertical offset), or a colour/gradient. */
 export const coverStyle = (c: string, y = 50) => (!c ? {} : c.startsWith('/files/') || /^https?:\/\//.test(c)
   ? { backgroundImage: `url("${c.replace(/["\\]/g, '')}")`, backgroundPosition: `center ${y}%` }

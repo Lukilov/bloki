@@ -408,7 +408,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
       <Popover anchor={pop?.kind === 'tab' ? pop.el : null} onClose={closePop} className="menu-pop" width={220}>
         <Menu onClose={closePop} items={[
           { icon: <PenLine size={15} />, label: 'Rename', onClick: () => setRenaming(view.id) },
-          { icon: <Settings2 size={15} />, label: 'Edit view', onClick: () => setTimeout(() => setPop({ kind: 'settings', el: document.querySelector(`[data-db="${db.id}"] .db-tools .icon-btn[title="Settings"]`) as HTMLElement }), 0) },
+          { icon: <Settings2 size={15} />, label: 'Edit view', onClick: () => setTimeout(() => setPop({ kind: 'settings', el: document.querySelector(`[data-db="${db.id}"] .db-tools .icon-btn:is([title="Settings"],[data-tip="Settings"])`) as HTMLElement }), 0) },
           { icon: <Copy size={15} />, label: 'Duplicate', onClick: () => { const v = { ...view, ...local, id: uid(), name: view.name + ' (1)' }; setSchema({ ...schema, views: [...views, v] }); setViewId(v.id) } },
           { icon: <Link2 size={15} />, label: 'Copy link to view', onClick: () => copyText(pageUrl(db.id)) },
           ...(views.length > 1 ? [{ icon: <Trash2 size={15} />, label: 'Delete', danger: true, onClick: () => { setSchema({ ...schema, views: views.filter(v => v.id !== view.id) }); setViewId(undefined) } }] : []),
