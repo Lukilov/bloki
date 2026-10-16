@@ -82,7 +82,7 @@ button:hover { background: var(--hover); }
 button:disabled { opacity: 0.4; cursor: default; }
 button:disabled:hover { background: none; }
 button.ghost { border: none; }
-button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 500; }
+button.primary { background: var(--accent); color: rgb(243, 249, 253); border-color: transparent; font-weight: 500; }
 button.primary:hover { background: rgb(0, 117, 211); }
 button.primary.big { padding: 6px 14px; }
 button.wide, .wide { width: 100%; }
