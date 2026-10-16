@@ -260,13 +260,14 @@ const lightTheme = {
   fontFamily: 'inherit', borderRadius: 6,
   colors: {
     editor: { text: 'rgb(44, 44, 43)', background: 'transparent' }, menu: { text: 'rgb(44, 44, 43)', background: '#ffffff' },
-    tooltip: { text: '#ffffff', background: 'rgb(15, 15, 15)' }, hovered: { text: 'rgb(44, 44, 43)', background: 'rgba(33, 27, 23, 0.051)' },
+    tooltip: { text: 'rgb(240, 239, 237)', background: 'rgb(44, 44, 43)' }, hovered: { text: 'rgb(44, 44, 43)', background: 'rgba(33, 27, 23, 0.051)' },
     selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(55, 53, 47, 0.35)', background: 'transparent' },
     shadow: 'rgba(15, 15, 15, 0.1)', border: 'rgba(28, 19, 1, 0.11)', sideMenu: 'rgba(55, 53, 47, 0.35)',
     highlights: {
-      gray: { text: '#787774', background: '#f1f1ef' }, brown: { text: '#9f6b53', background: '#f4eeee' }, orange: { text: '#d9730d', background: '#fbecdd' },
-      yellow: { text: '#cb912f', background: '#fbf3db' }, green: { text: '#448361', background: '#edf3ec' }, blue: { text: '#337ea9', background: '#e7f3f8' },
-      purple: { text: '#9065b0', background: '#f6f3f9' }, pink: { text: '#c14c8a', background: '#faf1f5' }, red: { text: '#d44c47', background: '#fdebec' },
+      // Measured on Notion's light colour menu (2026): text colours match dark; backgrounds are pale.
+      gray: { text: 'rgb(125, 122, 117)', background: 'rgb(240, 239, 237)' }, brown: { text: 'rgb(159, 118, 90)', background: 'rgb(245, 237, 233)' }, orange: { text: 'rgb(210, 123, 45)', background: 'rgb(251, 235, 222)' },
+      yellow: { text: 'rgb(203, 148, 52)', background: 'rgb(249, 243, 220)' }, green: { text: 'rgb(80, 148, 110)', background: 'rgb(232, 241, 236)' }, blue: { text: 'rgb(56, 125, 201)', background: 'rgb(229, 242, 252)' },
+      purple: { text: 'rgb(154, 107, 180)', background: 'rgb(243, 235, 249)' }, pink: { text: 'rgb(193, 76, 138)', background: 'rgb(250, 233, 241)' }, red: { text: 'rgb(207, 81, 72)', background: 'rgb(252, 233, 231)' },
     },
   },
 }
@@ -274,7 +275,7 @@ const darkTheme = {
   fontFamily: 'inherit', borderRadius: 6,
   colors: {
     editor: { text: 'rgb(240, 239, 237)', background: 'transparent' }, menu: { text: 'rgb(240, 239, 237)', background: '#252525' },
-    tooltip: { text: 'rgba(255, 255, 255, 0.9)', background: '#3f3f3f' }, hovered: { text: 'rgb(240, 239, 237)', background: 'rgba(255, 255, 255, 0.055)' },
+    tooltip: { text: 'rgb(240, 239, 237)', background: 'rgb(44, 44, 43)' }, hovered: { text: 'rgb(240, 239, 237)', background: 'rgba(255, 255, 255, 0.055)' },
     selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(255, 255, 255, 0.28)', background: 'transparent' },
     shadow: 'rgba(0, 0, 0, 0.4)', border: 'rgba(255, 255, 235, 0.1)', sideMenu: 'rgba(255, 255, 255, 0.28)',
     highlights: {
