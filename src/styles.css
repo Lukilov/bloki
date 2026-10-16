@@ -49,7 +49,7 @@
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
   --gallery-card: rgba(255, 255, 255, 0.055); --code-bg: rgba(252, 252, 252, 0.03); --tab-on: rgb(230, 229, 227); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
-  --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
+  --tl-bar: rgb(37, 37, 37); --tl-bar-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --cal-card: rgb(47, 47, 47); --cal-card-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 2px 4px; --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
   --line-2: rgba(255, 255, 235, 0.14);
@@ -877,8 +877,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .cal-day.today .cal-num { background: rgb(229, 100, 88); color: #fff; }
 .cal-add { opacity: 0; padding: 0; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .cal-day:hover .cal-add { opacity: 1; }
-.cal-item { background: var(--card); box-shadow: var(--shadow-sm); border-radius: 6px; padding: 3px 6px; margin-top: 4px; cursor: pointer; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
-.cal-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Calendar card measured on Notion: 28px, 6px in from the cell edges, title 14px/600 (dark bg rgb(47,47,47)). */
+.cal-item { background: var(--cal-card, var(--board-card)); box-shadow: var(--cal-card-shadow, var(--board-card-shadow)); border-radius: 6px; padding: 2px 6px; min-height: 28px; justify-content: center; margin: 5px 2px 0; cursor: pointer; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.cal-item-title { font-weight: 600; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* timeline */
 .timeline { padding: 6px 0; }
@@ -906,8 +907,12 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .weekend { position: absolute; top: 0; bottom: 0; background: var(--weekend); pointer-events: none; }
 .today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgb(229, 100, 88); z-index: 1; }
 .timeline-row { position: relative; height: 36px; }
-.bar { position: absolute; top: 5px; height: 26px; background: var(--card); box-shadow: var(--shadow-sm); border-radius: 6px; display: flex; align-items: center; cursor: grab; overflow: hidden; z-index: 2; }
-.bar-label { padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; font-size: 13px; flex: 1; }
+/* Timeline bar measured on Notion: 34px in a 36px row, radius 6, title 14px/500 at 6px; a short bar lets its title run past the end. */
+.bar { position: absolute; top: 1px; height: 34px; background: var(--tl-bar, var(--card)); box-shadow: var(--tl-bar-shadow, var(--shadow-sm)); border-radius: 6px; display: flex; align-items: center; cursor: grab; z-index: 2; }
+.bar-label { padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; font-size: 14px; flex: 1; position: absolute; left: 0; right: 0; pointer-events: none; }
+.bar.narrow .bar-label { overflow: visible; right: auto; }
+.bar-handle { border-radius: 6px; }
+.bar-handle.right { margin-left: auto; }
 .bar-handle { width: 8px; align-self: stretch; cursor: ew-resize; }
 .bar-handle:hover { background: var(--accent-soft); }
 
@@ -953,8 +958,6 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .settings-tabs .menu-heading { padding: 10px 10px 4px; }
 .sync-note { padding: 0 2px 6px; }
 .collaboration-cursor__caret, .bn-collaboration-cursor__base { position: relative; }
-.bar.narrow { overflow: visible; }
-.bar.narrow .bar-label { position: absolute; left: calc(100% + 6px); padding: 0; color: var(--text); overflow: visible; }
 
 /* Desktop app: the window's tab bar holds the traffic lights and dragging; Command Search fills its own small window */
 :root[data-command-search] .search-overlay { background: none; padding: 0; }
