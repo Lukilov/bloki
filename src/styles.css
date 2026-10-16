@@ -355,7 +355,7 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .page-head:hover .head-actions { opacity: 1; }
 .head-actions button { border: none; color: var(--muted); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; height: 28px; }
 .head-actions button:hover { color: var(--text-2); }
-.title-input { width: 100%; border: none; background: none; resize: none; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 3px 2px; margin-bottom: 7px; outline: none; overflow: hidden; color: var(--text); font-family: inherit; box-shadow: none !important; }
+.title-input { width: 100%; border: none; background: none; resize: none; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 0 2px; margin-bottom: 5px; outline: none; overflow: hidden; color: var(--text); font-family: inherit; box-shadow: none !important; }
 .title-input::placeholder { color: var(--faint); }
 .small-text .title-input { font-size: 32px; }
 .backlinks-toggle { border: none; color: var(--muted); font-size: 14px; padding: 2px 4px; margin: 4px 0; }
@@ -466,7 +466,7 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .tex.block { display: block; }
 
 /* ---------- Comments ---------- */
-.page-discussions { margin: 11px 0 12px; display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--line); }
+.page-discussions { margin: 11px 0 21px; display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--line); }
 /* Page comment composer measured on Notion: 24px avatar, text 6px after it, 8px above and 12px below, a rule underneath. */
 .page-discussions > .composer { padding: 8px 0 12px; }
 .discussion { padding: 4px 12px 8px; }
@@ -762,7 +762,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .header-menu { display: flex; flex-direction: column; }
 
 /* row page properties */
-.row-props { margin: 6px 0 12px; }
+/* First property sits 8px under the title, as in Notion (the title textarea leaves a 6px baseline gap). */
+.row-props { margin: -3px 0 12px; }
 .prop-row { display: flex; align-items: flex-start; min-height: 34px; margin-bottom: 4px; }
 .prop-name { display: flex; align-items: center; gap: 6px; width: 160px; flex-shrink: 0; border: none; padding: 6px; height: 34px; color: var(--icon); font-size: 14px; border-radius: 4px; text-align: left; overflow: hidden; white-space: nowrap; }
 .prop-name:disabled { opacity: 1; }
@@ -936,8 +937,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .peek .topbar { position: absolute; top: -40px; right: 4px; left: auto; z-index: 30; height: 36px; padding: 0 8px; background: transparent; }
 .peek .page-wrap { position: relative; }
 .peek-overlay.side .peek { border-left: 1px solid var(--line); }
-.peek .page-body { padding: 0 64px 120px; }
-.peek .page-head { padding-top: 24px; }
+.peek .page-body { padding: 0 74px 120px; }
+/* Measured on Notion's side peek: Add icon 4px under the bar, title at x76, a 170px property-name column. */
+.peek .page-head { padding-top: 0; }
+.peek .prop-name { width: 170px; }
 .peek .right-panel { height: auto; }
 @media (max-width: 760px) { .peek { width: 100vw; } }
 .page.db-page .page-body { padding: 0 96px 120px; }
