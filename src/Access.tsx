@@ -122,7 +122,13 @@ export function AcceptInvite({ token, onDone }: { token: string; onDone: () => v
 
 export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) => void }) {
   const store = useStore()
-  const [anchor, open, close] = usePopover()
+  const [anchor, open, close] = usePopover<HTMLElement | { x: number; y: number }>()
+  // The desktop tab bar's switcher opens this menu from just above the page's top-left corner.
+  useEffect(() => {
+    const show = () => open({ x: 8, y: 0 })
+    addEventListener('bloki:workspace-menu', show)
+    return () => removeEventListener('bloki:workspace-menu', show)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const me = store.me!
   const ws = me.workspaces.find(w => w.id === me.workspaceId)
   const switchTo = async (id: string) => { close(); await api.switchWorkspace(id); location.hash = ''; await store.reloadMe() }

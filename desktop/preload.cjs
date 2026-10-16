@@ -11,10 +11,15 @@ contextBridge.exposeInMainWorld('blokiDesktop', {
   /** Command Search: open a page in the main window, or just close. */
   openPage: (id, newTab) => ipcRenderer.send('bloki:open-page', String(id), !!newTab),
   closeCommandSearch: () => ipcRenderer.send('bloki:close-command-search'),
+  /** Workspace name and sidebar state, so the tab bar can show the switcher over the sidebar, as Notion does. */
+  chrome: info => ipcRenderer.send('bloki:chrome', {
+    workspace: String(info?.workspace ?? '').slice(0, 100), icon: String(info?.icon ?? '').slice(0, 8),
+    width: Math.max(0, Math.min(600, Number(info?.width) || 0)), collapsed: !!info?.collapsed,
+  }),
 })
 
 // Menu commands (Settings…, a fresh Command Search) reach the page as plain DOM events.
-const commands = ['settings', 'quick-search']
+const commands = ['settings', 'quick-search', 'workspace-menu', 'toggle-sidebar']
 ipcRenderer.on('bloki:command', (_e, name) => { if (commands.includes(name)) window.dispatchEvent(new Event('bloki:' + name)) })
 
 // Tell the window which theme the page shows, so the tab bar and launch picture match it.

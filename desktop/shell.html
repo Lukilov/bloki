@@ -28,6 +28,16 @@
   button:hover { background: var(--btn-hover); }
   button:disabled { opacity: 0.4; background: none; color: var(--icon-2); }
   svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  /* Over the sidebar, as in Notion's desktop app: the workspace switcher (20px icon, 14/600 name), then sidebar, back and forward. */
+  #ws { display: none; align-items: center; flex: none; box-sizing: border-box; padding-left: 12px; overflow: hidden; }
+  :root[data-platform='darwin']:not([data-fullscreen]) #ws { padding-left: 81px; }
+  :root[data-ws] #ws { display: flex; }
+  :root[data-ws] #nav { padding-left: 8px; }
+  #wsbtn { width: auto; height: 28px; max-width: 100%; padding: 0 8px 0 4px; gap: 8px; display: flex; align-items: center; color: var(--title-active); font-weight: 600; font-size: 14px; }
+  #wsbtn .ws-icon { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; flex: none; font-size: 12px; font-weight: 500; color: var(--title); background: var(--btn-hover); }
+  #wsbtn .ws-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sidebar { display: none; }
+  :root[data-chrome] #sidebar { display: grid; width: 28px; height: 28px; }
   #tabs { display: flex; min-width: 0; flex: 0 1 auto; overflow: hidden; }
   .tab { -webkit-app-region: no-drag; position: relative; height: 36px; flex: 0 1 200px; min-width: 36px; max-width: 200px; box-sizing: border-box; display: flex; align-items: center; padding: 0 16px; overflow: hidden;
     background: var(--bar); color: var(--title); box-shadow: inset 1px 0 0 var(--line), inset 0 -1px 0 var(--line); }
@@ -66,7 +76,9 @@
 </head>
 <body>
 <div id="bar">
+  <div id="ws"><button id="wsbtn" aria-label="Switch workspace"><span class="ws-icon"></span><span class="ws-name"></span></button></div>
   <div class="group" id="nav">
+    <button id="sidebar" title="Close sidebar (⌘\)" aria-label="Close Sidebar"><svg viewBox="0 0 20 20"><path d="m10.5 5-5 5 5 5M15.5 5l-5 5 5 5"/></svg></button>
     <button id="back" title="Back (⌘[)" aria-label="Back"><svg viewBox="0 0 20 20"><path d="m12 4.5-5.5 5.5 5.5 5.5"/></svg></button>
     <button id="forward" title="Forward (⌘])" aria-label="Forward"><svg viewBox="0 0 20 20"><path d="m8 4.5 5.5 5.5L8 15.5"/></svg></button>
   </div>
@@ -86,6 +98,8 @@
   const firstGrapheme = s => [...new Intl.Segmenter().segment(s.trim())][0]?.segment ?? '·'
   let state = null, dragId = null, snapshot = null
 
+  document.getElementById('wsbtn').onclick = () => send('workspace')
+  document.getElementById('sidebar').onclick = () => send('sidebar')
   document.getElementById('back').onclick = () => send('back')
   document.getElementById('forward').onclick = () => send('forward')
   document.getElementById('new').onclick = () => send('new')
@@ -108,6 +122,21 @@
     root.dataset.theme = state.theme
     if (state.fullscreen) root.dataset.fullscreen = ''; else delete root.dataset.fullscreen
     if (state.ready) { root.dataset.ready = ''; snapshot = null } else { delete root.dataset.ready; drawPlaceholder() }
+    // The page tells us its workspace and sidebar width; the switcher sits over an open sidebar.
+    const c = state.chrome
+    if (c) root.dataset.chrome = ''; else delete root.dataset.chrome
+    if (c && !c.collapsed && c.width) {
+      root.dataset.ws = ''
+      const ws = document.getElementById('ws')
+      ws.style.width = c.width + 'px'
+      ws.querySelector('.ws-icon').textContent = c.icon || firstGrapheme(c.workspace || '?').toUpperCase()
+      ws.querySelector('.ws-name').textContent = c.workspace
+    } else delete root.dataset.ws
+    const sb = document.getElementById('sidebar')
+    const open = c && !c.collapsed
+    sb.title = (open ? 'Close' : 'Open') + ' sidebar (⌘\\)'
+    sb.setAttribute('aria-label', open ? 'Close Sidebar' : 'Open Sidebar')
+    sb.innerHTML = open ? '<svg viewBox="0 0 20 20"><path d="m10.5 5-5 5 5 5M15.5 5l-5 5 5 5"/></svg>' : '<svg viewBox="0 0 20 20"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/></svg>'
     document.getElementById('back').disabled = !state.canBack
     document.getElementById('forward').disabled = !state.canForward
     // The strip asks for full-width tabs and shrinks them only when the window is too narrow.

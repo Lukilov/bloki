@@ -11,7 +11,7 @@ import { TEMPLATES } from './templates'
 import { alt, coverStyle, mod, shift, timeAgo, Toast, Tooltips } from './ui'
 import './styles.css'
 
-const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void } }).blokiDesktop
+const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void; chrome?: (info: { workspace: string; icon: string; width: number; collapsed: boolean }) => void } }).blokiDesktop
 
 export type Theme = 'light' | 'dark' | 'system'
 const readTheme = (): Theme => { try { return (localStorage.getItem('theme') as Theme) || 'system' } catch { return 'system' } }
@@ -100,6 +100,14 @@ function Shell({ dark }: { dark: boolean }) {
 
   useEffect(() => save('sidebarWidth', String(width)), [width])
   useEffect(() => save('sidebarCollapsed', collapsed ? '1' : '0'), [collapsed])
+  // In the desktop app the workspace switcher and sidebar button live in the tab bar, as in Notion's.
+  const ws = store.me?.workspaces.find(w => w.id === store.me?.workspaceId)
+  useEffect(() => { desktop?.chrome?.({ workspace: ws?.name ?? '', icon: ws?.icon ?? '', width, collapsed }) }, [ws?.name, ws?.icon, width, collapsed])
+  useEffect(() => {
+    const toggle = () => { setCollapsed(c => !c); setPeek(false) }
+    addEventListener('bloki:toggle-sidebar', toggle)
+    return () => removeEventListener('bloki:toggle-sidebar', toggle)
+  }, [])
   useEffect(() => { if (store.current) recordVisit(store.current) }, [store.current])
   // Open on the last visited page unless the person prefers Home.
   const [started, setStarted] = useState(false)

@@ -63,6 +63,9 @@ const tabOf = wc => {
   return null
 }
 
+/** What each tab's page last reported about its sidebar (not saved with the session). */
+const chromeOf = new Map()
+
 function sendState(w, extra = {}) {
   if (w.win.isDestroyed()) return
   const v = activeView(w)
@@ -72,6 +75,7 @@ function sendState(w, extra = {}) {
     tabs: w.state.tabs.map(x => ({ id: x.id, title: x.title, pinned: x.pinned, loading: x.loading })),
     active: w.state.active, ready: !!t?.ready,
     canBack: !!v?.webContents.navigationHistory.canGoBack(), canForward: !!v?.webContents.navigationHistory.canGoForward(),
+    chrome: chromeOf.get(w.state.active) ?? null,
     ...extra,
   })
   w.win.setTitle(t?.title ?? 'Bloki')
@@ -131,6 +135,7 @@ function closeTab(w, id, { remember = true } = {}) {
   const v = views.get(id)
   const removed = tabs.remove(w.state, id)
   if (!removed) return
+  chromeOf.delete(id)
   const url = v.webContents.getURL()
   if (remember && sameOrigin(url)) { closedTabs.push({ url, pinned: removed.tab.pinned, win: w, index: removed.index }); if (closedTabs.length > 25) closedTabs.shift() }
   if (w.win.contentView.children.includes(v)) w.win.contentView.removeChildView(v)
@@ -492,6 +497,8 @@ function onShell(e, cmd, id, arg) {
   else if (cmd === 'menu') tabMenu(w, id)
   else if (cmd === 'back') h?.goBack()
   else if (cmd === 'forward') h?.goForward()
+  else if (cmd === 'workspace') activeView(w)?.webContents.send('bloki:command', 'workspace-menu')
+  else if (cmd === 'sidebar') activeView(w)?.webContents.send('bloki:command', 'toggle-sidebar')
   else if (cmd === 'zoom' && isMac) w.win.isMaximized() ? w.win.unmaximize() : w.win.maximize()
 }
 
@@ -512,6 +519,12 @@ app.whenReady().then(() => {
   ipcMain.on('bloki:change-server', changeServer)
   ipcMain.on('bloki:shell', onShell)
   ipcMain.on('bloki:ready', e => { const f = tabOf(e.sender); if (f) markReady(f.t) })
+  ipcMain.on('bloki:chrome', (e, info) => {
+    const f = tabOf(e.sender)
+    if (!f || typeof info !== 'object' || !info) return
+    chromeOf.set(f.t.id, { workspace: String(info.workspace ?? '').slice(0, 100), icon: String(info.icon ?? '').slice(0, 8), width: Math.max(0, Math.min(600, Number(info.width) || 0)), collapsed: !!info.collapsed })
+    if (f.t.id === f.w.state.active) sendState(f.w)
+  })
   ipcMain.on('bloki:theme', (e, next, mode) => {
     if ((tabOf(e.sender) || e.sender === quick?.webContents) && ['light', 'dark'].includes(next)) setTheme(next, ['light', 'dark'].includes(mode) ? mode : 'system')
   })

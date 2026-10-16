@@ -1115,3 +1115,6 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .view-tab.on { background: var(--hover); color: var(--text); }
 .views-more { flex: none; height: 32px; padding: 6px 10px; border: none; border-radius: 20px; font-size: 14px; color: var(--icon); white-space: nowrap; }
 .view-add { color: var(--muted); }
+/* Desktop app: the tab bar carries the workspace switcher and sidebar button (Notion's desktop layout). */
+:root[data-tab-chrome] .sidebar .ws-row, :root[data-tab-chrome] .sidebar-toggle { display: none; }
+:root[data-tab-chrome] .sidebar .side-top { padding-top: 8px; }
