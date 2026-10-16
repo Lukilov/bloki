@@ -64,7 +64,8 @@ export type Item =
 /** Notion-style command menu: icon, label, right-aligned shortcut hint. */
 export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () => void; filter?: boolean }) {
   const [q, setQ] = useState('')
-  const [sub, setSub] = useState<{ el: HTMLElement; render: () => ReactNode } | null>(null)
+  // The submenu is looked up by position on every render, so it shows fresh state (e.g. a switch just flipped).
+  const [sub, setSub] = useState<{ el: HTMLElement; n: number } | null>(null)
   const shown = items.filter(i => !q || ('label' in i && typeof i.label === 'string' && i.label.toLowerCase().includes(q.toLowerCase())))
   const list = useRef<HTMLDivElement>(null)
   useEffect(() => { if (!filter) list.current?.focus({ preventScroll: true }) }, [filter])
@@ -90,9 +91,9 @@ export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () =>
         return (
           <button key={n} className={'menu-item' + (i.danger ? ' danger' : '')} disabled={i.disabled}
             data-sub={i.submenu ? '' : undefined}
-            onMouseEnter={e => { e.currentTarget.focus({ preventScroll: true }); setSub(i.submenu ? { el: e.currentTarget, render: i.submenu } : null) }}
+            onMouseEnter={e => { e.currentTarget.focus({ preventScroll: true }); setSub(i.submenu ? { el: e.currentTarget, n } : null) }}
             onClick={e => {
-              if (i.submenu) { setSub({ el: e.currentTarget, render: i.submenu }); return }
+              if (i.submenu) { setSub({ el: e.currentTarget, n }); return }
               i.onClick?.()
               onClose()
             }}>
@@ -105,7 +106,7 @@ export function Menu({ items, onClose, filter }: { items: Item[]; onClose: () =>
         )
       })}
       {sub && <Popover anchor={sub.el} side="right" onClose={() => setSub(null)}>
-        <div onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); sub.el.focus(); setSub(null) } }}>{sub.render()}</div>
+        <div onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); sub.el.focus(); setSub(null) } }}>{(shown[sub.n] as { submenu?: () => ReactNode } | undefined)?.submenu?.()}</div>
       </Popover>}
     </div>
   )
