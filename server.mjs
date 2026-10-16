@@ -824,7 +824,9 @@ export function addComment(user, pageId, body, { thread_id = null, block_id = nu
 
 /* ---------- Synced blocks ---------- */
 // Anyone who can see the original's page can see a synced block; editing it needs edit access to that page.
-const syncedOut = (user, r) => ({ id: r.id, page_id: r.page_id, content: JSON.parse(r.content), updated: r.updated, canEdit: atLeast(pageAccess(user.id, r.page_id), 'edit') })
+// Pages showing a synced block, found by its id in their saved content.
+const syncedPages = id => db.prepare("SELECT id FROM pages WHERE trashed = 0 AND content LIKE ?").all(`%"syncId":"${id}"%`).map(r => r.id)
+const syncedOut = (user, r) => ({ id: r.id, page_id: r.page_id, content: JSON.parse(r.content), updated: r.updated, canEdit: atLeast(pageAccess(user.id, r.page_id), 'edit'), copies: syncedPages(r.id).length })
 const checkBlocks = content => {
   if (!Array.isArray(content)) throw new HttpError(400, 'Content must be a list of blocks.')
   const json = JSON.stringify(content)
@@ -843,6 +845,26 @@ export function getSynced(user, id) {
   need(user.id, r.page_id, 'view')
   return syncedOut(user, r)
 }
+/** Unsync all: every copy (on pages this person can edit) becomes ordinary blocks holding the synced content. */
+export function unsyncAll(user, id) {
+  const r = db.prepare('SELECT * FROM synced WHERE id = ?').get(String(id))
+  if (!r) throw new HttpError(404, 'Synced block not found.')
+  need(user.id, r.page_id, 'edit')
+  const fresh = b => ({ ...b, id: randomUUID(), children: (b.children ?? []).map(fresh) })
+  const inner = JSON.parse(r.content)
+  const swap = blocks => blocks.flatMap(b => (b?.type === 'synced' && b.props?.syncId === r.id ? inner.map(fresh) : [{ ...b, children: swap(b.children ?? []) }]))
+  const done = []
+  for (const pid of syncedPages(r.id)) {
+    if (!atLeast(pageAccess(user.id, pid), 'edit')) continue
+    const p = db.prepare('SELECT content, workspace_id FROM pages WHERE id = ?').get(pid)
+    db.prepare('UPDATE pages SET content = ?, updated = ?, updated_by = ? WHERE id = ?').run(JSON.stringify(swap(JSON.parse(p.content || '[]'))), Date.now(), user.id, pid)
+    collab.reset(pid)
+    livePages(p.workspace_id, [pid])
+    done.push(pid)
+  }
+  return { pages: done.length }
+}
+
 export function updateSynced(user, id, content) {
   const r = db.prepare('SELECT * FROM synced WHERE id = ?').get(String(id))
   if (!r) throw new HttpError(404, 'Synced block not found.')
@@ -1041,6 +1063,7 @@ const routes = [
   ['GET', /^\/api\/pages\/([\w-]+)\/comments$/, (c, id) => listComments(c.user, id)],
   ['POST', /^\/api\/synced$/, async c => { const b = await c.body(); return createSynced(c.user, String(b.page_id ?? ''), b.content ?? []) }],
   ['GET', /^\/api\/synced\/([\w-]+)$/, (c, id) => getSynced(c.user, id)],
+  ['POST', /^\/api\/synced\/([\w-]+)\/unsync$/, (c, id) => unsyncAll(c.user, id)],
   ['PUT', /^\/api\/synced\/([\w-]+)$/, async (c, id) => updateSynced(c.user, id, (await c.body()).content)],
   ['GET', /^\/api\/pages\/([\w-]+)\/watch$/, (c, id) => { need(c.user.id, id, 'view'); return { mode: watchMode(c.user.id, id) } }],
   ['PUT', /^\/api\/pages\/([\w-]+)\/watch$/, async (c, id) => setWatch(c.user, id, (await c.body()).mode)],

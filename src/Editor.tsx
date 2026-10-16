@@ -40,7 +40,7 @@ const inlineSpecs = { ...defaultInlineContentSpecs, mention: Mention, person: Pe
 const innerSchema = BlockNoteSchema.create({ blockSpecs: innerSpecs, inlineContentSpecs: inlineSpecs, styleSpecs: defaultStyleSpecs })
 
 /** One editor's worth of content, stored once on the server and shown live on every page that pastes it. */
-function SyncedEditor({ id, initial, editable, original, pageId }: { id: string; initial: unknown[]; editable: boolean; original: string; pageId: string }) {
+function SyncedEditor({ id, initial, editable, original, pageId, copies }: { id: string; initial: unknown[]; editable: boolean; original: string; pageId: string; copies: number }) {
   const store = useStore()
   // Copies edit one shared Yjs document (room "synced-<id>"), so simultaneous edits merge instead of overwriting.
   const live = useCollab(`synced-${id}`, true)
@@ -85,7 +85,7 @@ function SyncedEditor({ id, initial, editable, original, pageId }: { id: string;
     <div className="synced" contentEditable={false} ref={isolate}>
       <div className="synced-bar">
         <button className="synced-label" onClick={() => !atOrigin && store.go(original)} title={atOrigin ? 'This is the original' : 'Open the original'}>
-          {atOrigin ? 'Editing original' : `Original in ${label(store.byId.get(original)) || 'another page'}`}
+          {atOrigin ? (copies > 1 ? `Editing in ${copies - 1} other page${copies > 2 ? 's' : ''}` : 'Editing original') : `Original in ${label(store.byId.get(original)) || 'another page'}`}
         </button>
         <span className="synced-sep" />
         <button className="synced-copy" title="Copy and sync" onClick={() => { copyText(`bloki-synced:${id}`); store.toast('Copied. Paste it in another page to sync.') }}><Copy size={16} /></button>
@@ -103,7 +103,7 @@ function SyncedView({ id, editable }: { id: string; editable: boolean }) {
   useEffect(() => { api.getSynced(id).then(setData).catch(() => setData('gone')) }, [id])
   if (!data) return <div className="synced loading" contentEditable={false} />
   if (data === 'gone') return <div className="synced gone" contentEditable={false}>This synced block was deleted, or you don't have access to its original page.</div>
-  return <SyncedEditor id={id} initial={data.content} editable={editable && data.canEdit} original={data.page_id} pageId={ctx?.page.id ?? store.current ?? ''} />
+  return <SyncedEditor id={id} initial={data.content} editable={editable && data.canEdit} original={data.page_id} pageId={ctx?.page.id ?? store.current ?? ''} copies={data.copies} />
 }
 
 const SyncedBlock = createReactBlockSpec(
@@ -288,6 +288,7 @@ function BlockMenu() {
       {editor.isEditable && block.type !== 'synced' && <ColorMenu block={block} />}
       {block.type === 'synced' && <>
         <Item className="bn-menu-item" icon={<Copy size={16} />} onClick={() => { copyText(`bloki-synced:${block.props.syncId}`); store.toast('Copied. Paste it in another page to sync.') }}>Copy and sync</Item>
+        {editor.isEditable && <Item className="bn-menu-item" icon={<RefreshCw size={16} />} onClick={() => api.unsyncAll(String(block.props.syncId)).then(r => store.toast(`Unsynced on ${r.pages} page${r.pages === 1 ? '' : 's'}`)).catch(e => store.setError(e.message))}>Unsync all <span className="bn-hint">{mod}{shift}G</span></Item>}
         {editor.isEditable && <Item className="bn-menu-item" icon={<RefreshCw size={16} />} onClick={() => api.getSynced(String(block.props.syncId)).then(d => editor.replaceBlocks([block.id], (d.content.length ? d.content.map(b => stripIds(b as AnyBlock)) : [{ type: 'paragraph' }]) as never)).catch(e => store.setError(e.message))}>Unsync</Item>}
       </>}
       <C.Generic.Menu.Divider />

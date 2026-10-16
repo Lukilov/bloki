@@ -246,6 +246,15 @@ test('synced blocks: shared content, edit needs edit access to the original page
   assert.equal(s.getSynced(member, b.id).content[0].content, 'bye')
   assert.throws(() => s.updateSynced(owner, b.id, 'nope'), e => e.status === 400)
   assert.throws(() => s.getSynced(guest, b.id), e => e.status === 403 || e.status === 404)
+  // Copies are counted from page content; Unsync all turns every copy into ordinary blocks.
+  const other = s.createPage(owner, { title: 'Copy', section: 'workspace', content: [{ id: 'x', type: 'synced', props: { syncId: b.id }, children: [] }] })
+  s.updatePage(owner, p.id, { content: [{ id: 'y', type: 'synced', props: { syncId: b.id }, children: [] }] })
+  assert.equal(s.getSynced(owner, b.id).copies, 2)
+  assert.equal(s.unsyncAll(owner, b.id).pages, 2)
+  const c = s.getPage(owner, other.id).content
+  assert.equal(c[0].type, 'paragraph')
+  assert.equal(c[0].content, 'bye')
+  assert.equal(s.getSynced(owner, b.id).copies, 0)
 })
 
 test('automations: set properties when rows are added or edited, notify people, never loop', () => {
