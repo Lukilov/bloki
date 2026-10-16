@@ -25,6 +25,8 @@ export function download(name: string, text: string, type = 'text/markdown') {
   URL.revokeObjectURL(a.href)
 }
 
+const emptyContent = (content: unknown[] = []) => content.every(b => { const x = b as { type?: string; content?: { text?: string }[]; children?: unknown[] }; return x.type === 'paragraph' && !(x.content ?? []).some(c => c.text?.trim()) && !(x.children ?? []).length })
+
 type Heading = { id: string; level: number; text: string }
 const readHeadings = (): Heading[] => [...document.querySelectorAll<HTMLElement>('.bn-editor .bn-block-content[data-content-type="heading"]')]
   .map(el => ({ id: el.closest<HTMLElement>('[data-id]')?.dataset.id ?? '', level: Number(el.dataset.level ?? 1), text: el.innerText.trim() || 'Untitled' })).filter(h => h.id)
@@ -109,6 +111,9 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     return () => clearTimeout(t)
   }, [offline, metaUpdated]) // eslint-disable-line react-hooks/exhaustive-deps
   const [layoutOpen, setLayoutOpen] = useState(false)
+  // The empty-row template hint goes away once you start typing, as Notion's does.
+  const [hintGone, setHintGone] = useState(false)
+  useEffect(() => setHintGone(false), [id])
   const [watch, setWatch] = useState<'all' | 'replies' | null>(null)
   useEffect(() => { setWatch(null); if (!store.published) api.watch(id).then(w => setWatch(w.mode)).catch(() => {}) }, [id, store.published])
   const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks' | 'discussions'; el: HTMLElement } | null>(null)
@@ -294,7 +299,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           <CoverPicker onPick={c => { set({ cover: c, cover_y: 50 }); closePop() }} onRemove={() => { set({ cover: '' }); closePop() }} />
         </Popover>
 
-        <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')}>
+        <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')} onKeyDownCapture={e => { if ((e.target as HTMLElement).closest('.bn-editor')) setHintGone(true) }}>
           {row && isTemplate(meta) && <div className="template-banner">You’re editing a template in {iconOf(row, 16)} <b>{label(row)}</b></div>}
           <div className="page-head">
             {meta.icon && <button ref={iconBtn} className="page-icon" disabled={!edit} onClick={openPop('icon')}>{iconOf(meta, 78)}</button>}
@@ -322,6 +327,24 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           </div>
 
           {row && <RowProperties db={row} row={meta} readOnly={!edit} />}
+          {row && edit && !hintGone && !isTemplate(meta) && emptyContent(page.content) && (() => {
+            // As in Notion, an empty row offers the database's templates (or making one) before you start typing.
+            const tpls = store.children(row.id).filter(isTemplate)
+            const useTemplate = async (tid: string) => {
+              const t = await api.get(tid)
+              const { _template, ...props } = (t.props ?? {}) as Record<string, unknown>
+              void _template
+              await api.update(id, { content: t.content, props: { ...(meta.props ?? {}), ...props }, ...(meta.icon ? {} : { icon: t.icon }) })
+              await store.reload(); setVersion(v => v + 1)
+            }
+            const makeTemplate = async () => { const t = await store.create({ parent_id: row.id, title: 'New template', props: { _template: true } }, false); store.go(t.id) }
+            return (
+              <div className="empty-row-hint">
+                <span>Press <kbd>Enter</kbd> to continue with an empty page, or <button className="link" onClick={makeTemplate}>create a template</button></span>
+                {tpls.length > 0 && <div className="empty-row-templates">{tpls.map(t => <button key={t.id} onClick={() => useTemplate(t.id).catch(e => store.setError(e.message))}>{iconOf(t, 16)} {label(t)}</button>)}</div>}
+              </div>
+            )
+          })()}
 
           {(layout.backlinks ?? 'popover') !== 'off' && backlinks.length > 0 && (
             (layout.backlinks ?? 'popover') === 'expanded' || showBacklinks

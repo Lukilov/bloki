@@ -1188,3 +1188,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .template-default { margin-left: auto; font-size: 11px; color: var(--muted); padding: 0 6px; border-radius: 4px; background: var(--hover); }
 .template-banner { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; padding: 8px 12px; border-radius: 6px; background: var(--hover); color: var(--text-2); font-size: 14px; }
 .template-banner b { font-weight: 500; color: var(--text); }
+/* Empty database row: Notion's "Press Enter to continue…, or create a template", with the templates as buttons. */
+.empty-row-hint { margin: 4px 0 12px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.empty-row-hint kbd { font: inherit; font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--hover); }
+.empty-row-hint .link { border: none; padding: 0; background: none; color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-2); font-size: 14px; }
+.empty-row-templates { display: flex; flex-wrap: wrap; gap: 6px; }
+.empty-row-templates button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; color: var(--text); }
