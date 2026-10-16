@@ -3,13 +3,13 @@ import {
   ArrowDownUp, ArrowUpRight, Calendar, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
   GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
-import { can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
+import { api, can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
 import { copyText, Menu, Popover, type Item } from './ui'
 import { pageUrl } from './pageActions'
 import { Chip, ctxOf, StatusChip, typeIcon } from './db/Cells'
 import { VIEW_COMPONENTS } from './db/Views'
-import { applyView, groupable, needsValue, newRowDefaults, OP_NAMES, opsFor, propOf, textOf, value } from './db/model'
+import { applyView, groupable, isTemplate, needsValue, newRowDefaults, OP_NAMES, opsFor, propOf, textOf, value } from './db/model'
 import { PageView } from './PageView'
 
 export { RowProperties } from './db/Cells'
@@ -79,6 +79,39 @@ function PropertyList({ db, onPick, filter, placeholder = 'Filter by…', extra 
     <div className="menu-list">
       <input className="menu-filter" autoFocus placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} />
       {all.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p)}><span className="menu-icon">{typeIcon(p)}</span><span className="menu-label">{p.name}</span></button>)}
+    </div>
+  )
+}
+
+/** Notion's "New ▾" menu: the database's templates (⋯ for default, edit, duplicate, delete), an empty page, New template. */
+function TemplateMenu({ db, templates, isDefault, use, empty, edit, create, setDefault, duplicate, remove, close }: {
+  db: Page; templates: Page[]; isDefault: (id: string) => boolean; close: () => void
+  use: (id: string) => void; empty: () => void; edit: (t: Page) => void; create: () => void
+  setDefault: (id: string) => void; duplicate: (id: string) => void; remove: (id: string) => void
+}) {
+  const [more, setMore] = useState<{ el: HTMLElement; t: Page } | null>(null)
+  return (
+    <div className="menu-list template-menu">
+      <div className="template-head"><b>Templates for <span>{iconOf(db, 16)} {label(db)}</span></b>
+        {!templates.length && <p>Create a reusable page template for this database.</p>}</div>
+      {templates.map(t => (
+        <div key={t.id} className="option-row template-row" onClick={() => use(t.id)}>
+          <span className="menu-icon">{iconOf(t, 16)}</span><span className="menu-label">{label(t)}</span>
+          {isDefault(t.id) && <span className="template-default">Default</span>}
+          <button className="ghost option-more" title="Template options" onClick={e => { e.stopPropagation(); setMore({ el: e.currentTarget, t }) }}><MoreHorizontal size={14} /></button>
+        </div>
+      ))}
+      {templates.length > 0 && <button className="menu-item" onClick={empty}><span className="menu-icon">{iconOf(db, 16)}</span><span className="menu-label">Empty page</span></button>}
+      <div className="menu-divider" />
+      <button className="menu-item" onClick={create}><span className="menu-icon"><Plus size={16} /></span><span className="menu-label">New template</span></button>
+      <Popover anchor={more?.el ?? null} side="right" onClose={() => setMore(null)} className="menu-pop" width={220}>
+        {more && <Menu onClose={() => { setMore(null); close() }} items={[
+          { label: isDefault(more.t.id) ? 'Remove as default' : 'Set as default', onClick: () => setDefault(more.t.id) },
+          { icon: <PenLine size={15} />, label: 'Edit', onClick: () => edit(more.t) },
+          { icon: <Copy size={15} />, label: 'Duplicate', onClick: () => duplicate(more.t.id) },
+          { icon: <Trash2 size={15} />, label: 'Delete', danger: true, onClick: () => remove(more.t.id) },
+        ]} />}
+      </Popover>
     </div>
   )
 }
@@ -285,7 +318,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
   const ctx = useMemo(() => ctxOf(store), [store])
   const rows = useMemo(() => {
     if (!db || !view) return []
-    let r = applyView(store.children(db.id), schema, view, ctx, store.me?.user.id)
+    let r = applyView(store.children(db.id).filter(x => !isTemplate(x)), schema, view, ctx, store.me?.user.id)
     if (query) {
       const q = query.toLowerCase()
       r = r.filter(row => label(row).toLowerCase().includes(q) || (schema.props ?? []).some(p => textOf(value(row, p, schema, ctx), p, ctx).toLowerCase().includes(q)))
@@ -304,6 +337,21 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
   }
   const props = (schema.props ?? []).filter(p => !view.hidden?.includes(p.id))
   const openRow = (r: Page) => ((view.open ?? 'peek') === 'page' ? store.go(r.id) : setPeek(r))
+  // Templates: rows marked _template. Using one copies its title, icon, properties and content into a new row.
+  const templates = store.children(db.id).filter(isTemplate)
+  const fromTemplate = async (id: string) => {
+    try {
+      const t = await api.get(id)
+      const { _template, ...props } = (t.props ?? {}) as Record<string, unknown>
+      void _template
+      const row = await store.create({ parent_id: db.id, title: t.title, icon: t.icon, props, content: t.content }, false)
+      openRow(row)
+    } catch (e) { store.setError((e as Error).message) }
+  }
+  const newTemplate = async () => {
+    const row = await store.create({ parent_id: db.id, title: 'New template', props: { ...newRowDefaults(schema), _template: true } }, false)
+    setPeek(row)
+  }
   const addRow = async (defaults: Record<string, unknown> = {}, open = true) => {
     // New rows satisfy simple filters so they don't vanish when created.
     const p: Record<string, unknown> = { ...newRowDefaults(schema), ...defaults }
@@ -385,7 +433,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
           <button className="icon-btn" title="Settings" onClick={e => setPop({ kind: 'settings', el: e.currentTarget })}><MoreHorizontal size={16} /></button>
           {perm.rows && (
             <span className="new-split">
-              <button className="primary" onClick={() => addRow()}>New</button>
+              <button className="primary" onClick={() => (schema.defaultTemplate && store.byId.get(schema.defaultTemplate) && !store.byId.get(schema.defaultTemplate)!.trashed ? fromTemplate(schema.defaultTemplate) : addRow())}>New</button>
               <button className="primary caret" onClick={e => setPop({ kind: 'new', el: e.currentTarget })}><ChevronDown size={14} /></button>
             </span>
           )}
@@ -461,12 +509,13 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
           ? <ViewSettings db={db} view={view} setView={setView} setSchema={setSchema} views={views} close={closePop} setViewId={setViewId} />
           : <Menu onClose={closePop} items={[{ note: 'You can view this database. Ask for edit access to change its views.' }, { icon: <Link2 size={15} />, label: 'Copy link', onClick: () => copyText(pageUrl(db.id)) }]} />}
       </Popover>
-      <Popover anchor={pop?.kind === 'new' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={240}>
-        <Menu onClose={closePop} items={[
-          { heading: `Templates for ${label(db)}` },
-          { icon: iconOf(db, 16), label: 'Empty page', onClick: () => addRow({}, true) },
-          { icon: <Copy size={15} />, label: 'Duplicate last page', disabled: !rows.length, onClick: async () => { if (rows.length) { const c = await import('./api').then(m => m.api.duplicate(rows[rows.length - 1].id)); await store.reload(); openRow(c) } } },
-        ]} />
+      <Popover anchor={pop?.kind === 'new' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={360}>
+        <TemplateMenu db={db} templates={templates} isDefault={id => schema.defaultTemplate === id} close={closePop}
+          use={id => { closePop(); fromTemplate(id) }} empty={() => { closePop(); addRow({}, true) }}
+          edit={t => { closePop(); setPeek(t) }} create={() => { closePop(); newTemplate() }}
+          setDefault={id => setSchema({ ...schema, defaultTemplate: schema.defaultTemplate === id ? undefined : id })}
+          duplicate={async id => { await api.duplicate(id); await store.reload() }}
+          remove={id => { store.patch(id, { trashed: true }); if (schema.defaultTemplate === id) setSchema({ ...schema, defaultTemplate: undefined }) }} />
       </Popover>
       {peek && store.byId.get(peek.id) && (
         <Peek row={store.byId.get(peek.id)!} mode={(view.open ?? 'peek') === 'center' ? 'center' : 'peek'} close={() => setPeek(null)} rows={rows} setRow={setPeek} dark={dark} />

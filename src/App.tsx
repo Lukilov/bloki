@@ -9,6 +9,7 @@ import { Avatar } from './Comments'
 // The page view brings the editor, databases and comments: it downloads in parallel with the app shell.
 const PageView = lazy(() => import('./PageView').then(m => ({ default: m.PageView })))
 import { TEMPLATES } from './templates'
+import { isTemplate } from './db/model'
 import { alt, coverStyle, mod, shift, timeAgo, Toast, Tooltips } from './ui'
 import './styles.css'
 
@@ -38,7 +39,7 @@ function Library() {
   const [tab, setTab] = useState<'recents' | 'favorites' | 'shared' | 'private'>('recents')
   const seen = new Map(visited().map(v => [v.id, v.at]))
   const rootOf = (id: string) => { let p = store.byId.get(id); while (p?.parent_id && store.byId.get(p.parent_id)) p = store.byId.get(p.parent_id); return p }
-  const live = store.pages.filter(p => !p.trashed)
+  const live = store.pages.filter(p => !p.trashed && !isTemplate(p))
   const rows = (tab === 'recents' ? live.filter(p => seen.has(p.id)).sort((a, b) => seen.get(b.id)! - seen.get(a.id)!)
     : tab === 'favorites' ? live.filter(p => p.favorite)
     : live.filter(p => rootOf(p.id)?.section === tab).sort((a, b) => b.updated - a.updated)).slice(0, 200)

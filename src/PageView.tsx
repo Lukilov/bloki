@@ -9,7 +9,7 @@ import { PageEditor, toHTML, toMarkdown } from './Editor'
 import { coverStyle, Database, RowProperties } from './Database'
 import { ctxOf } from './db/Cells'
 import { LayoutEditor } from './db/Layout'
-import { propOf, textOf, value } from './db/model'
+import { isTemplate, propOf, textOf, value } from './db/model'
 import { personName, ShareMenu } from './Access'
 import { CommentsPanel, DiscussionsPopover, PageDiscussions } from './Comments'
 import { CoverPicker, GRADIENTS, IconPicker, randomEmoji } from './IconPicker'
@@ -294,6 +294,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
         </Popover>
 
         <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')}>
+          {row && isTemplate(meta) && <div className="template-banner">You’re editing a template in {iconOf(row, 16)} <b>{label(row)}</b></div>}
           <div className="page-head">
             {meta.icon && <button ref={iconBtn} className="page-icon" disabled={!edit} onClick={openPop('icon')}>{iconOf(meta, 78)}</button>}
             {edit && (

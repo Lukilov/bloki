@@ -271,6 +271,9 @@ export function sortKey(row: Page, p: Prop, schema: Schema, ctx: Ctx): string | 
   }
 }
 
+/** Database templates are rows marked _template: they stay out of views and are copied by "New". */
+export const isTemplate = (p: Page) => !!(p.props as Record<string, unknown> | undefined)?._template
+
 export function applyView(rows: Page[], schema: Schema, view: View, ctx: Ctx, me?: string): Page[] {
   let out = rows.filter(r => (view.filters ?? []).every(f => matches(r, f, schema, ctx, me)))
   const sorts = view.sort ?? []
