@@ -278,10 +278,10 @@ const darkTheme = {
     selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(255, 255, 255, 0.28)', background: 'transparent' },
     shadow: 'rgba(0, 0, 0, 0.4)', border: 'rgba(255, 255, 235, 0.1)', sideMenu: 'rgba(255, 255, 255, 0.28)',
     highlights: {
-      // Measured on Notion's dark colour menu (2026); blue–red backgrounds not yet measured.
+      // Measured on Notion's dark colour menu (2026).
       gray: { text: 'rgb(125, 122, 117)', background: 'rgb(56, 56, 54)' }, brown: { text: 'rgb(159, 118, 90)', background: 'rgb(69, 54, 45)' }, orange: { text: 'rgb(210, 123, 45)', background: 'rgb(83, 54, 31)' },
-      yellow: { text: 'rgb(203, 148, 52)', background: 'rgb(80, 68, 37)' }, green: { text: 'rgb(80, 148, 110)', background: 'rgb(38, 61, 48)' }, blue: { text: 'rgb(56, 125, 201)', background: '#143a4e' },
-      purple: { text: 'rgb(154, 107, 180)', background: '#3c2d49' }, pink: { text: 'rgb(193, 76, 138)', background: '#4e2c3c' }, red: { text: 'rgb(207, 81, 72)', background: '#522e2a' },
+      yellow: { text: 'rgb(203, 148, 52)', background: 'rgb(80, 68, 37)' }, green: { text: 'rgb(80, 148, 110)', background: 'rgb(38, 61, 48)' }, blue: { text: 'rgb(56, 125, 201)', background: 'rgb(35, 56, 80)' },
+      purple: { text: 'rgb(154, 107, 180)', background: 'rgb(60, 45, 71)' }, pink: { text: 'rgb(193, 76, 138)', background: 'rgb(78, 43, 60)' }, red: { text: 'rgb(207, 81, 72)', background: 'rgb(80, 44, 41)' },
     },
   },
 }
