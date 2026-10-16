@@ -699,6 +699,12 @@ let detached: BlockNoteEditor | undefined
 const converter = () => (detached ??= BlockNoteEditor.create())
 const noTitles: Lookup = () => 'Page'
 
+/** HTML (e.g. edited in the desktop app's offline reader) back into blocks. */
+export async function htmlToBlocks(html: string) {
+  const ed = BlockNoteEditor.create({ schema } as never) as unknown as { tryParseHTMLToBlocks: (h: string) => unknown[] | Promise<unknown[]> }
+  return ed.tryParseHTMLToBlocks(html)
+}
+
 export function toMarkdown(page: Page, title: Lookup = noTitles) {
   return `# ${label(page)}\n\n` + converter().blocksToMarkdownLossy(exportable((page.content ?? []) as AnyBlock[], title) as never)
 }

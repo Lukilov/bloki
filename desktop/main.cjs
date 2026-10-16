@@ -535,9 +535,13 @@ app.whenReady().then(() => {
     if (!on) { offline().remove(config.server, id); return false }
     const html = String(data?.html ?? '')
     if (html.length > 5_000_000) return false
-    offline().save(config.server, id, { title: data?.title ?? '', icon: data?.icon ?? '', html })
+    offline().save(config.server, id, { title: data?.title ?? '', icon: data?.icon ?? '', html, base: Number(data?.base) || 0 })
     return true
   })
+  // Offline editing: the reader saves edits locally; the Bloki page picks them up once it loads again.
+  ipcMain.handle('bloki:offline-edit', (e, id, html) => isLocalPage(e.sender) && config.server && /^[\w-]{1,64}$/.test(String(id)) && String(html).length <= 5_000_000 ? offline().edit(config.server, String(id), String(html)) : false)
+  ipcMain.handle('bloki:offline-pending', e => (sameOrigin(e.sender.getURL()) ? offline().pending(config.server) : []))
+  ipcMain.handle('bloki:offline-sent', (e, id) => { if (sameOrigin(e.sender.getURL())) offline().sent(config.server, String(id)) })
   ipcMain.handle('bloki:offline-has', (e, id) => sameOrigin(e.sender.getURL()) && offline().has(config.server, String(id)))
   ipcMain.handle('bloki:offline-list', e => (isLocalPage(e.sender) && config.server ? offline().list(config.server) : []))
   ipcMain.handle('bloki:offline-get', (e, id) => (isLocalPage(e.sender) && config.server ? offline().get(config.server, String(id)) : null))

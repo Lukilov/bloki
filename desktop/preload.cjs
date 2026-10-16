@@ -13,7 +13,11 @@ contextBridge.exposeInMainWorld('blokiDesktop', {
   closeCommandSearch: () => ipcRenderer.send('bloki:close-command-search'),
   /** Available offline: keep this page's HTML on this computer, or forget it. */
   offline: {
-    set: (id, on, data) => ipcRenderer.invoke('bloki:offline-set', String(id), !!on, on ? { title: String(data?.title ?? ''), icon: String(data?.icon ?? ''), html: String(data?.html ?? '') } : null),
+    set: (id, on, data) => ipcRenderer.invoke('bloki:offline-set', String(id), !!on, on ? { title: String(data?.title ?? ''), icon: String(data?.icon ?? ''), html: String(data?.html ?? ''), base: Number(data?.base) || 0 } : null),
+    // Offline editing: the reader stores edits; the Bloki page sends them and marks them sent.
+    edit: (id, html) => ipcRenderer.invoke('bloki:offline-edit', String(id), String(html)),
+    pending: () => ipcRenderer.invoke('bloki:offline-pending'),
+    sent: id => ipcRenderer.invoke('bloki:offline-sent', String(id)),
     has: id => ipcRenderer.invoke('bloki:offline-has', String(id)),
     // Only the offline reader (a local file) gets answers to these two.
     list: () => ipcRenderer.invoke('bloki:offline-list'),

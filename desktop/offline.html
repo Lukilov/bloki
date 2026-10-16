@@ -20,7 +20,10 @@
   .foot { margin-top: auto; padding: 10px; display: flex; gap: 6px; }
   .foot button { flex: 1; font: inherit; font-weight: 500; border: none; border-radius: 6px; padding: 6px; cursor: pointer; background: rgb(35, 131, 226); color: #fff; }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .banner { padding: 8px 16px; font-size: 13px; color: var(--muted); box-shadow: var(--line) 0 -1px 0 inset; }
+  .banner { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: 13px; color: var(--muted); box-shadow: var(--line) 0 -1px 0 inset; }
+  .tools { margin-left: auto; display: flex; gap: 6px; }
+  .tools button { font: inherit; font-weight: 500; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; background: none; color: var(--text); cursor: pointer; }
+  .tools #save { background: rgb(35, 131, 226); border-color: transparent; color: #fff; }
   iframe { flex: 1; border: none; width: 100%; background: var(--bg); }
   .empty { margin: auto; color: var(--muted); }
 </style>
@@ -32,9 +35,10 @@
   <div class="foot"><button id="retry">Try again</button></div>
 </aside>
 <main>
-  <div class="banner">You’re offline, so these saved copies are read-only. Changes resume once Bloki can reach the server.</div>
+  <div class="banner"><span id="note">You’re offline. Edits you make here are kept on this computer and sent when Bloki can reach the server.</span>
+    <span class="tools"><button id="edit" hidden>Edit</button><button id="save" hidden>Save</button></span></div>
   <div class="empty" id="empty">Pick a page on the left.</div>
-  <iframe id="view" sandbox="" hidden title="Saved page"></iframe>
+  <iframe id="view" sandbox="allow-same-origin" hidden title="Saved page"></iframe>
 </main>
 <script>
   const q = new URLSearchParams(location.search)
@@ -42,12 +46,23 @@
   document.getElementById('server').textContent = q.get('server') || ''
   document.getElementById('retry').onclick = () => api.retry(q.get('url') || q.get('server'))
   const view = document.getElementById('view')
-  // The saved HTML is shown in a sandboxed frame with no scripts and nothing loaded from the network.
+  // The saved HTML is shown in a sandboxed frame: no scripts and nothing loaded from the network. Same-origin (still
+  // script-free) so the reader can switch it to editing and read the edited HTML back.
   const frame = html => '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:">'
     + '<style>body{font:16px/1.6 ui-sans-serif,-apple-system,system-ui,sans-serif;max-width:708px;margin:48px auto;padding:0 24px;color:' + getComputedStyle(document.body).color + ';background:' + getComputedStyle(document.body).backgroundColor + '}img{max-width:100%}pre{white-space:pre-wrap}li>p{margin:0}li:has(>input[type=checkbox]),li:has(>div>input[type=checkbox]){list-style:none;display:flex;gap:8px;align-items:center}blockquote{margin:0;padding-left:14px;border-left:3px solid currentColor}hr{border:none;border-top:1px solid rgba(127,127,127,.3)}a{color:inherit}table{border-collapse:collapse;font-size:14px;width:100%}th,td{border:1px solid rgba(127,127,127,.25);padding:6px 8px;text-align:left;vertical-align:top}th{font-weight:500;opacity:.7}</style>' + html
+  let current = null
+  const editBtn = document.getElementById('edit'), saveBtn = document.getElementById('save')
+  editBtn.onclick = () => { const d = view.contentDocument; d.designMode = 'on'; d.body.focus(); editBtn.hidden = true; saveBtn.hidden = false }
+  saveBtn.onclick = async () => {
+    const d = view.contentDocument
+    if (!current || !(await api.edit(current, d.body.innerHTML))) return
+    d.designMode = 'off'; saveBtn.hidden = true; editBtn.hidden = false
+    document.getElementById('note').textContent = 'Saved on this computer. It will be sent when Bloki can reach the server.'
+  }
   async function open(id, btn) {
     const p = await api.get(id)
     if (!p) return
+    current = id; editBtn.hidden = false; saveBtn.hidden = true
     document.querySelectorAll('.row').forEach(r => r.classList.toggle('on', r === btn))
     document.getElementById('empty').hidden = true
     view.hidden = false

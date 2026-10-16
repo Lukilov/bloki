@@ -102,7 +102,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const keepOffline = useCallback(async () => {
     const full = await api.get(id)
     const titleOf = (pid: string) => label(store.byId.get(pid))
-    return offlineApi!.set(id, true, { title: label(full), icon: typeof full.icon === 'string' && !full.icon.startsWith('icon:') && !full.icon.includes('/') ? full.icon : '', html: full.kind === 'page' ? toHTML(full, titleOf) : dbHTML(full) })
+    return offlineApi!.set(id, true, { base: full.updated, title: label(full), icon: typeof full.icon === 'string' && !full.icon.startsWith('icon:') && !full.icon.includes('/') ? full.icon : '', html: full.kind === 'page' ? toHTML(full, titleOf) : dbHTML(full) })
   }, [id, store.byId]) // eslint-disable-line react-hooks/exhaustive-deps
   const metaUpdated = store.byId.get(id)?.updated
   useEffect(() => {

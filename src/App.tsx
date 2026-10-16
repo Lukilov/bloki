@@ -13,7 +13,7 @@ import { isTemplate } from './db/model'
 import { alt, coverStyle, mod, shift, timeAgo, Toast, Tooltips } from './ui'
 import './styles.css'
 
-const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void; chrome?: (info: { workspace: string; icon: string; width: number; collapsed: boolean }) => void } }).blokiDesktop
+const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void; offline?: { pending: () => Promise<{ id: string; html: string; base: number }[]>; sent: (id: string) => Promise<void> }; chrome?: (info: { workspace: string; icon: string; width: number; collapsed: boolean }) => void } }).blokiDesktop
 
 export type Theme = 'light' | 'dark' | 'system'
 const readTheme = (): Theme => { try { return (localStorage.getItem('theme') as Theme) || 'system' } catch { return 'system' } }
@@ -147,6 +147,31 @@ function Shell({ dark }: { dark: boolean }) {
 
   useEffect(() => save('sidebarWidth', String(width)), [width])
   useEffect(() => save('sidebarCollapsed', collapsed ? '1' : '0'), [collapsed])
+  // Desktop: edits made in the offline reader are sent once Bloki loads again. If the page changed on the server
+  // meanwhile, the offline version is added as a "Changes made offline" toggle instead of replacing anything.
+  useEffect(() => {
+    if (!store.me || !desktop?.offline) return
+    desktop.offline.pending().then(async list => {
+      if (!list.length) return
+      const { htmlToBlocks } = await import('./Editor')
+      let n = 0
+      for (const p of list) {
+        try {
+          const page = await api.get(p.id)
+          // The saved copy starts with the page title and may hold placeholder paragraphs; neither belongs in the content.
+          const text = (b: unknown) => ((b as { content?: { text?: string }[] }).content ?? []).map(c => c.text ?? '').join('').replace(/\uFFFC/g, '').trim()
+          let blocks = (await htmlToBlocks(p.html)).filter(b => (b as { type: string }).type !== 'paragraph' || text(b))
+          if ((blocks[0] as { type?: string })?.type === 'heading' && text(blocks[0]) === (page.title || '').trim()) blocks = blocks.slice(1)
+          const content = page.updated <= p.base ? blocks
+            : [...(page.content ?? []), { type: 'toggleListItem', content: [{ type: 'text', text: 'Changes made offline', styles: { bold: true } }], children: blocks }]
+          await api.update(p.id, { content } as never)
+          await desktop.offline!.sent(p.id)
+          n++
+        } catch { /* try again next time */ }
+      }
+      if (n) { store.toast(`Sent ${n} offline edit${n === 1 ? '' : 's'}`); store.reload().catch(() => {}) }
+    }).catch(() => {})
+  }, [store.me?.user.id]) // eslint-disable-line react-hooks/exhaustive-deps
   // In the desktop app the workspace switcher and sidebar button live in the tab bar, as in Notion's.
   const ws = store.me?.workspaces.find(w => w.id === store.me?.workspaceId)
   useEffect(() => { desktop?.chrome?.({ workspace: ws?.name ?? '', icon: ws?.icon ?? '', width, collapsed }) }, [ws?.name, ws?.icon, width, collapsed])

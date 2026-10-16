@@ -15,3 +15,15 @@ test('offline pages are kept per server and replaced on save', () => {
   assert.equal(o.get('https://a', 'p1'), null)
   assert.equal(o.list('https://b').length, 1)
 })
+
+test('offline edits wait in pending with the base they started from', () => {
+  const o = openOffline(':memory:')
+  assert.equal(o.edit('https://a', 'x', '<p>no copy</p>'), false)
+  o.save('https://a', 'p1', { title: 'T', html: '<p>old</p>', base: 100 })
+  assert.equal(o.edit('https://a', 'p1', '<p>new</p>'), true)
+  o.edit('https://a', 'p1', '<p>newer</p>')
+  assert.equal(o.get('https://a', 'p1').html, '<p>newer</p>')
+  assert.deepEqual(o.pending('https://a').map(p => [p.id, p.html, p.base]), [['p1', '<p>newer</p>', 100]])
+  o.sent('https://a', 'p1')
+  assert.equal(o.pending('https://a').length, 0)
+})
