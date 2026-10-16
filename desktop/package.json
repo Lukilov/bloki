@@ -26,6 +26,8 @@
       "config.cjs",
       "tabs.cjs",
       "connect.html",
+      "offline.html",
+      "offline.cjs",
       "shell.html",
       "build/icon.png"
     ],

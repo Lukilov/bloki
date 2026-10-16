@@ -11,6 +11,15 @@ contextBridge.exposeInMainWorld('blokiDesktop', {
   /** Command Search: open a page in the main window, or just close. */
   openPage: (id, newTab) => ipcRenderer.send('bloki:open-page', String(id), !!newTab),
   closeCommandSearch: () => ipcRenderer.send('bloki:close-command-search'),
+  /** Available offline: keep this page's HTML on this computer, or forget it. */
+  offline: {
+    set: (id, on, data) => ipcRenderer.invoke('bloki:offline-set', String(id), !!on, on ? { title: String(data?.title ?? ''), icon: String(data?.icon ?? ''), html: String(data?.html ?? '') } : null),
+    has: id => ipcRenderer.invoke('bloki:offline-has', String(id)),
+    // Only the offline reader (a local file) gets answers to these two.
+    list: () => ipcRenderer.invoke('bloki:offline-list'),
+    get: id => ipcRenderer.invoke('bloki:offline-get', String(id)),
+    retry: url => ipcRenderer.send('bloki:retry', String(url)),
+  },
   /** Workspace name and sidebar state, so the tab bar can show the switcher over the sidebar, as Notion does. */
   chrome: info => ipcRenderer.send('bloki:chrome', {
     workspace: String(info?.workspace ?? '').slice(0, 100), icon: String(info?.icon ?? '').slice(0, 8),

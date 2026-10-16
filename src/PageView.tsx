@@ -81,6 +81,21 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [draft, setDraft] = useState<{ blockId: string; quote: string; id: string } | null>(null)
   const [composing, setComposing] = useState(false)
   const [modal, setModal] = useState<'history' | 'export' | null>(null)
+  // Available offline (desktop app only): a copy of the page kept on this computer, refreshed when it changes.
+  const offlineApi = (window as { blokiDesktop?: { offline?: { set: (id: string, on: boolean, data?: object) => Promise<boolean>; has: (id: string) => Promise<boolean> } } }).blokiDesktop?.offline
+  const [offline, setOffline] = useState(false)
+  useEffect(() => { setOffline(false); offlineApi?.has(id).then(setOffline).catch(() => {}) }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const keepOffline = useCallback(async () => {
+    const full = await api.get(id)
+    const titleOf = (pid: string) => label(store.byId.get(pid))
+    return offlineApi!.set(id, true, { title: label(full), icon: typeof full.icon === 'string' && !full.icon.startsWith('icon:') && !full.icon.includes('/') ? full.icon : '', html: full.kind === 'page' ? toHTML(full, titleOf) : `<h1>${label(full).replace(/</g, '&lt;')}</h1><p>Databases can't be read offline yet.</p>` })
+  }, [id, store.byId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const metaUpdated = store.byId.get(id)?.updated
+  useEffect(() => {
+    if (!offline || !offlineApi) return
+    const t = setTimeout(() => { keepOffline().catch(() => {}) }, 2000)
+    return () => clearTimeout(t)
+  }, [offline, metaUpdated]) // eslint-disable-line react-hooks/exhaustive-deps
   const [watch, setWatch] = useState<'all' | 'replies' | null>(null)
   useEffect(() => { setWatch(null); if (!store.published) api.watch(id).then(w => setWatch(w.mode)).catch(() => {}) }, [id, store.published])
   const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks' | 'discussions'; el: HTMLElement } | null>(null)
@@ -166,6 +181,11 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     { divider: true },
     { icon: <Palette size={16} />, label: 'Appearance & layout', submenu: appearance },
     { divider: true },
+    ...(offlineApi && !store.published ? [{ icon: <Download size={16} />, label: sw(offline, 'Available offline'), onClick: () => {
+      const on = !offline
+      setOffline(on)
+      ;(on ? keepOffline() : offlineApi.set(id, false)).then(() => store.toast(on ? 'Page available offline' : 'Removed from offline pages')).catch(e => { setOffline(!on); store.setError(e.message) })
+    } }] : []),
     ...(!store.published && watch ? [{ icon: <Bell size={16} />, label: 'Notify me', hint: watch === 'all' ? 'Comments' : 'Replies', submenu: () => <Menu onClose={() => setPop(null)} items={(['all', 'replies'] as const).map(m => ({ label: watchLabel[m], checked: watch === m, onClick: () => { setWatch(m); api.setWatch(id, m).catch(e => store.setError(e.message)) } }))} /> }] : []),
     ...(edit ? [
       { icon: meta.locked ? <LockOpen size={16} /> : <Lock size={16} />, label: sw(meta.locked, 'Lock page'), onClick: () => { set({ locked: !meta.locked }); setVersion(v => v + 1) } },

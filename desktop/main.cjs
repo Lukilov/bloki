@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { load, save, normalizeServer, isAllowedServer, deepLinkTarget } = require('./config.cjs')
 const tabs = require('./tabs.cjs')
+const { openOffline } = require('./offline.cjs')
 
 const isMac = process.platform === 'darwin'
 const TAB_BAR = 36
@@ -21,6 +22,10 @@ else app.setAsDefaultProtocolClient('bloki')
 
 const sameOrigin = url => { try { return !!config.server && new URL(url).origin === config.server } catch { return false } }
 const connectPage = (wc, query = {}) => wc.loadFile(path.join(__dirname, 'connect.html'), { query })
+// "Available offline" pages, opened lazily so a broken file never stops the app from starting.
+let offlineStore = null
+const offline = () => (offlineStore ??= openOffline(path.join(userData, 'offline.db')))
+const isLocalPage = wc => wc.getURL().startsWith('file://')
 const secure = preload => ({ preload: path.join(__dirname, preload), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: true })
 
 function openExternal(url) {
@@ -209,7 +214,12 @@ function wireTab(wc) {
     return { action: 'deny' }
   })
   wc.on('did-fail-load', (_e, code, description, failedUrl, isMainFrame) => {
-    if (isMainFrame && sameOrigin(failedUrl) && code !== -3) connectPage(wc, { error: `Can’t reach ${config.server} (${description}).`, server: config.server })
+    if (!isMainFrame || !sameOrigin(failedUrl) || code === -3) return
+    // With pages kept offline, show those to read; otherwise ask about the server again.
+    let saved = []
+    try { saved = offline().list(config.server) } catch { /* no offline store */ }
+    if (saved.length) wc.loadFile(path.join(__dirname, 'offline.html'), { query: { server: config.server, url: failedUrl } })
+    else connectPage(wc, { error: `Can’t reach ${config.server} (${description}).`, server: config.server })
   })
   wc.on('did-finish-load', () => { if (wc.getURL().startsWith('file://')) { const f = found(); if (f) markReady(f.t) } })
   wc.on('page-title-updated', (_e, title) => { const f = found(); if (f) { f.t.title = title; sendState(f.w) } })
@@ -519,6 +529,19 @@ app.whenReady().then(() => {
   ipcMain.on('bloki:change-server', changeServer)
   ipcMain.on('bloki:shell', onShell)
   ipcMain.on('bloki:ready', e => { const f = tabOf(e.sender); if (f) markReady(f.t) })
+  // Available offline: the Bloki page saves or forgets itself; the offline reader (a local file) lists and opens them.
+  ipcMain.handle('bloki:offline-set', (e, id, on, data) => {
+    if (!sameOrigin(e.sender.getURL()) || !/^[\w-]{1,64}$/.test(String(id))) return false
+    if (!on) { offline().remove(config.server, id); return false }
+    const html = String(data?.html ?? '')
+    if (html.length > 5_000_000) return false
+    offline().save(config.server, id, { title: data?.title ?? '', icon: data?.icon ?? '', html })
+    return true
+  })
+  ipcMain.handle('bloki:offline-has', (e, id) => sameOrigin(e.sender.getURL()) && offline().has(config.server, String(id)))
+  ipcMain.handle('bloki:offline-list', e => (isLocalPage(e.sender) && config.server ? offline().list(config.server) : []))
+  ipcMain.handle('bloki:offline-get', (e, id) => (isLocalPage(e.sender) && config.server ? offline().get(config.server, String(id)) : null))
+  ipcMain.on('bloki:retry', (e, url) => { if (isLocalPage(e.sender) && sameOrigin(String(url))) e.sender.loadURL(String(url)) })
   ipcMain.on('bloki:chrome', (e, info) => {
     const f = tabOf(e.sender)
     if (!f || typeof info !== 'object' || !info) return

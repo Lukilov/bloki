@@ -1,0 +1,17 @@
+const test = require('node:test')
+const assert = require('node:assert')
+const { openOffline } = require('../offline.cjs')
+
+test('offline pages are kept per server and replaced on save', () => {
+  const o = openOffline(':memory:')
+  o.save('https://a', 'p1', { title: 'Beta', html: '<p>one</p>' })
+  o.save('https://a', 'p2', { title: 'alfa', icon: '📄', html: '<p>two</p>' })
+  o.save('https://b', 'p1', { title: 'Other', html: '<p>x</p>' })
+  assert.deepEqual(o.list('https://a').map(p => p.title), ['alfa', 'Beta'])
+  o.save('https://a', 'p1', { title: 'Beta', html: '<p>new</p>' })
+  assert.equal(o.get('https://a', 'p1').html, '<p>new</p>')
+  assert.equal(o.has('https://b', 'p2'), false)
+  o.remove('https://a', 'p1')
+  assert.equal(o.get('https://a', 'p1'), null)
+  assert.equal(o.list('https://b').length, 1)
+})
