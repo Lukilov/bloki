@@ -1073,6 +1073,9 @@ export const collab = createCollab({
   authorize(req, pageId) {
     const user = sessionUser(readCookie(req, 'bloki_session'))
     if (!user) return null
+    // A synced block's room follows its original page's access.
+    if (pageId.startsWith('synced-')) pageId = db.prepare('SELECT page_id FROM synced WHERE id = ?').get(pageId.slice(7))?.page_id ?? ''
+    if (!pageId) return null
     let level
     try { level = pageAccess(user.id, pageId) } catch { return null }
     if (!atLeast(level, 'view')) return null

@@ -42,32 +42,37 @@ const innerSchema = BlockNoteSchema.create({ blockSpecs: innerSpecs, inlineConte
 /** One editor's worth of content, stored once on the server and shown live on every page that pastes it. */
 function SyncedEditor({ id, initial, editable, original, pageId }: { id: string; initial: unknown[]; editable: boolean; original: string; pageId: string }) {
   const store = useStore()
-  const ed = useCreateBlockNote({ schema: innerSchema, initialContent: initial.length ? initial as never : undefined, dictionary: dictionary as never })
+  // Copies edit one shared Yjs document (room "synced-<id>"), so simultaneous edits merge instead of overwriting.
+  const live = useCollab(`synced-${id}`, true)
+  const ed = useCreateBlockNote(withCollaboration({
+    schema: innerSchema, dictionary: dictionary as never,
+    collaboration: {
+      fragment: live!.doc.getXmlFragment('document-store'), provider: live!.provider,
+      user: { name: store.me?.user.name ?? 'Guest', color: colorFor(store.me?.user.id ?? 'guest') }, showCursorLabels: 'activity',
+    },
+  } as never) as never, [live]) as unknown as { document: unknown[]; replaceBlocks: (a: unknown[], b: unknown[]) => void }
+  // The server asks one editor to fill a brand-new shared doc from the saved blocks.
+  useEffect(() => {
+    const onSync = (ok: boolean) => {
+      if (ok && live!.state.seed && !live!.doc.getXmlFragment('document-store').length && initial.length) { live!.state.seed = false; ed.replaceBlocks(ed.document, initial) }
+    }
+    if (live!.provider.synced) onSync(true)
+    live!.provider.on('sync', onSync)
+    return () => live!.provider.off('sync', onSync)
+  }, [live, ed]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A plain JSON copy is still kept on the server for export, offline reading and Unsync.
   const sent = useRef(JSON.stringify(initial))
   const timer = useRef<number | undefined>(undefined)
-  // ponytail: last write wins between copies edited at the same moment; merge with Yjs if that ever bites.
   const save = () => {
+    if (!editable) return
     clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
       const json = JSON.stringify(ed.document)
       if (json === sent.current) return
       sent.current = json
       api.updateSynced(id, ed.document as never).catch(e => store.setError(e.message))
-    }, 500)
+    }, 1000)
   }
-  useEffect(() => {
-    const on = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== id) return
-      api.getSynced(id).then(d => {
-        const json = JSON.stringify(d.content)
-        if (json === sent.current) return
-        sent.current = json
-        ed.replaceBlocks(ed.document, (d.content.length ? d.content : [{ type: 'paragraph' }]) as never)
-      }).catch(() => {})
-    }
-    addEventListener('bloki:synced', on)
-    return () => removeEventListener('bloki:synced', on)
-  }, [id, ed])
   // Keys, clicks and pastes inside belong to this editor, not to the page around it.
   const isolate = (el: HTMLDivElement | null) => {
     if (!el || el.dataset.isolated) return

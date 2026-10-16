@@ -1,4 +1,5 @@
-// Live co-editing: the Yjs sync and awareness protocol over WebSockets, one shared document per page.
+// Live co-editing: the Yjs sync and awareness protocol over WebSockets, one shared document per page
+// (room = page id) or per synced block (room = "synced-<id>", stored in the synced table).
 import { WebSocketServer } from 'ws'
 import * as Y from 'yjs'
 import * as sync from 'y-protocols/sync'
@@ -17,19 +18,23 @@ const FRAGMENT = 'document-store'
  * @param {{ db: any, authorize: (req: any, pageId: string) => { userId: string, canEdit: boolean } | null }} deps
  */
 export function createCollab({ db, authorize }) {
-  if (!db.prepare("SELECT 1 FROM pragma_table_info('pages') WHERE name = 'ydoc'").get()) db.exec('ALTER TABLE pages ADD COLUMN ydoc BLOB')
+  for (const t of ['pages', 'synced']) {
+    if (db.prepare(`SELECT 1 FROM pragma_table_info('${t}')`).get() && !db.prepare(`SELECT 1 FROM pragma_table_info('${t}') WHERE name = 'ydoc'`).get()) db.exec(`ALTER TABLE ${t} ADD COLUMN ydoc BLOB`)
+  }
+  const where = key => (key.startsWith('synced-') ? ['synced', key.slice(7)] : ['pages', key])
   const rooms = new Map()
 
   function room(pageId) {
     let r = rooms.get(pageId)
     if (r) return r
     const doc = new Y.Doc()
-    const saved = db.prepare('SELECT ydoc FROM pages WHERE id = ?').get(pageId)?.ydoc
+    const [table, rowId] = where(pageId)
+    const saved = db.prepare(`SELECT ydoc FROM ${table} WHERE id = ?`).get(rowId)?.ydoc
     if (saved) Y.applyUpdate(doc, new Uint8Array(saved))
     const awareness = new awarenessProtocol.Awareness(doc)
     awareness.setLocalState(null)
     r = { doc, awareness, conns: new Map(), timer: null, seeding: false }
-    const save = () => db.prepare('UPDATE pages SET ydoc = ? WHERE id = ?').run(Buffer.from(Y.encodeStateAsUpdate(doc)), pageId)
+    const save = () => db.prepare(`UPDATE ${table} SET ydoc = ? WHERE id = ?`).run(Buffer.from(Y.encodeStateAsUpdate(doc)), rowId)
     r.save = save
     doc.on('update', (update, origin) => {
       const enc = encoding.createEncoder()
