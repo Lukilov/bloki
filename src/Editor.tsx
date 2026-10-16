@@ -94,6 +94,7 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Heading 2', icon: <Heading2 size={16} />, type: 'heading', props: { level: 2, isToggleable: false } },
   { label: 'Heading 3', icon: <Heading3 size={16} />, type: 'heading', props: { level: 3, isToggleable: false } },
   { label: 'Heading 4', icon: <Heading4 size={16} />, type: 'heading', props: { level: 4, isToggleable: false } },
+  { label: 'Page', icon: <FileText size={16} />, type: 'page' },
   { label: 'To-do list', icon: <ListTodo size={16} />, type: 'checkListItem' },
   { label: 'Bulleted list', icon: <List size={16} />, type: 'bulletListItem' },
   { label: 'Numbered list', icon: <ListOrdered size={16} />, type: 'numberedListItem' },
@@ -106,6 +107,7 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Toggle heading 2', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 2, isToggleable: true } },
   { label: 'Toggle heading 3', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 3, isToggleable: true } },
   { label: 'Toggle heading 4', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 4, isToggleable: true } },
+  { label: '2 columns', icon: <Columns2 size={16} />, type: 'columnList' },
 ]
 
 const stripIds = (b: AnyBlock): AnyBlock => ({ ...b, id: undefined as never, children: (b.children ?? []).map(stripIds) })
@@ -124,6 +126,19 @@ function commentOnBlock(editor: Editor, block: AnyBlock, ctx: Ctx) {
 
 const COLORS = ['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'] as const
 const cap = (c: string) => c[0].toUpperCase() + c.slice(1)
+
+/** Turn a block into another kind, as Notion's "Turn into" does. */
+function turnInto(editor: Editor, block: AnyBlock, t: (typeof TURN_INTO)[number], pageId: string, store: ReturnType<typeof useStore>) {
+  if (block.type === t.type && t.type === 'equation') return
+  const text = block.type === 'equation' ? String(block.props.latex ?? '') : plain(block.content)
+  // Page: the block's text becomes a new sub-page's title, and the block a link to it.
+  if (t.type === 'page') return void store.create({ parent_id: pageId, title: text }, false).then(child => editor.updateBlock(block.id, { type: 'page', props: { pageId: child.id }, content: undefined } as never))
+  // 2 columns: the block moves into the left column; the right one starts empty.
+  if (t.type === 'columnList') return void editor.replaceBlocks([block.id], [{ type: 'columnList', children: [{ type: 'column', children: [stripIds(block)] }, { type: 'column', children: [{ type: 'paragraph' }] }] }] as never)
+  // Equation: like Notion, the block's text becomes the TeX.
+  if (t.type === 'equation') return void editor.updateBlock(block.id, { type: 'equation', props: { latex: text }, content: undefined } as never)
+  editor.updateBlock(block.id, { type: t.type, props: t.props ?? {}, ...(block.type === 'equation' ? { content: text } : {}) } as never)
+}
 
 /** Notion's Color submenu: last used, then text colours, then backgrounds, each with a 26px "A" swatch. */
 function ColorMenu({ block }: { block: AnyBlock }) {
@@ -164,6 +179,7 @@ function BlockMenu() {
   const C = useComponentsContext()!
   const editor = useBlockNoteEditor() as unknown as Editor
   const ctx = useContext(EditorCtx)!
+  const store = useStore()
   const block = useExtensionState(SideMenuExtension, { editor: editor as never, selector: (s: { block?: unknown } | undefined) => s?.block }) as AnyBlock | undefined
   if (!block) return null
   const Item = C.Generic.Menu.Item
@@ -181,10 +197,7 @@ function BlockMenu() {
             {TURN_INTO.map(t => (
               <Item key={t.label} className="bn-menu-item" icon={t.icon}
                 checked={block.type === t.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable))}
-                onClick={() => block.type !== t.type || t.type !== 'equation' ? editor.updateBlock(block.id, (t.type === 'equation'
-                  // Like Notion, the block's text becomes the equation's TeX.
-                  ? { type: 'equation', props: { latex: plain(block.content) }, content: undefined }
-                  : { type: t.type, props: t.props ?? {}, ...(block.type === 'equation' ? { content: String(block.props.latex ?? '') } : {}) }) as never) : undefined}>{t.label}</Item>
+                onClick={() => turnInto(editor, block, t, ctx.page.id, store)}>{t.label}</Item>
             ))}
           </C.Generic.Menu.Dropdown>
         </C.Generic.Menu.Root>
