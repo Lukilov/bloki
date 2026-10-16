@@ -353,15 +353,28 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
         </div>
       )}
       <div className="db-bar">
-        {/* As in Notion: one pill for the current view; the other views, and adding one, sit in its menu. */}
+        {/* As in Notion: views as pill tabs; clicking the open one shows its options, the rest overflow into "N more…".
+            ponytail: shows at most three tabs rather than measuring how many fit. */}
         <div className="db-tabs">
-          <button className="view-pill" onClick={e => setPop({ kind: 'views', el: e.currentTarget })}>
-            {VIEW_ICONS[view.type]}
-            {renaming === view.id
-              ? <input autoFocus className="tab-rename" defaultValue={view.name} onClick={e => e.stopPropagation()} onBlur={e => { setSchema({ ...schema, views: views.map(x => (x.id === view.id ? { ...x, name: e.target.value || x.name } : x)) }); setRenaming(null) }} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-              : <span>{view.name}</span>}
-            <ChevronDown size={16} className="view-pill-caret" />
-          </button>
+          {(() => {
+            const first = views.slice(0, 3)
+            const shown = first.some(v => v.id === view.id) ? first : [...views.slice(0, 2), view]
+            return <>
+              {shown.map(v => (
+                <button key={v.id} className={'view-tab' + (v.id === view.id ? ' on' : '')}
+                  onClick={e => (v.id === view.id ? perm.structure && setPop({ kind: 'tab', el: e.currentTarget }) : setViewId(v.id))}
+                  onDoubleClick={() => perm.structure && setRenaming(v.id)}>
+                  {VIEW_ICONS[v.type]}
+                  {renaming === v.id
+                    ? <input autoFocus className="tab-rename" defaultValue={v.name} onClick={e => e.stopPropagation()} onBlur={e => { setSchema({ ...schema, views: views.map(x => (x.id === v.id ? { ...x, name: e.target.value || x.name } : x)) }); setRenaming(null) }} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+                    : <span>{v.name}</span>}
+                </button>
+              ))}
+              {views.length > shown.length
+                ? <button className="views-more" onClick={e => setPop({ kind: 'views', el: e.currentTarget })}>{views.length - shown.length} more…</button>
+                : perm.structure && <button className="icon-btn view-add" title="Add view" onClick={e => setPop({ kind: 'add-view', el: e.currentTarget })}><Plus size={16} /></button>}
+            </>
+          })()}
         </div>
         <div className="db-tools">
           <button className={'icon-btn' + (filters.length ? ' on-accent' : '')} title="Filter" onClick={e => (filters.length ? setPop({ kind: 'filter-add', el: e.currentTarget }) : setPop({ kind: 'filter-add', el: e.currentTarget }))}><FilterIcon size={15} /></button>

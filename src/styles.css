@@ -988,10 +988,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .overlay:has(> .dialog.settings) { align-items: center; padding-top: 0; }
 
 /* View switcher measured on Notion: a 32px pill for the current view, a 290px menu of 28px view rows. */
-.view-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 6px 10px; border: none; border-radius: 9999px; background: var(--hover); font-size: 14px; font-weight: 500; color: var(--text); }
-.view-pill > svg:first-child { width: 20px; height: 20px; }
-.view-pill-caret { color: var(--muted); }
-.view-pill .tab-rename { width: 120px; }
+.view-tab .tab-rename { width: 120px; }
 .view-row { display: flex; align-items: center; height: 28px; margin: 0 4px; padding: 0 4px 0 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
 .view-row:hover, .view-row.on { background: var(--hover); }
 .view-grip { width: 16px; display: inline-flex; color: var(--icon); margin-right: 10px; cursor: grab; }
@@ -1111,3 +1108,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .discussions-empty { padding: 8px 16px; color: var(--muted); font-size: 14px; }
 .discussions-pop .menu-divider { margin: 0 0 8px; }
 .discussions-all { display: block; width: calc(100% - 32px); margin: 0 16px; height: 32px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; background: var(--hover-2, var(--hover)); }
+/* View tabs measured on Notion: 32px pills (6px 12px, radius 20), 14/500; the open one tinted, others muted; "N more…" 14/400. */
+.db-tabs { display: flex; align-items: center; gap: 1px; min-width: 0; }
+.view-tab { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 6px 12px; border: none; border-radius: 20px; font-size: 14px; font-weight: 500; color: var(--icon); white-space: nowrap; flex: none; }
+.view-tab > svg:first-child { width: 20px; height: 20px; }
+.view-tab.on { background: var(--hover); color: var(--text); }
+.views-more { flex: none; height: 32px; padding: 6px 10px; border: none; border-radius: 20px; font-size: 14px; color: var(--icon); white-space: nowrap; }
+.view-add { color: var(--muted); }
