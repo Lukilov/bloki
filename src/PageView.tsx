@@ -289,7 +289,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
 
           {layout.toc && meta.kind === 'page' && <PageOutline key={id + version} />}
           {(layout.discussions ?? 'expanded') !== 'off' && !store.published && (
-            <PageDiscussions page={meta} all={comments} setAll={setComments} composing={composing} setComposing={setComposing} />
+            <PageDiscussions page={meta} all={comments} setAll={setComments} composing={composing} setComposing={setComposing} isRow={!!row} />
           )}
 
           {meta.kind === 'db'

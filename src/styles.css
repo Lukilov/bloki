@@ -1121,3 +1121,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 /* Desktop app: the tab bar carries the workspace switcher and sidebar button (Notion's desktop layout). */
 :root[data-tab-chrome] .sidebar .ws-row, :root[data-tab-chrome] .sidebar-toggle { display: none; }
 :root[data-tab-chrome] .sidebar .side-top { padding-top: 8px; }
+/* Database rows: a "Comments" section under the properties (13px/500 label), as in Notion. */
+.comments-label { font-size: 13px; font-weight: 500; line-height: 18px; color: var(--icon); padding: 11px 0 3px 8px; }
+.row-comments { margin-top: -4px; }
+.row-comments > .composer, .row-comments .discussion { padding-left: 8px; }
+.page-discussions.row-comments > .composer { padding-top: 4px; }

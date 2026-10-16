@@ -134,12 +134,13 @@ export function Discussion({ t, page, setAll, compact, noReply, quote }: { t: Th
 }
 
 /** Discussions shown under the page title (comments not tied to text). */
-export function PageDiscussions({ page, all, setAll, composing, setComposing }: { page: Page; all: Comment[]; setAll: (c: Comment[]) => void; composing: boolean; setComposing: (b: boolean) => void }) {
+export function PageDiscussions({ page, all, setAll, composing, setComposing, isRow }: { page: Page; all: Comment[]; setAll: (c: Comment[]) => void; composing: boolean; setComposing: (b: boolean) => void; isRow?: boolean }) {
   const open = threads(all).filter(t => !t.root.block_id && !t.root.resolved)
-  // Like Notion, the composer stays under page comments once there are any.
-  if (!open.length && !composing) return null
+  // Like Notion, the composer stays under page comments once there are any; database rows always show a Comments section.
+  if (!open.length && !composing && !isRow) return null
   return (
-    <div className="page-discussions">
+    <div className={'page-discussions' + (isRow ? ' row-comments' : '')}>
+      {isRow && <div className="comments-label">Comments</div>}
       {open.map(t => <Discussion key={t.root.id} t={t} page={page} setAll={setAll} compact noReply />)}
       {can(page, 'comment') && (
         <Composer autoFocus={composing} placeholder="Add a comment…" onCancel={() => setComposing(false)}
