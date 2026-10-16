@@ -73,8 +73,8 @@ const SHORTCUTS: [string, string][] = [
   [`${mod}K`, 'Search'], [`${mod}P`, 'Search'], [`${mod}\\`, 'Toggle sidebar'], [`${mod}${shift}L`, 'Toggle dark mode'],
   [`${mod}[`, 'Go back'], [`${mod}]`, 'Go forward'], [`${mod}${shift}N`, 'New page'],
   [`${mod}B`, 'Bold'], [`${mod}I`, 'Italic'], [`${mod}U`, 'Underline'], [`${mod}${shift}S`, 'Strikethrough'], [`${mod}E`, 'Inline code'], [`${mod}K (in text)`, 'Add link'],
-  [`${mod}${alt}0`, 'Text'], [`${mod}${alt}1–3`, 'Heading 1–3'], [`${mod}${alt}4`, 'To-do'], [`${mod}${alt}5`, 'Bulleted list'], [`${mod}${alt}6`, 'Numbered list'], [`${mod}${alt}7`, 'Toggle list'], [`${mod}${alt}8`, 'Code'],
-  ['/', 'Insert a block'], ['@', 'Mention a person or page'], ['[[', 'Link to a page'], ['---', 'Divider'], ['# / ## / ###', 'Headings'], ['[]', 'To-do'], ['>', 'Toggle'], ['"', 'Quote'],
+  [`${mod}${alt}0`, 'Text'], [`${mod}${alt}1–3`, 'Heading 1–3'], [`${mod}${alt}4`, 'To-do'], [`${mod}${alt}5`, 'Bulleted list'], [`${mod}${alt}6`, 'Numbered list'], [`${mod}${alt}7`, 'Toggle list'], [`${mod}${alt}8`, 'Code'], [`${mod}${alt}9`, 'Page'],
+  ['/', 'Insert a block'], ['@', 'Mention a person or page'], ['[[', 'Link to a page'], ['---', 'Divider'], ['# / ## / ### / ####', 'Headings'], ['[]', 'To-do'], ['>', 'Toggle'], ['"', 'Quote'],
   ['Tab / Shift+Tab', 'Indent / outdent'], [`${mod}Z`, 'Undo'], [`${mod}${shift}Z`, 'Redo'], ['Esc', 'Select block'],
 ]
 
