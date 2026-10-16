@@ -1044,3 +1044,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 /* Option picker field measured on Notion: 39px, a faint fill and a line under it; status/select pickers are 240px. */
 .picker-field { min-height: 39px; padding: 4px 12px; background: var(--code-bg); }
 .discussion-quote svg { vertical-align: -2px; }
+
+/* Notion's Color / Turn into submenus: 220px; colour rows lead with a 26px "A" swatch. */
+.bn-container .turn-menu, .bn-container .color-menu { width: 220px; }
+.bn-container .color-menu { max-height: 665px; overflow-y: auto; }
+.color-swatch { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 4px; font-size: 16px; font-weight: 500; box-shadow: var(--line) 0 0 0 1px inset; }
+.bn-container .color-item .mantine-Menu-itemSection[data-position='left'] { margin-right: 8px; margin-left: 0; }
+.bn-container .bn-menu-item.color-item { padding-left: 6px !important; }

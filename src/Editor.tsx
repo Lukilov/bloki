@@ -6,7 +6,7 @@ import {
 import { SideMenuExtension } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
 import {
-  BasicTextStyleButton, BlockColorsItem, BlockTypeSelect, blockTypeSelectItems, ColorStyleButton, CreateLinkButton, DragHandleMenu, FileCaptionButton, FileReplaceButton,
+  BasicTextStyleButton, BlockTypeSelect, blockTypeSelectItems, ColorStyleButton, CreateLinkButton, DragHandleMenu, FileCaptionButton, FileReplaceButton,
   FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, RemoveBlockItem, SideMenu, SideMenuController, SuggestionMenuController,
   useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState, type DefaultReactSuggestionItem,
 } from '@blocknote/react'
@@ -118,6 +118,43 @@ function commentOnBlock(editor: Editor, block: AnyBlock, ctx: Ctx) {
   ctx.onComment?.(block.id, plain(block.content).slice(0, 300), id)
 }
 
+const COLORS = ['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'] as const
+const cap = (c: string) => c[0].toUpperCase() + c.slice(1)
+
+/** Notion's Color submenu: last used, then text colours, then backgrounds, each with a 26px "A" swatch. */
+function ColorMenu({ block }: { block: AnyBlock }) {
+  const C = useComponentsContext()!
+  const editor = useBlockNoteEditor() as unknown as Editor
+  const Item = C.Generic.Menu.Item
+  const last = (() => { try { return JSON.parse(localStorage.getItem('lastColor') ?? 'null') as { kind: 'text' | 'background'; c: string } | null } catch { return null } })()
+  const set = (kind: 'text' | 'background', c: string) => {
+    editor.updateBlock(block.id, { props: { [kind === 'text' ? 'textColor' : 'backgroundColor']: c } } as never)
+    try { localStorage.setItem('lastColor', JSON.stringify({ kind, c })) } catch { /* storage blocked */ }
+  }
+  const row = (kind: 'text' | 'background', c: string) => (
+    <Item key={kind + c} className="bn-menu-item color-item" onClick={() => set(kind, c)}
+      checked={(kind === 'text' ? block.props.textColor : block.props.backgroundColor) === c}
+      icon={<span className="color-swatch" style={kind === 'text'
+        ? { color: c === 'default' ? undefined : `var(--bn-colors-highlights-${c}-text)` }
+        : { background: c === 'default' ? undefined : `var(--bn-colors-highlights-${c}-background)` }}>{kind === 'text' ? 'A' : ''}</span>}>
+      {cap(c)} {kind}
+    </Item>
+  )
+  return (
+    <C.Generic.Menu.Root sub position="right" portalElement={null}>
+      <C.Generic.Menu.Trigger sub><Item className="bn-menu-item" subTrigger icon={<Palette size={16} />}>Color</Item></C.Generic.Menu.Trigger>
+      <C.Generic.Menu.Dropdown sub className="bn-menu-dropdown color-menu">
+        {last && last.c !== 'default' && <><C.Generic.Menu.Label>Last used</C.Generic.Menu.Label>{row(last.kind, last.c)}<C.Generic.Menu.Divider /></>}
+        <C.Generic.Menu.Label>Text color</C.Generic.Menu.Label>
+        {COLORS.map(c => row('text', c))}
+        <C.Generic.Menu.Divider />
+        <C.Generic.Menu.Label>Background color</C.Generic.Menu.Label>
+        {COLORS.map(c => row('background', c))}
+      </C.Generic.Menu.Dropdown>
+    </C.Generic.Menu.Root>
+  )
+}
+
 /** The ⋮⋮ block menu, as in Notion. */
 function BlockMenu() {
   const C = useComponentsContext()!
@@ -136,7 +173,7 @@ function BlockMenu() {
       {hasText && editor.isEditable && (
         <C.Generic.Menu.Root sub position="right" portalElement={null}>
           <C.Generic.Menu.Trigger sub><Item className="bn-menu-item" subTrigger icon={<Repeat2 size={16} />}>Turn into</Item></C.Generic.Menu.Trigger>
-          <C.Generic.Menu.Dropdown sub className="bn-menu-dropdown">
+          <C.Generic.Menu.Dropdown sub className="bn-menu-dropdown turn-menu">
             {TURN_INTO.map(t => (
               <Item key={t.label} className="bn-menu-item" icon={t.icon}
                 checked={block.type === t.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable))}
@@ -145,7 +182,7 @@ function BlockMenu() {
           </C.Generic.Menu.Dropdown>
         </C.Generic.Menu.Root>
       )}
-      {editor.isEditable && <BlockColorsItem><span className="bn-with-icon"><Palette size={16} /> Color</span></BlockColorsItem>}
+      {editor.isEditable && <ColorMenu block={block} />}
       <C.Generic.Menu.Divider />
       <Item className="bn-menu-item" icon={<Link2 size={16} />} onClick={() => copyText(`${pageUrl(ctx.page.id)}/b/${block.id}`)}>Copy link to block <span className="bn-hint">{isMac ? '⌘⌃L' : 'Ctrl+Alt+L'}</span></Item>
       {editor.isEditable && <Item className="bn-menu-item" icon={<Copy size={16} />} onClick={() => duplicateBlock(editor, block)}>Duplicate <span className="bn-hint">{mod}D</span></Item>}
@@ -241,9 +278,10 @@ const darkTheme = {
     selected: { text: '#ffffff', background: 'rgb(35, 131, 226)' }, disabled: { text: 'rgba(255, 255, 255, 0.28)', background: 'transparent' },
     shadow: 'rgba(0, 0, 0, 0.4)', border: 'rgba(255, 255, 235, 0.1)', sideMenu: 'rgba(255, 255, 255, 0.28)',
     highlights: {
-      gray: { text: '#9b9b9b', background: '#2f2f2f' }, brown: { text: '#ba856f', background: '#4a3228' }, orange: { text: '#c77d48', background: '#5c3b23' },
-      yellow: { text: '#ca984d', background: '#564328' }, green: { text: '#529e72', background: '#243d30' }, blue: { text: '#379ad3', background: '#143a4e' },
-      purple: { text: '#9d68d3', background: '#3c2d49' }, pink: { text: '#d15796', background: '#4e2c3c' }, red: { text: '#df5452', background: '#522e2a' },
+      // Measured on Notion's dark colour menu (2026); blue–red backgrounds not yet measured.
+      gray: { text: 'rgb(125, 122, 117)', background: 'rgb(56, 56, 54)' }, brown: { text: 'rgb(159, 118, 90)', background: 'rgb(69, 54, 45)' }, orange: { text: 'rgb(210, 123, 45)', background: 'rgb(83, 54, 31)' },
+      yellow: { text: 'rgb(203, 148, 52)', background: 'rgb(80, 68, 37)' }, green: { text: 'rgb(80, 148, 110)', background: 'rgb(38, 61, 48)' }, blue: { text: 'rgb(56, 125, 201)', background: '#143a4e' },
+      purple: { text: 'rgb(154, 107, 180)', background: '#3c2d49' }, pink: { text: 'rgb(193, 76, 138)', background: '#4e2c3c' }, red: { text: 'rgb(207, 81, 72)', background: '#522e2a' },
     },
   },
 }
