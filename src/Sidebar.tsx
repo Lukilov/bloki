@@ -205,21 +205,23 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
         <div className="side-section">
           <NavRow icon={<Settings size={17} />} label="Settings" onClick={() => openSettings()} />
           {member && <NavRow icon={<LayoutTemplate size={17} />} label="Templates" onClick={() => setTemplates(true)} />}
+          {/* Notion keeps Help as a sidebar row above Trash. */}
+          <NavRow icon={<CircleHelp size={17} />} label="Help" active={panel?.kind === 'help'} onClick={e => setPanel(panel?.kind === 'help' ? null : { kind: 'help', el: e.currentTarget })} />
           <NavRow icon={<Trash2 size={17} />} label="Trash" active={panel?.kind === 'trash'} onClick={e => setPanel(panel?.kind === 'trash' ? null : { kind: 'trash', el: e.currentTarget })} />
         </div>
       </div>}
 
       <div className="side-foot">
         {store.me?.role === 'owner' ? <NavRow icon={<UserPlus size={17} />} label="Invite members" onClick={() => openSettings('people')} /> : <span />}
-        <button className="help-btn" title="Help & support" onClick={e => setPanel(panel?.kind === 'help' ? null : { kind: 'help', el: e.currentTarget })}><CircleHelp size={18} /></button>
       </div>
 
       <div className="side-resizer" onMouseDown={resize} onDoubleClick={() => setWidth(248)} title="Drag to resize" />
 
       {panel?.kind === 'trash' && <Popover anchor={panel.el} side="right" onClose={() => setPanel(null)} className="side-panel" width={414}><TrashPanel close={() => setPanel(null)} /></Popover>}
       {panel?.kind === 'help' && (
-        <Popover anchor={panel.el} onClose={() => setPanel(null)} className="menu-pop" width={240} align="end">
+        <Popover anchor={panel.el} onClose={() => setPanel(null)} className="menu-pop" width={260}>
           <Menu onClose={() => setPanel(null)} items={[
+            { icon: <FileText size={16} />, label: 'Documentation', onClick: () => window.open('https://github.com/Lukilov/bloki#readme', '_blank', 'noopener') },
             { icon: <Keyboard size={16} />, label: 'Keyboard shortcuts', hint: `${mod}/`, onClick: () => dispatchEvent(new CustomEvent('bloki:shortcuts')) },
             ...(member ? [{ icon: <Upload size={16} />, label: 'Import', onClick: () => importMarkdown(store) }] : []),
             { divider: true },
