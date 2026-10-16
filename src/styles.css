@@ -1096,3 +1096,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .reaction { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; border: none; font-size: 13px; background: var(--hover); color: var(--text-2); }
 .reaction.mine { background: var(--accent-soft); color: var(--accent); box-shadow: rgba(35, 131, 226, 0.4) 0 0 0 1px inset; }
 .reaction.add { padding: 0 6px; color: var(--icon); }
+/* Composer tools measured on Notion: 24px buttons, 20px muted icons, 6px apart, before the send circle. */
+.composer-tool { width: 24px; height: 24px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 6px; }
+.composer { align-items: flex-start; }
+.composer > .composer-tool + .composer-tool, .composer > .composer-tool + input + .composer-tool { margin-left: -0px; }
+.comment-mention { color: var(--muted); font-weight: 500; }
+.comment-body a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-2); word-break: break-all; }

@@ -122,7 +122,7 @@ export const api = {
   share: (id: string) => call<Share>('GET', `pages/${id}/share`),
   setShare: (id: string, body: object) => call<Share>('PATCH', `pages/${id}/share`, body),
   comments: (id: string) => (publicRoot ? Promise.resolve([]) : call<Comment[]>('GET', `pages/${id}/comments`)),
-  addComment: (id: string, body: string, extra: { thread_id?: string; block_id?: string; quote?: string; id?: string } = {}) => call<Comment[]>('POST', `pages/${id}/comments`, { body, ...extra }),
+  addComment: (id: string, body: string, extra: { thread_id?: string; block_id?: string; quote?: string; id?: string; mentions?: string[] } = {}) => call<Comment[]>('POST', `pages/${id}/comments`, { body, ...extra }),
   updateComment: (id: string, body: { resolved?: boolean; delete?: boolean; body?: string; react?: string }) => call<Comment[]>('PATCH', `comments/${id}`, body),
   inbox: () => call<{ items: Notice[]; unread: number }>('GET', 'inbox'),
   updateInbox: (b: { ids?: string[]; all?: boolean; read?: boolean; archived?: boolean }) => call<{ items: Notice[]; unread: number }>('PATCH', 'inbox', b),

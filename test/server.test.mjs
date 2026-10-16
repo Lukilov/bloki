@@ -207,6 +207,16 @@ test('inbox: mentions, comments and shares notify the right people', () => {
   assert.equal(r.unread, 0)
 })
 
+test('comment @-mentions notify only people who can see the page', () => {
+  const p = s.createPage(owner, { title: 'Mentions', section: 'private' })
+  const before = s.inbox(member).items.length
+  s.addComment(owner, p.id, 'Hey @member', { mentions: [member.id, 'nobody'] })
+  assert.equal(s.inbox(member).items.length, before)
+  s.setShare(owner, p.id, { grant: { user_id: member.id, level: 'view' } })
+  s.addComment(owner, p.id, 'Now @member', { mentions: [member.id] })
+  assert.equal(s.inbox(member).items[0].kind, 'mention')
+})
+
 test('comment threads: replies, resolve and delete apply to the whole discussion', () => {
   const p = s.createPage(owner, { title: 'Thread', section: 'workspace' })
   const [root] = s.addComment(owner, p.id, 'Question?', { block_id: 'b1', quote: 'some text' })

@@ -750,7 +750,7 @@ export function listComments(user, pageId) {
 }
 
 /** `thread_id` replies to a discussion; `block_id` + `quote` anchor a new discussion to text in the page. */
-export function addComment(user, pageId, body, { thread_id = null, block_id = null, quote = null, id = null } = {}) {
+export function addComment(user, pageId, body, { thread_id = null, block_id = null, quote = null, id = null, mentions = [] } = {}) {
   need(user.id, pageId, 'comment')
   const text = String(body ?? '').trim()
   if (!text) throw new HttpError(400, 'Write something first.')
@@ -763,6 +763,10 @@ export function addComment(user, pageId, body, { thread_id = null, block_id = nu
   const page = db.prepare('SELECT created_by, workspace_id FROM pages WHERE id = ?').get(pageId)
   const people = new Set([page.created_by, ...db.prepare('SELECT DISTINCT user_id FROM comments WHERE page_id = ? AND (? IS NULL OR id = ? OR thread_id = ?)').all(pageId, thread_id, thread_id, thread_id).map(r => r.user_id)])
   for (const uid of people) if (uid && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'comment', pageId, user.id, text)
+  // @-mentioned people who can open the page get a mention, unless they were already told about the comment.
+  for (const uid of new Set(Array.isArray(mentions) ? mentions.slice(0, 50).map(String) : [])) {
+    if (uid !== user.id && !people.has(uid) && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'mention', pageId, user.id, text)
+  }
   return listComments(user, pageId)
 }
 
