@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
-import { copyText, Menu, Popover, usePopover, type Item } from './ui'
+import { copyText, Menu, Popover, type Item } from './ui'
 import { pageUrl } from './pageActions'
 import { Chip, ctxOf, StatusChip, typeIcon } from './db/Cells'
 import { VIEW_COMPONENTS } from './db/Views'
@@ -72,12 +72,12 @@ function FilterEditor({ f, db, onChange, onRemove }: { f: Filter; db: Page; onCh
   )
 }
 
-function PropertyList({ db, onPick, filter }: { db: Page; onPick: (p: Prop) => void; filter?: (p: Prop) => boolean }) {
+function PropertyList({ db, onPick, filter, placeholder = 'Filter by…', extra = [] }: { db: Page; onPick: (p: Prop) => void; filter?: (p: Prop) => boolean; placeholder?: string; extra?: Prop[] }) {
   const [q, setQ] = useState('')
-  const all = [propOf(db.schema, 'title')!, ...(db.schema.props ?? [])].filter(p => (!filter || filter(p)) && p.name.toLowerCase().includes(q.toLowerCase()))
+  const all = [propOf(db.schema, 'title')!, ...(db.schema.props ?? []), ...extra].filter(p => (!filter || filter(p)) && p.name.toLowerCase().includes(q.toLowerCase()))
   return (
     <div className="menu-list">
-      <input className="menu-filter" autoFocus placeholder="Filter by…" value={q} onChange={e => setQ(e.target.value)} />
+      <input className="menu-filter" autoFocus placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} />
       {all.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p)}><span className="menu-icon">{typeIcon(p)}</span><span className="menu-label">{p.name}</span></button>)}
     </div>
   )
@@ -120,23 +120,38 @@ function ViewList({ views, current, canEdit, pick, more, reorder, add }: {
   )
 }
 
+const SORT_EXTRA = [{ id: 'created', name: 'Created time', type: 'created' }, { id: 'updated', name: 'Last edited time', type: 'updated' }] as Prop[]
+const TEXTY = ['title', 'text', 'url', 'email', 'phone', 'select', 'multi_select', 'status', 'person']
+const dirName = (p: Prop | undefined, dir: 'asc' | 'desc') => (p && TEXTY.includes(p.type) ? (dir === 'asc' ? 'Sort A → Z' : 'Sort Z → A') : dir === 'asc' ? 'Ascending' : 'Descending')
+
+/** Notion's sort editor: "Sort by…" until there is a rule, then rows of [grip][property ▾][direction ▾][×]. */
 function SortEditor({ view, db, setView }: { view: View; db: Page; setView: (v: Partial<View>) => void }) {
-  const [add, openAdd, closeAdd] = usePopover()
+  const [pick, setPick] = useState<{ el: HTMLElement; i: number | null; what: 'prop' | 'dir' } | null>(null)
+  const [drag, setDrag] = useState<number | null>(null)
   const sorts = view.sort ?? []
-  const all = [propOf(db.schema, 'title')!, ...(db.schema.props ?? []), { id: 'created', name: 'Created time', type: 'created' } as Prop, { id: 'updated', name: 'Last edited time', type: 'updated' } as Prop]
+  const prop = (id: string) => propOf(db.schema, id) ?? SORT_EXTRA.find(p => p.id === id)
+  const used = (p: Prop) => !sorts.some(s => s.prop === p.id)
+  if (!sorts.length) return <PropertyList db={db} placeholder="Sort by…" extra={SORT_EXTRA} filter={used} onPick={p => setView({ sort: [{ prop: p.id, dir: 'asc' }] })} />
+  const put = (i: number, x: Partial<(typeof sorts)[number]>) => setView({ sort: sorts.map((s, j) => (j === i ? { ...s, ...x } : s)) })
   return (
     <div className="sort-editor">
       {sorts.map((s, i) => (
-        <div key={i} className="sort-row">
-          <select value={s.prop} onChange={e => setView({ sort: sorts.map((x, j) => (j === i ? { ...x, prop: e.target.value } : x)) })}>{all.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-          <select value={s.dir} onChange={e => setView({ sort: sorts.map((x, j) => (j === i ? { ...x, dir: e.target.value as 'asc' } : x)) })}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
-          <button className="ghost" onClick={() => setView({ sort: sorts.filter((_, j) => j !== i) })}><X size={14} /></button>
+        <div key={s.prop} className={'sort-row' + (drag === i ? ' dragging' : '')} draggable
+          onDragStart={() => setDrag(i)} onDragEnd={() => setDrag(null)} onDragOver={e => e.preventDefault()}
+          onDrop={() => { if (drag === null || drag === i) return; const next = [...sorts]; next.splice(i, 0, next.splice(drag, 1)[0]); setView({ sort: next }); setDrag(null) }}>
+          <span className="sort-grip"><GripVertical size={14} /></span>
+          <button className="sort-btn" onClick={e => setPick({ el: e.currentTarget, i, what: 'prop' })}>{prop(s.prop) && typeIcon(prop(s.prop)!)}<span>{prop(s.prop)?.name ?? 'Deleted'}</span><ChevronDown size={12} /></button>
+          <button className="sort-btn" onClick={e => setPick({ el: e.currentTarget, i, what: 'dir' })}><span>{dirName(prop(s.prop), s.dir)}</span><ChevronDown size={12} /></button>
+          <button className="ghost sort-x" title="Remove sort rule" onClick={() => setView({ sort: sorts.filter((_, j) => j !== i) })}><X size={14} /></button>
         </div>
       ))}
-      <button className="menu-item" onClick={e => openAdd(e.currentTarget)}><span className="menu-icon"><Plus size={14} /></span><span className="menu-label">Add sort</span></button>
-      {sorts.length > 0 && <button className="menu-item danger" onClick={() => setView({ sort: [] })}><span className="menu-icon"><Trash2 size={14} /></span><span className="menu-label">Delete sort</span></button>}
-      <Popover anchor={add} onClose={closeAdd} className="menu-pop" width={240}>
-        <div className="menu-list">{all.filter(p => !sorts.some(s => s.prop === p.id)).map(p => <button key={p.id} className="menu-item" onClick={() => { setView({ sort: [...sorts, { prop: p.id, dir: 'asc' }] }); closeAdd() }}><span className="menu-icon">{typeIcon(p)}</span><span className="menu-label">{p.name}</span></button>)}</div>
+      <button className="menu-item muted-item" onClick={e => setPick({ el: e.currentTarget, i: null, what: 'prop' })}><span className="menu-icon"><Plus size={16} /></span><span className="menu-label">Add sort</span></button>
+      <button className="menu-item muted-item" onClick={() => setView({ sort: [] })}><span className="menu-icon"><Trash2 size={16} /></span><span className="menu-label">Delete sort</span></button>
+      <Popover anchor={pick?.el ?? null} onClose={() => setPick(null)} className="menu-pop" width={pick?.what === 'dir' ? 160 : 290}>
+        {pick?.what === 'dir'
+          ? <Menu onClose={() => setPick(null)} items={(['asc', 'desc'] as const).map(d => ({ label: dirName(prop(sorts[pick.i!].prop), d), checked: sorts[pick.i!].dir === d, onClick: () => put(pick.i!, { dir: d }) }))} />
+          : pick && <PropertyList db={db} placeholder="Sort by…" extra={SORT_EXTRA} filter={used}
+              onPick={p => { setView({ sort: pick.i === null ? [...sorts, { prop: p.id, dir: 'asc' }] : sorts.map((x, j) => (j === pick.i ? { ...x, prop: p.id } : x)) }); setPick(null) }} />}
       </Popover>
     </div>
   )
@@ -425,7 +440,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
             onRemove={() => { setView({ filters: filters.filter((_, j) => j !== pop.index) }); closePop() }} />
         )}
       </Popover>
-      <Popover anchor={pop?.kind === 'sort' ? pop.el : null} onClose={closePop} className="menu-pop" width={340}>
+      <Popover anchor={pop?.kind === 'sort' ? pop.el : null} onClose={closePop} className="menu-pop" width={sorts.length ? 304 : 290}>
         <SortEditor view={view} db={db} setView={setView} />
       </Popover>
       <Popover anchor={pop?.kind === 'settings' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={290}>
