@@ -20,6 +20,7 @@ export type View = {
   order?: string[]; widths?: Record<string, number>; calcs?: Record<string, string>; wrap?: boolean
   hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'cover' | 'none'
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
+  freeze?: string; hideIcon?: boolean
 }
 export type Schema = { props?: Prop[]; views?: View[]; titleName?: string }
 

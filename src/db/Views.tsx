@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, EyeOff, Filter as FilterIcon, GripVertical, Maximize2, MoreHorizontal, Plus, Trash2, X,
-  ArrowLeftToLine, ArrowRightToLine, WrapText,
+  ArrowLeftToLine, ArrowRightToLine, WrapText, ArrowDownUp, Calculator, Snowflake, FileText,
   Group as GroupIcon,
 } from 'lucide-react'
 import { api, type Page, type Prop, type View } from '../api'
@@ -45,11 +45,18 @@ function HeaderMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () =>
       {p.perm.structure && <PropertyEditor prop={prop} db={db} close={close} inHeader />}
       <Menu onClose={close} items={[
         ...(p.perm.structure ? [{ divider: true } as const] : []),
+        // Notion's order: page icon switch (Name only), Filter, Sort ›, Group, Calculate ›, Freeze, wrapping, then inserting columns.
+        ...(prop.id === 'title' ? [{ icon: <FileText size={15} />, label: <span className="menu-switch">Show page icon<span className={'switch' + (view.hideIcon ? '' : ' on')} /></span>, onClick: () => setView({ hideIcon: !view.hideIcon }) }] : []),
         { icon: <FilterIcon size={15} />, label: 'Filter', onClick: () => p.addFilter(prop.id) },
-        { icon: <ArrowUp size={15} />, label: 'Sort ascending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'asc' }] }) },
-        { icon: <ArrowDown size={15} />, label: 'Sort descending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'desc' }] }) },
-        // Notion's order: Filter, Sort, Group, wrapping, then inserting columns either side.
+        { icon: <ArrowDownUp size={15} />, label: 'Sort', submenu: () => <Menu onClose={close} items={[
+          { icon: <ArrowUp size={15} />, label: 'Sort ascending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'asc' }] }) },
+          { icon: <ArrowDown size={15} />, label: 'Sort descending', onClick: () => setView({ sort: [{ prop: prop.id, dir: 'desc' }] }) },
+        ]} /> },
         ...(groupable(prop) ? [{ icon: <GroupIcon size={15} />, label: 'Group', checked: view.groupBy === prop.id, onClick: () => setView({ groupBy: view.groupBy === prop.id ? undefined : prop.id }) }] : []),
+        ...(view.type === 'table' ? [
+          { icon: <Calculator size={15} />, label: 'Calculate', submenu: () => <CalcMenu prop={prop} p={p} close={close} /> },
+          { icon: <Snowflake size={15} />, label: view.freeze === prop.id ? 'Unfreeze columns' : 'Freeze', onClick: () => setView({ freeze: view.freeze === prop.id ? undefined : prop.id }) },
+        ] : []),
         ...(actions.hide ? [actions.hide] : []),
         { icon: <WrapText size={15} />, label: view.wrap ? 'Unwrap content' : 'Wrap content', onClick: () => setView({ wrap: !view.wrap }) },
         ...(p.perm.structure ? [
@@ -63,6 +70,23 @@ function HeaderMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () =>
   )
 }
 
+/** Notion's Calculate menu: None, then Count › and Percent › groups, then type-specific "More options". */
+function CalcMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () => void }) {
+  const fn = p.view.calcs?.[prop.id]
+  const item = (k: string) => ({ label: ROLLUP_FNS[k], checked: fn === k, onClick: () => p.setView({ calcs: { ...p.view.calcs, [prop.id]: k } }) })
+  const all = calcsFor(prop)
+  const count = all.filter(k => ['count', 'count_values', 'unique', 'empty', 'not_empty'].includes(k))
+  const percent = all.filter(k => k.startsWith('percent'))
+  const more = all.filter(k => !count.includes(k) && !percent.includes(k))
+  const sub = (keys: string[]) => () => <Menu onClose={close} items={keys.map(item)} />
+  return <Menu onClose={close} items={[
+    { label: 'None', checked: !fn, onClick: () => { const c = { ...p.view.calcs }; delete c[prop.id]; p.setView({ calcs: c }) } },
+    ...(count.length ? [{ label: 'Count', checked: count.includes(fn ?? ''), submenu: sub(count) }] : []),
+    ...(percent.length ? [{ label: 'Percent', checked: percent.includes(fn ?? ''), submenu: sub(percent) }] : []),
+    ...(more.length ? [{ label: 'More options', checked: more.includes(fn ?? ''), submenu: sub(more) }] : []),
+  ]} />
+}
+
 function CalcCell({ prop, p, rows }: { prop: Prop; p: ViewProps; rows: Page[] }) {
   const store = useStore()
   const [anchor, open, close] = usePopover()
@@ -74,10 +98,7 @@ function CalcCell({ prop, p, rows }: { prop: Prop; p: ViewProps; rows: Page[] })
         {fn ? <><span className="muted">{ROLLUP_FNS[fn].replace('Count all', 'Count').replace('Show original', '')}</span> {String(result ?? '')}</> : <span className="calc-hint">Calculate <ChevronDown size={12} /></span>}
       </div>
       <Popover anchor={anchor} onClose={close} className="menu-pop" width={220}>
-        <Menu onClose={close} items={[
-          { label: 'None', checked: !fn, onClick: () => { const c = { ...p.view.calcs }; delete c[prop.id]; p.setView({ calcs: c }) } },
-          ...calcsFor(prop).map(k => ({ label: ROLLUP_FNS[k], checked: fn === k, onClick: () => p.setView({ calcs: { ...p.view.calcs, [prop.id]: k } }) })),
-        ]} />
+        <CalcMenu prop={prop} p={p} close={close} />
       </Popover>
     </>
   )
@@ -123,12 +144,21 @@ function useRowWindow(count: number): [number, number, number, React.RefObject<H
   return [state[0], Math.min(state[1], count), state[2], ref]
 }
 
+/** Frozen columns (up to view.freeze) stick to the left edge while the table scrolls sideways. */
+function frozen(cols: Prop[], view: View, width: (id: string) => number): (id: string) => React.CSSProperties | undefined {
+  const upTo = view.freeze ? cols.findIndex(c => c.id === view.freeze) : -1
+  const left: Record<string, number> = {}
+  cols.slice(0, upTo + 1).reduce((x, c) => { left[c.id] = x; return x + width(c.id) }, 0)
+  return id => (id in left ? { position: 'sticky', left: left[id], zIndex: 2, background: 'var(--bg)' } : undefined)
+}
+
 function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewProps; rows: Page[]; cols: Prop[]; selected: Set<string>; setSelected: (s: Set<string>) => void; fresh?: string | null }) {
   const store = useStore()
   const [menu, setMenu] = useState<{ el: HTMLElement; row: Page } | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const sorted = !!p.view.sort?.length
   const [from, to, rowH, ref] = useRowWindow(rows.length)
+  const stick = frozen(cols, p.view, id => p.view.widths?.[id] ?? (id === 'title' ? 280 : 180))
   return (
     <div ref={ref}>
       {from > 0 && <div style={{ height: from * rowH }} />}
@@ -142,10 +172,10 @@ function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewPro
             <input type="checkbox" checked={selected.has(r.id)} onChange={e => { const n = new Set(selected); if (e.target.checked) n.add(r.id); else n.delete(r.id); setSelected(n) }} />
           </div>
           {cols.map(c => (
-            <div key={c.id} className={'td' + (c.id === 'title' ? ' title-td' : '')} style={{ width: p.view.widths?.[c.id] ?? (c.id === 'title' ? 280 : 180) }}>
+            <div key={c.id} className={'td' + (c.id === 'title' ? ' title-td' : '')} style={{ width: p.view.widths?.[c.id] ?? (c.id === 'title' ? 280 : 180), ...stick(c.id) }}>
               {c.id === 'title'
                 ? <div className="title-cell">
-                    <span className="row-icon">{iconOf(r, 16)}</span>
+                    {!p.view.hideIcon && <span className="row-icon">{iconOf(r, 16)}</span>}
                     <Cell prop={c} row={r} db={p.db} readOnly={!p.perm.rows} wrap={p.view.wrap} className="title-value" autoEdit={r.id === fresh} />
                     <button className="open-btn" onClick={() => p.openRow(r)}><Maximize2 size={12} /> OPEN</button>
                   </div>
@@ -186,6 +216,7 @@ export function TableView(p: ViewProps) {
     addEventListener('mousemove', move); addEventListener('mouseup', up)
   }
   const width = (id: string) => view.widths?.[id] ?? (id === 'title' ? 280 : 180)
+  const stick = frozen(cols, view, width)
 
   return (
     <div className="table-view">
@@ -201,7 +232,7 @@ export function TableView(p: ViewProps) {
         <div className="thead">
           <div className="row-gutter head-gutter"><input type="checkbox" checked={!!p.rows.length && selected.size === p.rows.length} onChange={e => setSelected(e.target.checked ? new Set(p.rows.map(r => r.id)) : new Set())} /></div>
           {cols.map(c => (
-            <div key={c.id} data-col={c.id} className="th" style={{ width: width(c.id) }} onClick={e => setHead({ el: e.currentTarget, prop: c })}>
+            <div key={c.id} data-col={c.id} className="th" style={{ width: width(c.id), ...stick(c.id) }} onClick={e => setHead({ el: e.currentTarget, prop: c })}>
               <span className="th-icon">{typeIcon(c)}</span><span className="th-name">{c.name}</span>
               <span className="col-resize" onMouseDown={resize(c.id)} onClick={e => e.stopPropagation()} />
             </div>
@@ -226,7 +257,7 @@ export function TableView(p: ViewProps) {
         ))}
         <div className="calc-row">
           <div className="row-gutter" />
-          {cols.map(c => <div key={c.id} data-col={c.id} style={{ width: width(c.id) }}><CalcCell prop={c} p={p} rows={p.rows} /></div>)}
+          {cols.map(c => <div key={c.id} data-col={c.id} style={{ width: width(c.id), ...stick(c.id) }}><CalcCell prop={c} p={p} rows={p.rows} /></div>)}
         </div>
       </div>
       <Popover anchor={head?.el ?? null} onClose={() => setHead(null)} className="menu-pop" width={244}>
