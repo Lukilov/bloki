@@ -49,7 +49,7 @@
   /* Board colours measured on Notion (gray, blue, green); the rest follow Bloki's highlight colours. */
   --t-gray: rgb(188, 186, 182); --t-brown: #ba856f; --t-orange: #c77d48; --t-yellow: #ca984d; --t-green: rgb(70, 161, 113); --t-blue: rgb(39, 131, 222); --t-purple: #9d68d3; --t-pink: #d15796; --t-red: #df5452;
   --gallery-card: rgba(255, 255, 255, 0.055); --code-bg: rgba(252, 252, 252, 0.03); --tab-on: rgb(230, 229, 227); --empty-icon: rgb(95, 94, 89); --search-bg: rgba(32, 32, 32, 0.9); --search-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.64) 0 24px 48px, rgba(25, 25, 25, 0.56) 0 4px 12px; --peek-bg: rgb(32, 32, 32); --peek-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --grid-line: rgb(56, 56, 54); --pill-on: rgba(67, 155, 255, 0.24); --weekend: rgba(255, 255, 255, 0.03);
-  --tl-bar: rgb(37, 37, 37); --tl-bar-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --cal-card: rgb(47, 47, 47); --cal-card-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 2px 4px; --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
+  --outline-bar: rgba(255, 252, 235, 0.306); --outline-on: rgb(211, 211, 211); --tl-bar: rgb(37, 37, 37); --tl-bar-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; --cal-card: rgb(47, 47, 47); --cal-card-shadow: rgb(56, 56, 54) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 2px 4px; --board-card: rgb(32, 32, 32); --board-card-shadow: rgba(25, 25, 25, 0.08) 0 2px 4px, rgba(255, 255, 243, 0.082) 0 0 0 1px;
   --faint: rgba(255, 255, 255, 0.282);
   --line: rgba(255, 255, 235, 0.1);
   --line-2: rgba(255, 255, 235, 0.14);
@@ -1070,3 +1070,20 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .switch::before { content: ''; display: block; width: 14px; height: 14px; border-radius: 44px; background: #fff; transition: transform 200ms ease-out; }
 .switch.on { background: var(--accent); }
 .switch.on::before { transform: translateX(12px); }
+/* Appearance & layout submenu measured on Notion: 300px, 92x61 font tiles under "Font style". */
+.menu-list.appearance { width: 292px; }
+.appearance .font-picker { gap: 0; padding: 0 8px 4px; }
+.appearance .font-picker button { flex: none; width: 92px; height: 61px; padding: 8px 0 6px; border-radius: 6px; }
+.appearance .menu-list { width: auto; }
+/* Floating table of contents measured on Notion: 2px bars 14px apart (16/12/8 wide), hover panel 232px, radius 14. */
+.outline { position: fixed; right: 8px; top: 164px; z-index: 20; }
+.outline-bars { width: 28px; padding: 10px 12px 10px 0; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.outline-bars span { height: 2px; border-radius: 2px; background: var(--outline-bar, rgba(55, 53, 47, 0.2)); }
+.outline-bars .lvl-1 { width: 16px; } .outline-bars .lvl-2 { width: 12px; } .outline-bars .lvl-3 { width: 8px; }
+.outline-bars span.on { background: var(--outline-on, rgb(55, 53, 47)); }
+.outline-panel { position: absolute; top: 0; right: 2px; width: 232px; max-height: 70vh; overflow: auto; padding: 12px 12px 12px; background: var(--bg); border-radius: 14px; box-shadow: var(--line) 0 0 0 1px, rgba(25, 25, 25, 0.2) 0 14px 28px -6px, rgba(25, 25, 25, 0.12) 0 2px 4px -1px; display: flex; flex-direction: column; opacity: 0; visibility: hidden; transform: translateX(4px); transition: opacity 120ms, transform 120ms, visibility 120ms; }
+.outline:hover .outline-panel { opacity: 1; visibility: visible; transform: none; }
+.outline-panel button { text-align: left; border: none; background: none; font-size: 13px; line-height: 17px; padding-top: 4px; padding-bottom: 4px; color: var(--muted); border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline-panel button:hover { background: var(--hover); }
+.outline-panel button.on { color: var(--accent); }
+@media (max-width: 1100px) { .outline { display: none; } }

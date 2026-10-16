@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeftRight, Clock, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
-  PanelTop, Redo2, Smile, Star, Trash2, Undo2, Upload, X,
+  Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
 } from 'lucide-react'
 import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
@@ -22,12 +22,51 @@ export function download(name: string, text: string, type = 'text/markdown') {
   URL.revokeObjectURL(a.href)
 }
 
+type Heading = { id: string; level: number; text: string }
+const readHeadings = (): Heading[] => [...document.querySelectorAll<HTMLElement>('.bn-editor .bn-block-content[data-content-type="heading"]')]
+  .map(el => ({ id: el.closest<HTMLElement>('[data-id]')?.dataset.id ?? '', level: Number(el.dataset.level ?? 1), text: el.innerText.trim() || 'Untitled' })).filter(h => h.id)
+
+/** Notion's floating table of contents: short bars at the right edge that open into a list on hover; follows edits live. */
+function PageOutline() {
+  const [heads, setHeads] = useState<Heading[]>([])
+  const [active, setActive] = useState<string | null>(null)
+  useEffect(() => {
+    const read = () => setHeads(h => { const n = readHeadings(); return JSON.stringify(n) === JSON.stringify(h) ? h : n })
+    const spot = () => {
+      let cur: string | null = null
+      for (const el of document.querySelectorAll<HTMLElement>('.bn-editor .bn-block-content[data-content-type="heading"]')) {
+        if (!cur || el.getBoundingClientRect().top < 140) cur = el.closest<HTMLElement>('[data-id]')?.dataset.id ?? cur
+      }
+      setActive(cur)
+    }
+    read(); spot()
+    const mo = new MutationObserver(() => { read(); spot() })
+    // The editor loads lazily, so wait for it before watching.
+    const wait = setInterval(() => {
+      const ed = document.querySelector('.bn-editor')
+      if (!ed) return
+      clearInterval(wait); read(); spot()
+      mo.observe(ed, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-level'] })
+    }, 200)
+    document.addEventListener('scroll', spot, { capture: true, passive: true })
+    return () => { clearInterval(wait); mo.disconnect(); document.removeEventListener('scroll', spot, { capture: true }) }
+  }, [])
+  if (!heads.length) return null
+  const go = (id: string) => document.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  return (
+    <nav className="outline" aria-label="Table of contents">
+      <div className="outline-bars">{heads.map(h => <span key={h.id} className={'lvl-' + Math.min(h.level, 3) + (h.id === active ? ' on' : '')} />)}</div>
+      <div className="outline-panel">{heads.map(h => <button key={h.id} className={h.id === active ? 'on' : ''} style={{ paddingLeft: 10 + 12 * (h.level - 1) }} onClick={() => go(h.id)}>{h.text}</button>)}</div>
+    </nav>
+  )
+}
+
 const wordCount = (content: unknown[] = []) => {
   const text = JSON.stringify(content).match(/"text":"((?:[^"\\]|\\.)*)"/g)?.map(t => t.slice(8, -1)).join(' ') ?? ''
   return text.split(/\s+/).filter(Boolean).length
 }
 
-type Layout = { backlinks?: 'expanded' | 'popover' | 'off'; discussions?: 'expanded' | 'minimal' | 'off' }
+type Layout = { backlinks?: 'expanded' | 'popover' | 'off'; discussions?: 'expanded' | 'minimal' | 'off'; toc?: boolean }
 
 export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dark: boolean; sidebarCollapsed?: boolean; peek?: boolean }) {
   const store = useStore()
@@ -91,45 +130,57 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const openPop = (kind: NonNullable<typeof pop>['kind']) => (e: React.MouseEvent<HTMLElement>) => setPop(pop?.kind === kind ? null : { kind, el: e.currentTarget })
   const shownCrumbs = crumbs.length > 4 ? [crumbs[0], null, ...crumbs.slice(-2)] : crumbs
 
-  const moreItems: Item[] = [
-    { note: (
+  // Notion's page menu (2026): actions first, Appearance & layout and More as submenus, a word count at the foot.
+  const sw = (on: boolean | undefined, text: string) => <span className="menu-switch">{text}<span className={'switch' + (on ? ' on' : '')} /></span>
+  const appearance = () => (
+    <div className="menu-list appearance">
+      <div className="menu-heading">Font style</div>
       <div className="font-picker">
         {(['default', 'serif', 'mono'] as const).map(f => (
-          <button key={f} disabled={!edit} className={meta.font === f ? 'on' : ''} onClick={() => set({ font: f })}>
+          <button key={f} disabled={!edit} className={(meta.font ?? 'default') === f ? 'on' : ''} onClick={() => set({ font: f })}>
             <span className={'ag font-' + f}>Ag</span><span>{f[0].toUpperCase() + f.slice(1)}</span>
           </button>
         ))}
       </div>
-    ) },
+      <div className="menu-divider" />
+      <div className="menu-heading">Appearance</div>
+      <Menu onClose={() => {}} items={[
+        { icon: <Type size={16} />, label: sw(meta.small_text, 'Small text'), disabled: !edit, onClick: () => set({ small_text: !meta.small_text }) },
+        { icon: <ArrowLeftRight size={16} />, label: sw(meta.full_width, 'Full width'), disabled: !edit, onClick: () => set({ full_width: !meta.full_width }) },
+        { icon: <ListTree size={16} />, label: sw(layout.toc, 'Table of contents'), disabled: !edit, onClick: () => setLayout({ toc: !layout.toc }) },
+        { icon: <MessageSquare size={16} />, label: sw((layout.discussions ?? 'expanded') !== 'off', 'Page discussions'), disabled: !edit, onClick: () => setLayout({ discussions: (layout.discussions ?? 'expanded') === 'off' ? 'expanded' : 'off' }) },
+        { icon: <LinkIcon size={16} />, label: 'Backlinks', disabled: !edit, submenu: () => <Menu onClose={() => {}} items={(['expanded', 'popover', 'off'] as const).map(v => ({ label: { expanded: 'Expanded', popover: 'Show in popover', off: 'Off' }[v], checked: (layout.backlinks ?? 'popover') === v, onClick: () => setLayout({ backlinks: v }) }))} /> },
+      ]} />
+    </div>
+  )
+  const moreItems: Item[] = [
     { icon: <Link2 size={16} />, label: 'Copy link', hint: `${mod}L`, onClick: () => { copyText(pageUrl(id)); store.toast('Copied link to clipboard') } },
+    { icon: <ClipboardCopy size={16} />, label: 'Copy page contents', onClick: () => { copyText(toMarkdown(page).replace(/^# .*\n\n/, '')); store.toast('Copied page contents') } },
     { icon: <Copy size={16} />, label: 'Duplicate', hint: `${mod}D`, onClick: () => duplicate(store, meta) },
     ...(full ? [{ icon: <CornerUpRight size={16} />, label: 'Move to', hint: `${mod}${shift}P`, onClick: () => setPop(p => ({ kind: 'move', el: p!.el })) }] : []),
-    ...(edit ? [{ icon: <Trash2 size={16} />, label: 'Move to Trash', onClick: () => trash(store, meta) }] : []),
+    { icon: <HistoryIcon size={16} />, label: 'Version history', onClick: () => setModal('history') },
+    { icon: <Activity size={16} />, label: 'Updates & analytics', onClick: () => setPanel('updates') },
+    { divider: true },
+    { icon: <Palette size={16} />, label: 'Appearance & layout', submenu: appearance },
     { divider: true },
     ...(edit ? [
-      { icon: <span className="menu-toggle-icon">Aa</span>, label: 'Small text', checked: meta.small_text, onClick: () => set({ small_text: !meta.small_text }) },
-      { icon: <ArrowLeftRight size={16} />, label: 'Full width', hint: `${mod}${shift}\\`, checked: meta.full_width, onClick: () => set({ full_width: !meta.full_width }) },
-      { icon: meta.locked ? <LockOpen size={16} /> : <Lock size={16} />, label: meta.locked ? 'Unlock page' : 'Lock page', checked: meta.locked, onClick: () => { set({ locked: !meta.locked }); setVersion(v => v + 1) } },
-      { icon: <PanelTop size={16} />, label: 'Customize page', submenu: () => (
-        <div className="menu-list customize">
-          <div className="menu-heading">Backlinks</div>
-          {(['expanded', 'popover', 'off'] as const).map(v => <button key={v} className="menu-item" onClick={() => setLayout({ backlinks: v })}><span className="menu-label">{{ expanded: 'Expanded', popover: 'Show in popover', off: 'Off' }[v]}</span>{(layout.backlinks ?? 'popover') === v && <span className="menu-check">✓</span>}</button>)}
-          <div className="menu-heading">Page discussions</div>
-          {(['expanded', 'minimal', 'off'] as const).map(v => <button key={v} className="menu-item" onClick={() => setLayout({ discussions: v })}><span className="menu-label">{{ expanded: 'Expanded', minimal: 'Minimal', off: 'Off' }[v]}</span>{(layout.discussions ?? 'expanded') === v && <span className="menu-check">✓</span>}</button>)}
-        </div>
-      ) },
+      { icon: meta.locked ? <LockOpen size={16} /> : <Lock size={16} />, label: sw(meta.locked, 'Lock page'), onClick: () => { set({ locked: !meta.locked }); setVersion(v => v + 1) } },
+      { icon: <Trash2 size={16} />, label: 'Move to Trash', onClick: () => trash(store, meta) },
       { divider: true },
-      { icon: <Undo2 size={16} />, label: 'Undo', hint: `${mod}Z`, onClick: () => dispatchEvent(new CustomEvent('bloki:undo')) },
-      { icon: <Redo2 size={16} />, label: 'Redo', hint: `${mod}${shift}Z`, onClick: () => dispatchEvent(new CustomEvent('bloki:redo')) },
     ] as Item[] : []),
-    { icon: <HistoryIcon size={16} />, label: 'Version history', onClick: () => setModal('history') },
-    { icon: <Trash2 size={16} />, label: 'Show deleted pages', onClick: () => document.querySelectorAll<HTMLElement>('.sidebar .nav').forEach(b => b.textContent?.includes('Trash') && b.click()) },
+    { icon: <More size={16} />, label: 'More', submenu: () => <Menu onClose={() => setPop(null)} items={[
+      ...(edit ? [
+        { icon: <Undo2 size={16} />, label: 'Undo', hint: `${mod}Z`, onClick: () => dispatchEvent(new CustomEvent('bloki:undo')) },
+        { icon: <Redo2 size={16} />, label: 'Redo', hint: `${mod}${shift}Z`, onClick: () => dispatchEvent(new CustomEvent('bloki:redo')) },
+      ] : []),
+      ...(edit && meta.kind === 'page' ? [{ icon: <Upload size={16} />, label: 'Import', onClick: () => importMarkdown(store, id) }] : []),
+      { icon: <Download size={16} />, label: 'Export', onClick: () => setModal('export') },
+      { icon: <Trash2 size={16} />, label: 'Show deleted pages', onClick: () => document.querySelectorAll<HTMLElement>('.sidebar .nav').forEach(b => b.textContent?.includes('Trash') && b.click()) },
+    ]} /> },
     { divider: true },
-    ...(edit && meta.kind === 'page' ? [{ icon: <Upload size={16} />, label: 'Import', onClick: () => importMarkdown(store, id) }] : []),
-    { icon: <Download size={16} />, label: 'Export', onClick: () => setModal('export') },
-    { divider: true },
-    { note: <>Word count: {wordCount(page.content)} words<br />Last edited by {personName(store.people, meta.updated_by) || 'you'}<br />{new Date(meta.updated).toLocaleString()}</> },
+    { note: <>{wordCount(page.content)} words<br />Last edited by {personName(store.people, meta.updated_by) || 'you'}<br />{new Date(meta.updated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</> },
   ]
+
 
   const dragCover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!reposition) return
@@ -234,6 +285,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
               : <button className="backlinks-toggle" onClick={() => setShowBacklinks(true)}>↗ {backlinks.length} backlink{backlinks.length > 1 ? 's' : ''}</button>
           )}
 
+          {layout.toc && meta.kind === 'page' && <PageOutline key={id + version} />}
           {(layout.discussions ?? 'expanded') !== 'off' && !store.published && (
             <PageDiscussions page={meta} all={comments} setAll={setComments} composing={composing} setComposing={setComposing} />
           )}
