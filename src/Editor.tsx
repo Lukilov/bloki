@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BlockNoteEditor, BlockNoteSchema, createCodeBlockSpec, defaultBlockSpecs, defaultInlineContentSpecs, defaultStyleSpecs, filterSuggestionItems,
+  BlockNoteEditor, BlockNoteSchema, createCodeBlockSpec, createHeadingBlockSpec, defaultBlockSpecs, defaultInlineContentSpecs, defaultStyleSpecs, filterSuggestionItems,
   insertOrUpdateBlockForSlashMenu,
 } from '@blocknote/core'
 import { SideMenuExtension } from '@blocknote/core/extensions'
@@ -17,7 +17,7 @@ import { WebsocketProvider } from 'y-websocket'
 import { codeBlockOptions, syntaxHighlighter } from '@blocknote/code-block'
 import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column'
 import {
-  AtSign, Bookmark, CalendarDays, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Link2,
+  AtSign, Bookmark, CalendarDays, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
   ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
   ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting,
 } from 'lucide-react'
@@ -32,7 +32,8 @@ import { pageUrl } from './pageActions'
 
 const base = BlockNoteSchema.create({
   blockSpecs: {
-    ...defaultBlockSpecs, codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), database: InlineDatabase(), page: PageLink(),
+    // Notion has four heading levels.
+    ...defaultBlockSpecs, heading: createHeadingBlockSpec({ levels: [1, 2, 3, 4] }), codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), database: InlineDatabase(), page: PageLink(),
     toc: TableOfContents(), breadcrumb: Breadcrumb(), embed: Embed(), equation: Equation(),
   },
   inlineContentSpecs: { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention },
@@ -74,12 +75,12 @@ const dictionary = {
   placeholders: { ...en.placeholders, default: "Write something, or press '/' for commands…", heading: 'Heading', toggleListItem: 'Toggle', bulletListItem: 'List', numberedListItem: 'List', checkListItem: 'To-do', quote: 'Empty quote' },
 }
 const GROUPS = ['Basic blocks', 'Media', 'Database', 'Advanced blocks', 'Inline']
-const ORDER = ['Text', 'Page', 'To-do list', 'Heading 1', 'Heading 2', 'Heading 3', 'Table', 'Bulleted list', 'Numbered list', 'Toggle list', 'Quote', 'Divider', 'Link to page', 'Callout',
+const ORDER = ['Text', 'Page', 'To-do list', 'Heading 1', 'Heading 2', 'Heading 3', 'Heading 4', 'Table', 'Bulleted list', 'Numbered list', 'Toggle list', 'Quote', 'Divider', 'Link to page', 'Callout',
   'Image', 'Bookmark', 'Video', 'Audio', 'Code', 'File', 'Embed']
 /* Notion shows the markdown shortcut next to each block. */
 const HINTS: Record<string, string> = {
   'Heading 1': '#', 'Heading 2': '##', 'Heading 3': '###', 'To-do list': '[]', 'Bulleted list': '-', 'Numbered list': '1.', 'Toggle list': '>', Quote: '"', Divider: '---',
-  Code: '```', 'Toggle heading 1': '>#', 'Toggle heading 2': '>##', 'Toggle heading 3': '>###', 'Mention a person': '@', 'Mention a page': '[[', 'Block equation': '$$',
+  Code: '```', 'Toggle heading 1': '>#', 'Toggle heading 2': '>##', 'Toggle heading 3': '>###', 'Heading 4': '####', 'Toggle heading 4': '>####', 'Mention a person': '@', 'Mention a page': '[[', 'Block equation': '$$',
 }
 const DROP = new Set(['Heading 4', 'Heading 5', 'Heading 6', 'Page Break'])
 
@@ -92,6 +93,7 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Heading 1', icon: <Heading1 size={16} />, type: 'heading', props: { level: 1, isToggleable: false } },
   { label: 'Heading 2', icon: <Heading2 size={16} />, type: 'heading', props: { level: 2, isToggleable: false } },
   { label: 'Heading 3', icon: <Heading3 size={16} />, type: 'heading', props: { level: 3, isToggleable: false } },
+  { label: 'Heading 4', icon: <Heading4 size={16} />, type: 'heading', props: { level: 4, isToggleable: false } },
   { label: 'To-do list', icon: <ListTodo size={16} />, type: 'checkListItem' },
   { label: 'Bulleted list', icon: <List size={16} />, type: 'bulletListItem' },
   { label: 'Numbered list', icon: <ListOrdered size={16} />, type: 'numberedListItem' },
@@ -99,9 +101,11 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Code', icon: <Code2 size={16} />, type: 'codeBlock' },
   { label: 'Quote', icon: <Quote size={16} />, type: 'quote' },
   { label: 'Callout', icon: <StickyNote size={16} />, type: 'callout' },
+  { label: 'Block equation', icon: <Sigma size={16} />, type: 'equation' },
   { label: 'Toggle heading 1', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 1, isToggleable: true } },
   { label: 'Toggle heading 2', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 2, isToggleable: true } },
   { label: 'Toggle heading 3', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 3, isToggleable: true } },
+  { label: 'Toggle heading 4', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 4, isToggleable: true } },
 ]
 
 const stripIds = (b: AnyBlock): AnyBlock => ({ ...b, id: undefined as never, children: (b.children ?? []).map(stripIds) })
@@ -170,14 +174,17 @@ function BlockMenu() {
   return (
     <DragHandleMenu>
       <C.Generic.Menu.Label>{kind}</C.Generic.Menu.Label>
-      {hasText && editor.isEditable && (
+      {(hasText || block.type === 'equation') && editor.isEditable && (
         <C.Generic.Menu.Root sub position="right" portalElement={null}>
           <C.Generic.Menu.Trigger sub><Item className="bn-menu-item" subTrigger icon={<Repeat2 size={16} />}>Turn into</Item></C.Generic.Menu.Trigger>
           <C.Generic.Menu.Dropdown sub className="bn-menu-dropdown turn-menu">
             {TURN_INTO.map(t => (
               <Item key={t.label} className="bn-menu-item" icon={t.icon}
                 checked={block.type === t.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable))}
-                onClick={() => editor.updateBlock(block.id, { type: t.type, props: t.props ?? {} } as never)}>{t.label}</Item>
+                onClick={() => block.type !== t.type || t.type !== 'equation' ? editor.updateBlock(block.id, (t.type === 'equation'
+                  // Like Notion, the block's text becomes the equation's TeX.
+                  ? { type: 'equation', props: { latex: plain(block.content) }, content: undefined }
+                  : { type: t.type, props: t.props ?? {}, ...(block.type === 'equation' ? { content: String(block.props.latex ?? '') } : {}) }) as never) : undefined}>{t.label}</Item>
             ))}
           </C.Generic.Menu.Dropdown>
         </C.Generic.Menu.Root>
@@ -412,6 +419,8 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       })),
       { title: 'Database - Full page', subtext: 'Add a database as a sub-page.', group: 'Database', aliases: ['database', 'db', 'full page'], icon: <Table size={18} />, onItemClick: () => { insertDb('table', false) } },
       { title: 'Table of contents', subtext: 'Show an outline of your page.', group: 'Advanced blocks', aliases: ['toc', 'outline'], icon: <ListTree size={18} />, onItemClick: insert({ type: 'toc' }) },
+      { title: 'Heading 4', subtext: 'Smallest section heading.', group: 'Basic blocks', aliases: ['h4', '####'], icon: <Heading4 size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4 } }) },
+      { title: 'Toggle heading 4', subtext: 'Hide content inside a small heading.', group: 'Advanced blocks', aliases: ['h4', 'toggle'], icon: <ChevronRightSquare size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4, isToggleable: true } }) },
       { title: 'Block equation', subtext: 'Display a standalone math equation.', group: 'Advanced blocks', aliases: ['math', 'latex', 'tex', 'formula'], icon: <Sigma size={18} />, onItemClick: insert({ type: 'equation' }) },
       { title: 'Breadcrumb', subtext: 'Show where this page sits.', group: 'Advanced blocks', aliases: ['path', 'location'], icon: <Navigation size={18} />, onItemClick: insert({ type: 'breadcrumb' }) },
       ...getMultiColumnSlashMenuItems(e as never).map((i, n) => ({ ...i, group: 'Advanced blocks', icon: [<Columns2 size={18} />, <Columns3 size={18} />, <Columns4 size={18} />][n] ?? <Columns4 size={18} /> })),
