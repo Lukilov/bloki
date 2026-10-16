@@ -37,7 +37,9 @@ function Composer({ placeholder, onSend, autoFocus, initial = '', onCancel, tool
       <textarea ref={box} rows={1} autoFocus={autoFocus} placeholder={placeholder} value={text}
         onChange={e => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }}
         onKeyDown={e => {
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+          // Preferences → "Use Enter to add a new line": then only Cmd/Ctrl+Enter sends.
+          const newline = !!store.me?.prefs?.enterNewline
+          if (e.key === 'Enter' && !e.shiftKey && (newline ? e.metaKey || e.ctrlKey : true)) { e.preventDefault(); send() }
           if (e.key === 'Escape') onCancel?.()
         }} />
       {tools && <>

@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, ChevronDown, Download, FileText, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, User as UserIcon, UserPlus, Users, X } from 'lucide-react'
+import { Bell, ChevronDown, Download, FileCode, FileText, Globe, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
-const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void } }).blokiDesktop
+const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
 import { Menu, Popover, usePopover } from './ui'
 import { api, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share } from './api'
-import { useStore } from './store'
+import { iconOf, label, useStore } from './store'
 
 const ROLE_NAMES: Record<Role, string> = { owner: 'Workspace owner', member: 'Member', guest: 'Guest' }
 
@@ -120,6 +120,43 @@ export function AcceptInvite({ token, onDone }: { token: string; onDone: () => v
 
 /* ---------- Workspace switcher ---------- */
 
+/** Settings → Public pages: everything published to the web from this workspace, with Unpublish. */
+function PublicPages() {
+  const store = useStore()
+  const list = store.pages.filter(p => p.public && !p.trashed)
+  return <>
+    <h3>Public pages</h3>
+    <p className="settings-sub">Manage public content from your workspace</p>
+    <Section title="Published pages" desc="Anyone with the link can view these pages and their sub-pages.">
+      {!list.length && <p className="muted small">No pages are published yet. Use Share → Publish on a page.</p>}
+      {list.map(p => (
+        <Row key={p.id} label={<button className="link-row" onClick={() => store.go(p.id)}>{iconOf(p, 16)} {label(p)}</button>} desc={publicLink(p.id)}>
+          {can(p, 'full') && <button onClick={() => api.setShare(p.id, { public: false }).then(() => store.reload()).catch(e => store.setError(e.message))}>Unpublish</button>}
+        </Row>
+      ))}
+    </Section>
+  </>
+}
+
+/** Settings → Offline (desktop app): pages kept for reading without a connection, with Remove. */
+function OfflinePages() {
+  const [list, setList] = useState<{ id: string; title: string; icon: string; saved: number }[] | null>(null)
+  const load = () => desktopApp?.offline?.mine().then(setList).catch(() => setList([]))
+  useEffect(() => { load() }, [])
+  return <>
+    <h3>Offline</h3>
+    <p className="settings-sub">See which pages you can use while offline</p>
+    <Section title="Offline pages" desc="These pages are available on this computer without a connection. Turn it on from a page’s ⋯ menu.">
+      {list && !list.length && <p className="muted small">No pages available</p>}
+      {list?.map(p => (
+        <Row key={p.id} label={`${p.icon || '📄'} ${p.title || 'Untitled'}`} desc={`Saved ${new Date(p.saved).toLocaleString()}`}>
+          <button onClick={() => desktopApp!.offline!.set(p.id, false).then(load)}>Remove</button>
+        </Row>
+      ))}
+    </Section>
+  </>
+}
+
 export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) => void }) {
   const store = useStore()
   const [anchor, open, close] = usePopover<HTMLElement | { x: number; y: number }>()
@@ -175,12 +212,12 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 /* ---------- Settings & members ---------- */
 
-type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import'
+type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'public' | 'offline'
 
 function Section({ title, children, desc }: { title: string; desc?: string; children: React.ReactNode }) {
   return <section className="set-section"><h4>{title}</h4>{desc && <p className="muted small">{desc}</p>}{children}</section>
 }
-function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+function Row({ label, desc, children }: { label: React.ReactNode; desc?: string; children: React.ReactNode }) {
   return <div className="set-row"><div><div>{label}</div>{desc && <div className="muted small">{desc}</div>}</div><div className="set-control">{children}</div></div>
 }
 
@@ -214,23 +251,26 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
     <div className="overlay" onClick={close}>
       <div className="dialog settings" onClick={e => e.stopPropagation()}>
         <nav className="settings-tabs">
+          {/* Notion's settings navigation: the account row, then Preferences, Notifications; Workspace; Features. */}
           <div className="menu-heading">Account</div>
-          <div className="set-user"><span className="avatar">{me.user.name[0]}</span><div><div>{me.user.name}</div><div className="muted small">{me.user.email}</div></div></div>
-          {nav('account', 'My account', <UserIcon size={16} />)}
-          {nav('settings', 'My settings', <SlidersHorizontal size={16} />)}
-          {nav('notifications', 'My notifications', <Bell size={16} />)}
+          {nav('account', me.user.name, <span className="avatar small">{me.user.name[0]}</span>)}
+          {nav('settings', 'Preferences', <SlidersHorizontal size={16} />)}
+          {nav('notifications', 'Notifications', <Bell size={16} />)}
           {ws && <>
             <div className="menu-heading">Workspace</div>
-            {nav('workspace', 'Settings', <Settings size={16} />)}
+            {nav('workspace', 'General', <Settings size={16} />)}
             {nav('people', 'People', <Users size={16} />)}
             {nav('import', 'Import', <Download size={16} />)}
+            <div className="menu-heading">Features</div>
+            {nav('public', 'Public pages', <Globe size={16} />)}
+            {desktopApp && 'offline' in desktopApp && nav('offline', 'Offline', <WifiOff size={16} />)}
           </>}
         </nav>
         <div className="settings-body">
           {tab === 'account' && <>
-            <h3>My account</h3>
-            <p className="settings-sub">Your profile, sign-in email and password.</p>
-            <Section title="My profile">
+            <h3>Account</h3>
+            <p className="settings-sub">Manage your profile, login information, and devices</p>
+            <Section title="Profile">
               <div className="set-profile">
                 <span className="avatar big">{me.user.name[0]}</span>
                 <label>Preferred name<span className="row"><input value={name} onChange={e => setName(e.target.value)} />
@@ -262,13 +302,19 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
           </>}
 
           {tab === 'settings' && <>
-            <h3>My settings</h3>
-            <p className="settings-sub">How Bloki looks and behaves for you.</p>
-            <Section title="Appearance" desc="Customize how Bloki looks on this device.">
-              <Row label="Appearance"><select value={theme} onChange={e => theme_(e.target.value)}><option value="system">Use system setting</option><option value="light">Light</option><option value="dark">Dark</option></select></Row>
+            <h3>Preferences</h3>
+            <p className="settings-sub">Choose how you want Bloki to look and behave</p>
+            <Section title="Appearance">
+              <Row label="Theme" desc="Choose a theme for Bloki on this device"><select value={theme} onChange={e => theme_(e.target.value)}><option value="system">Use system setting</option><option value="light">Light</option><option value="dark">Dark</option></select></Row>
+            </Section>
+            <Section title="Input options">
+              <Row label="Use Enter to add a new line" desc="Applies to comments and other input fields. Press Cmd/Ctrl + Enter to send."><input type="checkbox" checked={!!prefs.enterNewline} onChange={e => savePrefs({ enterNewline: e.target.checked })} /></Row>
             </Section>
             <Section title="Language & time">
-              <Row label="Start week on Monday" desc="This changes how calendars look."><input type="checkbox" checked={(prefs.weekStart ?? 'monday') === 'monday'} onChange={e => savePrefs({ weekStart: e.target.checked ? 'monday' : 'sunday' })} /></Row>
+              <Row label="Start week on Monday" desc="This will affect the way your calendars appear in Bloki"><input type="checkbox" checked={(prefs.weekStart ?? 'monday') === 'monday'} onChange={e => savePrefs({ weekStart: e.target.checked ? 'monday' : 'sunday' })} /></Row>
+              <Row label="Date format" desc="Set the default format for new @date mentions">
+                <select value={prefs.dateFormat ?? 'relative'} onChange={e => savePrefs({ dateFormat: e.target.value })}><option value="relative">Relative</option><option value="full">Full date</option><option value="iso">Year/Month/Day</option></select>
+              </Row>
             </Section>
             <Section title="Startup">
               <Row label="Open on start" desc="Choose what to show when Bloki opens.">
@@ -278,21 +324,24 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
           </>}
 
           {tab === 'notifications' && <>
-            <h3>My notifications</h3>
-            <p className="settings-sub">What lands in your Inbox, and when.</p>
+            <h3>Notifications</h3>
+            <p className="settings-sub">Decide when and how you want to be notified</p>
             <Section title="Inbox" desc="Choose what shows up in your Inbox.">
-              {([['mention', 'Mentions', 'When someone @mentions you in a page'], ['comment', 'Comments', 'Replies and comments on pages you created or discussed'], ['share', 'Invites', 'When a page is shared with you']] as const).map(([k, l, d]) => (
+              {([['mention', 'Mentions', 'When someone @mentions you in a page'], ['comment', 'Comments', 'Replies and comments on pages you created or discussed'], ['share', 'Invites', 'When a page is shared with you'], ['automation', 'Automations', 'When a database automation notifies you']] as const).map(([k, l, d]) => (
                 <Row key={k} label={l} desc={d}><input type="checkbox" checked={prefs.notify?.[k] !== false} onChange={e => savePrefs({ notify: { ...prefs.notify, [k]: e.target.checked } })} /></Row>
               ))}
             </Section>
           </>}
 
           {tab === 'workspace' && ws && <>
-            <h3>Workspace settings</h3>
-            <p className="settings-sub">The name, icon and contents of this workspace.</p>
+            <h3>General</h3>
+            <p className="settings-sub">Manage your workspace name, icon, export and more</p>
             <Section title="Name"><input className="wide" value={wsName} disabled={!owner} onChange={e => setWsName(e.target.value)} /><p className="muted small">You can use your organization or company name. Keep it simple.</p></Section>
             <Section title="Icon"><input value={wsIcon} disabled={!owner} maxLength={8} placeholder="Emoji" onChange={e => setWsIcon(e.target.value)} /><p className="muted small">Upload an image or pick an emoji. It will show up in your sidebar and notifications.</p></Section>
             {owner && <button className="primary" disabled={busy} onClick={() => run(async () => { await api.updateWorkspace(ws.id, { name: wsName, icon: wsIcon }); await store.reloadMe(); done('Saved') })}>Update</button>}
+            {owner && <Section title="Members"><Row label="Export members" desc="Download the members and guests of this workspace as a CSV file.">
+              <button onClick={() => { const csv = ['Name,Email,Role', ...people.map(p => [p.name, p.email ?? '', ROLE_NAMES[p.role]].map(x => `"${String(x).replace(/"/g, '""')}"`).join(','))].join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `${ws.name} members.csv`; a.click() }}>Export</button>
+            </Row></Section>}
             {owner && <Section title="Export content"><Row label="Export all workspace content" desc="Download every page you can see as a JSON backup.">
               <button onClick={() => run(async () => { const data = await api.exportWorkspace(ws.id); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); a.download = `${ws.name}.bloki.json`; a.click() })}>Export</button>
             </Row></Section>}
@@ -308,7 +357,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'people' && ws && <>
             <h3>People</h3>
-            <p className="settings-sub">Who belongs to this workspace and what each person can do.</p>
+            <p className="settings-sub">Manage people in your workspace and their roles</p>
             {owner && (
               <Section title="Invite link" desc="Single-use links, valid for 7 days. Send one to each person you invite.">
                 <div className="row">
@@ -348,11 +397,17 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
 
           {tab === 'import' && <>
             <h3>Import</h3>
-            <p className="settings-sub">Bring pages in from Markdown files.</p>
-            <Section title="Import data into this workspace" desc="Markdown and text files become private pages you can then move anywhere.">
-              <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import')) }}><FileText size={20} /> Text & Markdown</button>
+            <p className="settings-sub">Import data from other apps and files into Bloki</p>
+            <Section title="File-based imports" desc="Imported files become private pages you can then move anywhere.">
+              <div className="import-tiles">
+                <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-csv')) }}><Table2 size={20} /><span><b>CSV</b><small>Import structured data from spreadsheets</small></span></button>
+                <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import')) }}><FileText size={20} /><span><b>Text & Markdown</b><small>Import plain text and formatted notes</small></span></button>
+                <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-html')) }}><FileCode size={20} /><span><b>HTML</b><small>Import web pages and structured content</small></span></button>
+              </div>
             </Section>
           </>}
+          {tab === 'public' && <PublicPages />}
+          {tab === 'offline' && <OfflinePages />}
           {error && <p className="danger">{error}</p>}
           {msg && <p className="ok">{msg}</p>}
         </div>

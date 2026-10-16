@@ -43,7 +43,7 @@ export const can = (p: { access?: Level } | undefined, need: Level) => LEVELS.in
 
 export type Role = 'owner' | 'member' | 'guest'
 export type Person = { id: string; name: string; email?: string; role: Role }
-export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday' }
+export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso' }
 export type Me = { user: { id: string; email: string; name: string }; prefs: Prefs; workspaceId: string | null; role: Role | null; workspaces: { id: string; name: string; icon: string; role: Role }[] }
 
 export type Page = {

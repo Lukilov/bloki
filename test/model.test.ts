@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregate, applyView, groupRows, matches, newRowDefaults, value, visibleRange, type Ctx } from '../src/db/model.ts'
+import { aggregate, applyView, groupRows, matches, newRowDefaults, parseCSV, value, visibleRange, type Ctx } from '../src/db/model.ts'
 import type { Page, Prop, Schema } from '../src/api.ts'
 
 const page = (id: string, parent: string | null, props: Record<string, unknown> = {}, extra: Partial<Page> = {}): Page => ({
@@ -72,4 +72,9 @@ test('long tables render only the rows near the screen', () => {
   assert.deepEqual(visibleRange(-3600, 720, 1000, 36, 10), [90, 130], 'scrolled 100 rows down')
   assert.deepEqual(visibleRange(-40000, 720, 1000, 36, 10), [1000, 1000], 'scrolled past the end')
   assert.deepEqual(visibleRange(2000, 720, 1000, 36, 10), [0, 0], 'list still below the screen')
+})
+
+test('parseCSV handles quotes, doubled quotes, commas and newlines inside quotes, and CRLF', () => {
+  assert.deepEqual(parseCSV('Name,Note\r\nA,"x, y"\r\nB,"say ""hi""\nnext"\r\n\r\n'), [['Name', 'Note'], ['A', 'x, y'], ['B', 'say "hi"\nnext']])
+  assert.deepEqual(parseCSV('a,b\n1,'), [['a', 'b'], ['1', '']])
 })

@@ -540,6 +540,7 @@ app.whenReady().then(() => {
   })
   // Offline editing: the reader saves edits locally; the Bloki page picks them up once it loads again.
   ipcMain.handle('bloki:offline-edit', (e, id, html) => isLocalPage(e.sender) && config.server && /^[\w-]{1,64}$/.test(String(id)) && String(html).length <= 5_000_000 ? offline().edit(config.server, String(id), String(html)) : false)
+  ipcMain.handle('bloki:offline-mine', e => (sameOrigin(e.sender.getURL()) ? offline().list(config.server) : []))
   ipcMain.handle('bloki:offline-pending', e => (sameOrigin(e.sender.getURL()) ? offline().pending(config.server) : []))
   ipcMain.handle('bloki:offline-sent', (e, id) => { if (sameOrigin(e.sender.getURL())) offline().sent(config.server, String(id)) })
   ipcMain.handle('bloki:offline-has', (e, id) => sameOrigin(e.sender.getURL()) && offline().has(config.server, String(id)))

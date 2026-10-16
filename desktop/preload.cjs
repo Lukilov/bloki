@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('blokiDesktop', {
     // Offline editing: the reader stores edits; the Bloki page sends them and marks them sent.
     edit: (id, html) => ipcRenderer.invoke('bloki:offline-edit', String(id), String(html)),
     pending: () => ipcRenderer.invoke('bloki:offline-pending'),
+    /** The list shown in Settings → Offline. */
+    mine: () => ipcRenderer.invoke('bloki:offline-mine'),
     sent: id => ipcRenderer.invoke('bloki:offline-sent', String(id)),
     has: id => ipcRenderer.invoke('bloki:offline-has', String(id)),
     // Only the offline reader (a local file) gets answers to these two.

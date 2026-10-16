@@ -1230,3 +1230,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .automation-item .switch { border: none; margin-left: auto; cursor: pointer; }
 .discussions-head { justify-content: space-between; }
 .discussions-bell { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); border-radius: 4px; }
+/* Settings → Import tiles and Public pages rows, after Notion's lists. */
+.import-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.import-tile { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); text-align: left; }
+.import-tile span { display: flex; flex-direction: column; gap: 2px; }
+.import-tile b { font-weight: 500; font-size: 14px; }
+.import-tile small { color: var(--muted); font-size: 12px; }
+.link-row { display: inline-flex; align-items: center; gap: 6px; border: none; padding: 0; background: none; font-size: 14px; color: var(--text); }

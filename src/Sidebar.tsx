@@ -3,7 +3,8 @@ import {
   Library as LibraryIcon, Archive, CheckCheck, ChevronDown, ChevronRight, ChevronsLeft, CircleHelp, FileText, Home, Inbox as InboxIcon, Keyboard, LayoutTemplate,
   MessageSquare, MoreHorizontal, Plus, RotateCcw, Search, Settings, SquarePen, Trash2, Upload, UserPlus, Users,
 } from 'lucide-react'
-import { api, can, type Notice, type Page } from './api'
+import { api, can, uid, type Notice, type Page } from './api'
+import { parseCSV } from './db/model'
 import { ancestors, iconOf, label, useStore } from './store'
 import { WorkspaceMenu } from './Access'
 import { Menu, mod, Popover, timeAgo, usePopover } from './ui'
@@ -158,8 +159,12 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
     const on = () => setTemplates(true)
     const imp = () => importMarkdown(store)
     addEventListener('bloki:templates', on)
+    const csv = () => importCSV(store)
+    const html = () => importHTML(store)
     addEventListener('bloki:import', imp)
-    return () => { removeEventListener('bloki:templates', on); removeEventListener('bloki:import', imp) }
+    addEventListener('bloki:import-csv', csv)
+    addEventListener('bloki:import-html', html)
+    return () => { removeEventListener('bloki:templates', on); removeEventListener('bloki:import', imp); removeEventListener('bloki:import-csv', csv); removeEventListener('bloki:import-html', html) }
   }, [store])
 
   const favorites = store.pages.filter(p => p.favorite && !p.trashed)
@@ -246,6 +251,40 @@ export function importMarkdown(store: Store, parent_id: string | null = null) {
       const heading = text.match(/^#\s+(.+)\n/)
       const title = heading?.[1] ?? f.name.replace(/\.(md|markdown|txt)$/, '')
       last = await store.create({ title, parent_id, content: fromMarkdown(heading ? text.slice(heading[0].length) : text), section: parent_id ? undefined : 'private' }, false)
+    }
+    if (last) store.go(last.id)
+  }
+  input.click()
+}
+
+/** Import a CSV file as a new database: the first column becomes the page name, the others text properties. */
+export function importCSV(store: Store) {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.csv,text/csv' })
+  input.onchange = async () => {
+    const f = input.files?.[0]
+    if (!f) return
+    const [head = [], ...rows] = parseCSV(await f.text())
+    if (!head.length) return
+    const props = head.slice(1).map(name => ({ id: uid(), name: name || 'Column', type: 'text' as const }))
+    const db = await store.create({ kind: 'db', title: f.name.replace(/\.csv$/i, ''), section: 'private', schema: { titleName: head[0] || 'Name', props, views: [{ id: uid(), name: 'Table', type: 'table' }] } }, false)
+    for (const r of rows.slice(0, 5000)) await api.create({ parent_id: db.id, title: r[0] ?? '', props: Object.fromEntries(props.map((p, i) => [p.id, r[i + 1] ?? ''])) })
+    await store.reload()
+    store.go(db.id)
+  }
+  input.click()
+}
+
+/** Import HTML files as pages (through the editor's HTML reader). */
+export function importHTML(store: Store) {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.html,.htm,text/html', multiple: true })
+  input.onchange = async () => {
+    const { htmlToBlocks } = await import('./Editor')
+    let last: Page | undefined
+    for (const f of Array.from(input.files ?? [])) {
+      const html = await f.text()
+      const doc = new DOMParser().parseFromString(html, 'text/html')
+      const title = doc.title || doc.querySelector('h1')?.textContent || f.name.replace(/\.html?$/i, '')
+      last = await store.create({ title, content: await htmlToBlocks(doc.body.innerHTML) as never, section: 'private' }, false)
     }
     if (last) store.go(last.id)
   }

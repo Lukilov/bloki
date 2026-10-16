@@ -32,10 +32,14 @@ export const PersonMention = createReactInlineContentSpec(
   { render: ({ inlineContent }) => <PersonChip id={inlineContent.props.userId} /> },
 )
 
+/** Settings → Preferences → Date format for @date mentions (set from the signed-in person's preferences). */
+let mentionFormat: 'relative' | 'full' | 'iso' = 'relative'
+export const setMentionDateFormat = (f?: 'relative' | 'full' | 'iso') => { mentionFormat = f ?? 'relative' }
 export function formatMentionDate(iso: string) {
   const d = new Date(iso + 'T00:00')
+  if (mentionFormat === 'iso') return iso.replace(/-/g, '/')
   const days = Math.round((d.getTime() - new Date(new Date().toDateString()).getTime()) / 864e5)
-  const rel = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days === -1 ? 'Yesterday' : null
+  const rel = mentionFormat === 'relative' ? (days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days === -1 ? 'Yesterday' : null) : null
   return rel ?? d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 }
 export const DateMention = createReactInlineContentSpec(

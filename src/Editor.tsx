@@ -26,7 +26,7 @@ import '@blocknote/mantine/style.css'
 import { api, can, type Comment, type Page, type Synced, type ViewType } from './api'
 import { ancestors, iconText, label, useStore } from './store'
 import { newDatabase } from './Database'
-import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate } from './blocks'
+import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate, setMentionDateFormat } from './blocks'
 import { copyText, isMac, mod, Popover, shift } from './ui'
 import { pageUrl } from './pageActions'
 
@@ -431,6 +431,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   const store = useStore()
   const storeRef = useRef(store)
   storeRef.current = store
+  setMentionDateFormat(store.me?.prefs?.dateFormat)
   const timer = useRef<number | undefined>(undefined)
   const [moving, setMoving] = useState<{ block: AnyBlock; anchor: HTMLElement; mode?: 'move' | 'pagein' } | null>(null)
   const live = useCollab(page.id, collab, onReset)
