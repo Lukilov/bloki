@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AlignLeft, ArrowUpRight, AtSign, Calendar, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Fingerprint, Hash, Link2, List,
-  MoreHorizontal, Paperclip, Phone, Plus, Search, Sigma, Trash2, User, UserCircle, X, ListChecks,
+  MoreHorizontal, Paperclip, Phone, Plus, Search, Sigma, Trash2, User, UserCircle, X, ListChecks, SlidersHorizontal,
 } from 'lucide-react'
 import { api, COLORS, uid, type Option, type Page, type Prop, type PropType, type Schema } from '../api'
 import { iconOf, label, useStore } from '../store'
@@ -130,6 +130,7 @@ export function OptionPicker({ prop, db, selected, multi, onChange, canEditOptio
   const store = useStore()
   const [q, setQ] = useState('')
   const [menu, setMenu] = useState<{ el: HTMLElement; o: Option } | null>(null)
+  const [editProp, setEditProp] = useState<HTMLElement | null>(null)
   const options = prop.options ?? []
   const shown = options.filter(o => o.name.toLowerCase().includes(q.toLowerCase()))
   const exact = options.find(o => o.name.toLowerCase() === q.trim().toLowerCase())
@@ -167,6 +168,14 @@ export function OptionPicker({ prop, db, selected, multi, onChange, canEditOptio
       {q.trim() && !exact && canEditOptions && (
         <div className="option-row create" onClick={create}>Create <Chip o={{ id: '', name: q.trim(), color: 'gray' }} /></div>
       )}
+      {canEditOptions && <>
+        {/* Notion ends the picker with "Edit property", which opens the property's settings beside it. */}
+        <div className="menu-divider" />
+        <button className="menu-item" onClick={e => setEditProp(e.currentTarget)}><span className="menu-icon"><SlidersHorizontal size={16} /></span><span className="menu-label">Edit property</span></button>
+        <Popover anchor={editProp} side="right" onClose={() => setEditProp(null)} className="menu-pop" width={290}>
+          {editProp && <PropertyEditor prop={prop} db={db} close={() => setEditProp(null)} />}
+        </Popover>
+      </>}
       <Popover anchor={menu?.el ?? null} side="right" onClose={() => setMenu(null)} className="menu-pop" width={220}>
         {menu && <OptionMenu o={menu.o}
           onChange={o => { updateOptions(store, db, prop, options.map(x => (x.id === o.id ? o : x))); setMenu({ ...menu, o }) }}
