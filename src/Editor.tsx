@@ -8,7 +8,7 @@ import { en } from '@blocknote/core/locales'
 import {
   BasicTextStyleButton, BlockTypeSelect, blockTypeSelectItems, ColorStyleButton, CreateLinkButton, DragHandleMenu, FileCaptionButton, FileReplaceButton,
   FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, RemoveBlockItem, SideMenu, SideMenuController, SuggestionMenuController,
-  useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState, type DefaultReactSuggestionItem,
+  createReactBlockSpec, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState, type DefaultReactSuggestionItem,
 } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { withCollaboration } from '@blocknote/core/yjs'
@@ -17,26 +17,98 @@ import { WebsocketProvider } from 'y-websocket'
 import { codeBlockOptions, syntaxHighlighter } from '@blocknote/code-block'
 import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column'
 import {
-  AtSign, Bookmark, CalendarDays, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
+  AtSign, Bookmark, CalendarDays, RefreshCw, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
   ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
   ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting,
 } from 'lucide-react'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
-import { api, can, type Comment, type Page, type ViewType } from './api'
+import { api, can, type Comment, type Page, type Synced, type ViewType } from './api'
 import { ancestors, iconText, label, useStore } from './store'
 import { newDatabase } from './Database'
 import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate } from './blocks'
 import { copyText, isMac, mod, Popover, shift } from './ui'
 import { pageUrl } from './pageActions'
 
+// Blocks a synced block may hold (no databases or nested synced blocks).
+const innerSpecs = {
+  // Notion has four heading levels.
+  ...defaultBlockSpecs, heading: createHeadingBlockSpec({ levels: [1, 2, 3, 4] }), codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), page: PageLink(),
+  embed: Embed(), equation: Equation(),
+}
+const inlineSpecs = { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention }
+const innerSchema = BlockNoteSchema.create({ blockSpecs: innerSpecs, inlineContentSpecs: inlineSpecs, styleSpecs: defaultStyleSpecs })
+
+/** One editor's worth of content, stored once on the server and shown live on every page that pastes it. */
+function SyncedEditor({ id, initial, editable, original, pageId }: { id: string; initial: unknown[]; editable: boolean; original: string; pageId: string }) {
+  const store = useStore()
+  const ed = useCreateBlockNote({ schema: innerSchema, initialContent: initial.length ? initial as never : undefined, dictionary: dictionary as never })
+  const sent = useRef(JSON.stringify(initial))
+  const timer = useRef<number | undefined>(undefined)
+  // ponytail: last write wins between copies edited at the same moment; merge with Yjs if that ever bites.
+  const save = () => {
+    clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      const json = JSON.stringify(ed.document)
+      if (json === sent.current) return
+      sent.current = json
+      api.updateSynced(id, ed.document as never).catch(e => store.setError(e.message))
+    }, 500)
+  }
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== id) return
+      api.getSynced(id).then(d => {
+        const json = JSON.stringify(d.content)
+        if (json === sent.current) return
+        sent.current = json
+        ed.replaceBlocks(ed.document, (d.content.length ? d.content : [{ type: 'paragraph' }]) as never)
+      }).catch(() => {})
+    }
+    addEventListener('bloki:synced', on)
+    return () => removeEventListener('bloki:synced', on)
+  }, [id, ed])
+  // Keys, clicks and pastes inside belong to this editor, not to the page around it.
+  const isolate = (el: HTMLDivElement | null) => {
+    if (!el || el.dataset.isolated) return
+    el.dataset.isolated = '1'
+    for (const t of ['keydown', 'keypress', 'keyup', 'beforeinput', 'input', 'paste', 'cut', 'copy', 'drop', 'dragstart', 'dragover', 'mousedown', 'compositionstart', 'compositionend']) el.addEventListener(t, e => e.stopPropagation())
+  }
+  const dark = document.documentElement.dataset.theme === 'dark'
+  const atOrigin = original === pageId
+  return (
+    <div className="synced" contentEditable={false} ref={isolate}>
+      <div className="synced-bar">
+        <button className="synced-label" onClick={() => !atOrigin && store.go(original)} title={atOrigin ? 'This is the original' : 'Open the original'}>
+          {atOrigin ? 'Editing original' : `Original in ${label(store.byId.get(original)) || 'another page'}`}
+        </button>
+        <span className="synced-sep" />
+        <button className="synced-copy" title="Copy and sync" onClick={() => { copyText(`bloki-synced:${id}`); store.toast('Copied. Paste it in another page to sync.') }}><Copy size={16} /></button>
+      </div>
+      <BlockNoteView editor={ed as never} editable={editable} theme={dark ? darkTheme : lightTheme} onChange={save} sideMenu={false} />
+      {editable && <div className="synced-empty">Click or type here, then copy and paste it in another page to sync content.</div>}
+    </div>
+  )
+}
+
+function SyncedView({ id, editable }: { id: string; editable: boolean }) {
+  const store = useStore()
+  const ctx = useContext(EditorCtx)
+  const [data, setData] = useState<Synced | 'gone' | null>(null)
+  useEffect(() => { api.getSynced(id).then(setData).catch(() => setData('gone')) }, [id])
+  if (!data) return <div className="synced loading" contentEditable={false} />
+  if (data === 'gone') return <div className="synced gone" contentEditable={false}>This synced block was deleted, or you don't have access to its original page.</div>
+  return <SyncedEditor id={id} initial={data.content} editable={editable && data.canEdit} original={data.page_id} pageId={ctx?.page.id ?? store.current ?? ''} />
+}
+
+const SyncedBlock = createReactBlockSpec(
+  { type: 'synced', propSchema: { syncId: { default: '' } }, content: 'none' },
+  { render: ({ block, editor }) => <SyncedView id={block.props.syncId} editable={editor.isEditable} /> },
+)
+
 const base = BlockNoteSchema.create({
-  blockSpecs: {
-    // Notion has four heading levels.
-    ...defaultBlockSpecs, heading: createHeadingBlockSpec({ levels: [1, 2, 3, 4] }), codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), database: InlineDatabase(), page: PageLink(),
-    toc: TableOfContents(), breadcrumb: Breadcrumb(), embed: Embed(), equation: Equation(),
-  },
-  inlineContentSpecs: { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention },
+  blockSpecs: { ...innerSpecs, database: InlineDatabase(), toc: TableOfContents(), breadcrumb: Breadcrumb(), synced: SyncedBlock() },
+  inlineContentSpecs: inlineSpecs,
   styleSpecs: { ...defaultStyleSpecs, comment: CommentMark },
 })
 export const schema = withMultiColumn(base)
@@ -108,6 +180,7 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Toggle heading 2', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 2, isToggleable: true } },
   { label: 'Toggle heading 3', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 3, isToggleable: true } },
   { label: 'Toggle heading 4', icon: <ChevronRightSquare size={16} />, type: 'heading', props: { level: 4, isToggleable: true } },
+  { label: 'Synced block', icon: <RefreshCw size={16} />, type: 'synced' },
   { label: '2 columns', icon: <Columns2 size={16} />, type: 'columnList' },
 ]
 
@@ -134,6 +207,8 @@ function turnInto(editor: Editor, block: AnyBlock, t: (typeof TURN_INTO)[number]
   const text = block.type === 'equation' ? String(block.props.latex ?? '') : plain(block.content)
   // Page: the block's text becomes a new sub-page's title, and the block a link to it.
   if (t.type === 'page') return void store.create({ parent_id: pageId, title: text }, false).then(child => editor.updateBlock(block.id, { type: 'page', props: { pageId: child.id }, content: undefined } as never))
+  // Synced block: the block's content moves into a new synced block that can be pasted elsewhere.
+  if (t.type === 'synced') return void api.createSynced(pageId, [stripIds(block)]).then(b => editor.replaceBlocks([block.id], [{ type: 'synced', props: { syncId: b.id } }] as never)).catch(e => store.setError(e.message))
   // 2 columns: the block moves into the left column; the right one starts empty.
   if (t.type === 'columnList') return void editor.replaceBlocks([block.id], [{ type: 'columnList', children: [{ type: 'column', children: [stripIds(block)] }, { type: 'column', children: [{ type: 'paragraph' }] }] }] as never)
   // Equation: like Notion, the block's text becomes the TeX.
@@ -205,7 +280,11 @@ function BlockMenu() {
           </C.Generic.Menu.Dropdown>
         </C.Generic.Menu.Root>
       )}
-      {editor.isEditable && <ColorMenu block={block} />}
+      {editor.isEditable && block.type !== 'synced' && <ColorMenu block={block} />}
+      {block.type === 'synced' && <>
+        <Item className="bn-menu-item" icon={<Copy size={16} />} onClick={() => { copyText(`bloki-synced:${block.props.syncId}`); store.toast('Copied. Paste it in another page to sync.') }}>Copy and sync</Item>
+        {editor.isEditable && <Item className="bn-menu-item" icon={<RefreshCw size={16} />} onClick={() => api.getSynced(String(block.props.syncId)).then(d => editor.replaceBlocks([block.id], (d.content.length ? d.content.map(b => stripIds(b as AnyBlock)) : [{ type: 'paragraph' }]) as never)).catch(e => store.setError(e.message))}>Unsync</Item>}
+      </>}
       <C.Generic.Menu.Divider />
       <Item className="bn-menu-item" icon={<Link2 size={16} />} onClick={() => copyText(`${pageUrl(ctx.page.id)}/b/${block.id}`)}>Copy link to block <span className="bn-hint">{isMac ? '⌘⌃L' : 'Ctrl+Alt+L'}</span></Item>
       {editor.isEditable && <Item className="bn-menu-item" icon={<Copy size={16} />} onClick={() => duplicateBlock(editor, block)}>Duplicate <span className="bn-hint">{mod}D</span></Item>}
@@ -349,7 +428,16 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   const live = useCollab(page.id, collab, onReset)
   const [synced, setSynced] = useState(!live)
 
-  const opts = { schema, dictionary, extensions: [syntaxHighlighter], dropCursor: { ...multiColumnDropCursor }, uploadFile: api.upload }
+  const opts = {
+    schema, dictionary, extensions: [syntaxHighlighter], dropCursor: { ...multiColumnDropCursor }, uploadFile: api.upload,
+    // "Copy and sync" puts a token on the clipboard; pasting it drops in a live copy of that synced block.
+    pasteHandler: ({ event, editor: ed, defaultPasteHandler }: { event: ClipboardEvent; editor: Editor; defaultPasteHandler: () => boolean | undefined }) => {
+      const m = /^bloki-synced:([0-9a-f-]{36})$/.exec(event.clipboardData?.getData('text/plain').trim() ?? '')
+      if (!m) return defaultPasteHandler()
+      ed.insertBlocks([{ type: 'synced', props: { syncId: m[1] } }] as never, ed.getTextCursorPosition().block, 'after')
+      return true
+    },
+  }
   const editor = useCreateBlockNote((live
     ? withCollaboration({
         ...opts,
@@ -435,6 +523,16 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       })),
       { title: 'Database - Full page', subtext: 'Add a database as a sub-page.', group: 'Database', aliases: ['database', 'db', 'full page'], icon: <Table size={18} />, onItemClick: () => { insertDb('table', false) } },
       { title: 'Table of contents', subtext: 'Show an outline of your page.', group: 'Advanced blocks', aliases: ['toc', 'outline'], icon: <ListTree size={18} />, onItemClick: insert({ type: 'toc' }) },
+      { title: 'Synced block', subtext: 'Sync content across pages.', group: 'Advanced blocks', aliases: ['sync', 'transclusion'], icon: <RefreshCw size={18} />,
+        onItemClick: () => {
+          // Remember the block now: the server round trip can outlast the cursor.
+          const here = e.getTextCursorPosition().block as unknown as AnyBlock
+          api.createSynced(page.id, []).then(b => {
+            const blank = Array.isArray(here.content) && !plain(here.content).replace('/', '').trim()
+            if (blank) e.updateBlock(here.id, { type: 'synced', props: { syncId: b.id }, content: undefined } as never)
+            else e.insertBlocks([{ type: 'synced', props: { syncId: b.id } }] as never, here.id, 'after')
+          }).catch(err => s.setError(err.message))
+        } },
       { title: 'Heading 4', subtext: 'Smallest section heading.', group: 'Basic blocks', aliases: ['h4', '####'], icon: <Heading4 size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4 } }) },
       { title: 'Toggle heading 4', subtext: 'Hide content inside a small heading.', group: 'Advanced blocks', aliases: ['h4', 'toggle'], icon: <ChevronRightSquare size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4, isToggleable: true } }) },
       { title: 'Block equation', subtext: 'Display a standalone math equation.', group: 'Advanced blocks', aliases: ['math', 'latex', 'tex', 'formula'], icon: <Sigma size={18} />, onItemClick: insert({ type: 'equation' }) },
@@ -577,6 +675,7 @@ function exportable(blocks: AnyBlock[], title: Lookup): AnyBlock[] {
     switch (b.type) {
       case 'page': case 'database': return [p(`📄 ${title(String(b.props.pageId ?? b.props.dbId))}`)]
       case 'toc': case 'breadcrumb': return []
+      case 'synced': return [p('⟳ Synced block')]
       case 'embed': return b.props.url ? [p(String(b.props.url))] : []
       case 'equation': return [{ id: b.id, type: 'codeBlock', props: { language: 'latex' }, content: [{ type: 'text', text: String(b.props.latex), styles: {} }], children: [] }]
       case 'callout': return [{ ...b, type: 'quote', props: {}, content: [{ type: 'text', text: `${b.props.icon} `, styles: {} }, ...(inline(b.content) as unknown[])], children: kids }]

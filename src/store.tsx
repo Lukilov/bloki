@@ -74,6 +74,8 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
         const p = pending.current
         if (msg.type === 'reload') p.reload = true
         if (msg.type === 'pages') for (const id of msg.ids) p.ids.add(id)
+        // Synced blocks refresh themselves wherever they are shown.
+        if (msg.type === 'synced') { dispatchEvent(new CustomEvent('bloki:synced', { detail: msg.id })); return }
         // Bursts (typing, bulk edits) collapse into one round of fetches.
         if (!p.timer) p.timer = window.setTimeout(flush, 250)
       }

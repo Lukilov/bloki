@@ -233,6 +233,21 @@ test('Notify me: all comments or only replies and mentions', () => {
   assert.ok(c)
 })
 
+test('synced blocks: shared content, edit needs edit access to the original page', () => {
+  const p = s.createPage(owner, { title: 'Origin', section: 'workspace' })
+  const b = s.createSynced(owner, p.id, [{ type: 'paragraph', content: 'hi' }])
+  assert.equal(b.canEdit, true)
+  const seen = s.getSynced(member, b.id)
+  assert.equal(seen.content[0].content, 'hi')
+  s.setShare(owner, p.id, { workspace_access: 'view' })
+  assert.equal(s.getSynced(member, b.id).canEdit, false)
+  throws403(() => s.updateSynced(member, b.id, []))
+  s.updateSynced(owner, b.id, [{ type: 'paragraph', content: 'bye' }])
+  assert.equal(s.getSynced(member, b.id).content[0].content, 'bye')
+  assert.throws(() => s.updateSynced(owner, b.id, 'nope'), e => e.status === 400)
+  assert.throws(() => s.getSynced(guest, b.id), e => e.status === 403 || e.status === 404)
+})
+
 test('comment threads: replies, resolve and delete apply to the whole discussion', () => {
   const p = s.createPage(owner, { title: 'Thread', section: 'workspace' })
   const [root] = s.addComment(owner, p.id, 'Question?', { block_id: 'b1', quote: 'some text' })

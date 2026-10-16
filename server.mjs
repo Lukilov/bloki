@@ -90,6 +90,14 @@ db.exec(`
     created INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS comments_page ON comments(page_id, created);
+  -- Synced blocks: one copy of content shared by every page that shows it. page_id is the original's page.
+  CREATE TABLE IF NOT EXISTS synced (
+    id TEXT PRIMARY KEY,
+    page_id TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '[]',
+    updated INTEGER NOT NULL,
+    updated_by TEXT
+  );
   -- "Notify me" on a page: 'all' comments, or only 'replies' (threads you're in) and @mentions.
   CREATE TABLE IF NOT EXISTS watches (
     user_id TEXT NOT NULL,
@@ -378,7 +386,7 @@ export function deleteAccount(user, password) {
   // Workspaces only this person was in go with them.
   for (const m of db.prepare('SELECT workspace_id FROM members WHERE user_id = ?').all(user.id)) {
     if (db.prepare('SELECT COUNT(*) AS n FROM members WHERE workspace_id = ?').get(m.workspace_id).n === 1) {
-      for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(m.workspace_id)
+      for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches', 'synced']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(m.workspace_id)
       db.prepare('DELETE FROM pages WHERE workspace_id = ?').run(m.workspace_id)
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(m.workspace_id)
     }
@@ -568,7 +576,7 @@ export function deletePage(user, id) {
   const ids = descendants(id)
   for (const pid of ids) collab.reset(pid)
   const marks = ids.map(() => '?').join(',')
-  for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
+  for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches', 'synced']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM invites WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM pages WHERE id IN (${marks})`).run(...ids)
   liveReload(wsId)
@@ -743,7 +751,7 @@ export function purgeTrash(now = Date.now()) {
   for (const p of db.prepare('SELECT id FROM pages WHERE trashed = 1 AND trashed_at < ? AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM pages WHERE trashed = 1))').all(now - 30 * 864e5)) {
     const ids = descendants(p.id)
     const marks = ids.map(() => '?').join(',')
-    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
+    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches', 'synced']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
     db.prepare(`DELETE FROM pages WHERE id IN (${marks})`).run(...ids)
   }
 }
@@ -778,6 +786,38 @@ export function addComment(user, pageId, body, { thread_id = null, block_id = nu
     if (uid !== user.id && !people.has(uid) && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'mention', pageId, user.id, text)
   }
   return listComments(user, pageId)
+}
+
+/* ---------- Synced blocks ---------- */
+// Anyone who can see the original's page can see a synced block; editing it needs edit access to that page.
+const syncedOut = (user, r) => ({ id: r.id, page_id: r.page_id, content: JSON.parse(r.content), updated: r.updated, canEdit: atLeast(pageAccess(user.id, r.page_id), 'edit') })
+const checkBlocks = content => {
+  if (!Array.isArray(content)) throw new HttpError(400, 'Content must be a list of blocks.')
+  const json = JSON.stringify(content)
+  if (json.length > 500_000) throw new HttpError(413, 'This synced block is too large.')
+  return json
+}
+export function createSynced(user, pageId, content = []) {
+  need(user.id, pageId, 'edit')
+  const id = randomUUID()
+  db.prepare('INSERT INTO synced (id, page_id, content, updated, updated_by) VALUES (?, ?, ?, ?, ?)').run(id, pageId, checkBlocks(content), Date.now(), user.id)
+  return getSynced(user, id)
+}
+export function getSynced(user, id) {
+  const r = db.prepare('SELECT * FROM synced WHERE id = ?').get(String(id))
+  if (!r) throw new HttpError(404, 'Synced block not found.')
+  need(user.id, r.page_id, 'view')
+  return syncedOut(user, r)
+}
+export function updateSynced(user, id, content) {
+  const r = db.prepare('SELECT * FROM synced WHERE id = ?').get(String(id))
+  if (!r) throw new HttpError(404, 'Synced block not found.')
+  need(user.id, r.page_id, 'edit')
+  db.prepare('UPDATE synced SET content = ?, updated = ?, updated_by = ? WHERE id = ?').run(checkBlocks(content), Date.now(), user.id, r.id)
+  // Every open copy refreshes; only people who can see the original are told.
+  const ws = db.prepare('SELECT workspace_id FROM pages WHERE id = ?').get(r.page_id)?.workspace_id
+  for (const c of liveConns) if (c.workspaceId === ws) { try { if (atLeast(pageAccess(c.userId, r.page_id), 'view')) liveSend(c, { type: 'synced', id: r.id, by: user.id }) } catch { /* no access */ } }
+  return getSynced(user, r.id)
 }
 
 /** A person's "Notify me" choice on a page; the creator follows all comments unless they said otherwise. */
@@ -944,7 +984,7 @@ const routes = [
   }],
   ['DELETE', /^\/api\/workspaces\/([\w-]+)$/, (c, id) => {
     needOwner(c.user, id)
-    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(id)
+    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches', 'synced']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(id)
     db.prepare('DELETE FROM pages WHERE workspace_id = ?').run(id)
     db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
     return { ok: true }
@@ -965,6 +1005,9 @@ const routes = [
   ['GET', /^\/api\/pages\/([\w-]+)\/share$/, (c, id) => getShare(c.user, id)],
   ['PATCH', /^\/api\/pages\/([\w-]+)\/share$/, async (c, id) => setShare(c.user, id, await c.body())],
   ['GET', /^\/api\/pages\/([\w-]+)\/comments$/, (c, id) => listComments(c.user, id)],
+  ['POST', /^\/api\/synced$/, async c => { const b = await c.body(); return createSynced(c.user, String(b.page_id ?? ''), b.content ?? []) }],
+  ['GET', /^\/api\/synced\/([\w-]+)$/, (c, id) => getSynced(c.user, id)],
+  ['PUT', /^\/api\/synced\/([\w-]+)$/, async (c, id) => updateSynced(c.user, id, (await c.body()).content)],
   ['GET', /^\/api\/pages\/([\w-]+)\/watch$/, (c, id) => { need(c.user.id, id, 'view'); return { mode: watchMode(c.user.id, id) } }],
   ['PUT', /^\/api\/pages\/([\w-]+)\/watch$/, async (c, id) => setWatch(c.user, id, (await c.body()).mode)],
   ['POST', /^\/api\/pages\/([\w-]+)\/comments$/, async (c, id) => { const b = await c.body(); return addComment(c.user, id, b.body, b) }],

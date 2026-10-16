@@ -73,6 +73,7 @@ export type Share = {
   grants: { user_id: string; level: Level; name: string; email?: string; role: Role | null }[]
   invite?: string
 }
+export type Synced = { id: string; page_id: string; content: unknown[]; updated: number; canEdit: boolean }
 export type Comment = { id: string; body: string; resolved: boolean; created: number; user_id: string; name: string; thread_id: string | null; block_id: string | null; quote: string | null; reactions?: Record<string, string[]> }
 export type Notice = { id: string; kind: 'mention' | 'comment' | 'share'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
 
@@ -119,6 +120,9 @@ export const api = {
     return data.url as string
   },
 
+  createSynced: (pageId: string, content: unknown[]) => call<Synced>('POST', 'synced', { page_id: pageId, content }),
+  getSynced: (id: string) => call<Synced>('GET', `synced/${id}`),
+  updateSynced: (id: string, content: unknown[]) => call<Synced>('PUT', `synced/${id}`, { content }),
   watch: (id: string) => call<{ mode: 'all' | 'replies' }>('GET', `pages/${id}/watch`),
   setWatch: (id: string, mode: 'all' | 'replies') => call<{ mode: 'all' | 'replies' }>('PUT', `pages/${id}/watch`, { mode }),
   share: (id: string) => call<Share>('GET', `pages/${id}/share`),

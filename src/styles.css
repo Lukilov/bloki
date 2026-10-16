@@ -1139,3 +1139,17 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .library-name b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 .library-source { font-weight: 500; color: var(--text-2); }
 .library-empty { padding: 16px 8px; }
+/* Synced block measured on Notion: 2px border in the orange background colour (radius 6); a 28px bar 40px above,
+   right-aligned, with "Editing original" (12px) and a copy button, shown on hover or while editing. */
+.synced { position: relative; border: 2px solid var(--bn-colors-highlights-orange-background, rgb(251, 235, 222)); border-radius: 6px; padding: 2px 0; margin: 4px 0; min-height: 36px; }
+.synced.loading { opacity: 0.5; }
+.synced.gone { padding: 8px 12px; color: var(--muted); font-size: 14px; border-style: dashed; }
+.synced .bn-editor { padding-inline: 2px !important; }
+.synced-bar { position: absolute; right: -2px; top: -40px; z-index: 5; display: none; align-items: center; gap: 2px; height: 28px; padding: 2px; box-sizing: border-box; border-radius: 6px; background: var(--peek-bg); box-shadow: var(--line) 0 0 0 1px, rgba(25, 25, 25, 0.08) 0 4px 12px -2px; }
+.synced:hover .synced-bar, .synced:focus-within .synced-bar { display: flex; }
+.synced-label { height: 24px; padding: 0 6px; border: none; border-radius: 4px; font-size: 12px; color: var(--icon); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.synced-sep { width: 1px; height: 16px; background: var(--line); margin: 0 2px; }
+.synced-copy { width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); }
+.synced-empty { position: absolute; left: 14px; top: 8px; pointer-events: none; color: var(--faint); font-size: 16px; display: none; }
+/* Only while it holds a single empty paragraph and isn't being edited. */
+.synced:not(:focus-within):has(.bn-block-group > .bn-block-outer:only-child [data-content-type='paragraph'] .bn-inline-content:empty) .synced-empty { display: block; }
