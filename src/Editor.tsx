@@ -495,6 +495,14 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
           e.preventDefault()
           duplicateBlock(editor, editor.getTextCursorPosition().block as unknown as AnyBlock)
         }
+        // Notion's turn-into shortcuts: ⌘⌥0 text, 1–3 headings, 4 to-do, 5 bullets, 6 numbers, 7 toggle, 8 code, 9 page.
+        const digit = /^Digit(\d)$/.exec(e.code)?.[1]
+        if (m && e.altKey && !e.shiftKey && digit && editable) {
+          const label = ['Text', 'Heading 1', 'Heading 2', 'Heading 3', 'To-do list', 'Bulleted list', 'Numbered list', 'Toggle list', 'Code', 'Page'][Number(digit)]
+          const t = TURN_INTO.find(x => x.label === label)
+          const block = editor.getTextCursorPosition().block as unknown as AnyBlock
+          if (t && Array.isArray(block.content)) { e.preventDefault(); e.stopPropagation(); turnInto(editor, block, t, page.id, storeRef.current) }
+        }
         // Notion's block-link shortcut: ⌘⌃L on a Mac (⌘⌥L belongs to the desktop app's "copy link with title").
         if (m && (isMac ? e.ctrlKey && e.metaKey : e.altKey) && e.code === 'KeyL') {
           e.preventDefault()
