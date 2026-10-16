@@ -119,6 +119,8 @@ export const api = {
     return data.url as string
   },
 
+  watch: (id: string) => call<{ mode: 'all' | 'replies' }>('GET', `pages/${id}/watch`),
+  setWatch: (id: string, mode: 'all' | 'replies') => call<{ mode: 'all' | 'replies' }>('PUT', `pages/${id}/watch`, { mode }),
   share: (id: string) => call<Share>('GET', `pages/${id}/share`),
   setShare: (id: string, body: object) => call<Share>('PATCH', `pages/${id}/share`, body),
   comments: (id: string) => (publicRoot ? Promise.resolve([]) : call<Comment[]>('GET', `pages/${id}/comments`)),

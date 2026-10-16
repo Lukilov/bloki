@@ -217,6 +217,22 @@ test('comment @-mentions notify only people who can see the page', () => {
   assert.equal(s.inbox(member).items[0].kind, 'mention')
 })
 
+test('Notify me: all comments or only replies and mentions', () => {
+  const p = s.createPage(owner, { title: 'Watched', section: 'workspace' })
+  const count = u => s.inbox(u).items.length
+  assert.equal(s.watchMode(owner.id, p.id), 'all')
+  assert.equal(s.watchMode(member.id, p.id), 'replies')
+  const o0 = count(owner), m0 = count(member)
+  s.setWatch(owner, p.id, 'replies')
+  s.setWatch(member, p.id, 'all')
+  const third = join_('watcher@x.si', 'member')
+  const [c] = s.addComment(third, p.id, 'First')
+  assert.equal(count(owner), o0)
+  assert.equal(count(member), m0 + 1)
+  assert.throws(() => s.setWatch(member, p.id, 'loud'), e => e.status === 400)
+  assert.ok(c)
+})
+
 test('comment threads: replies, resolve and delete apply to the whole discussion', () => {
   const p = s.createPage(owner, { title: 'Thread', section: 'workspace' })
   const [root] = s.addComment(owner, p.id, 'Question?', { block_id: 'b1', quote: 'some text' })

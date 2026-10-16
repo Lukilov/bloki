@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeftRight, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
-  ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
+  Bell, ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
 } from 'lucide-react'
 import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
@@ -81,6 +81,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [draft, setDraft] = useState<{ blockId: string; quote: string; id: string } | null>(null)
   const [composing, setComposing] = useState(false)
   const [modal, setModal] = useState<'history' | 'export' | null>(null)
+  const [watch, setWatch] = useState<'all' | 'replies' | null>(null)
+  useEffect(() => { setWatch(null); if (!store.published) api.watch(id).then(w => setWatch(w.mode)).catch(() => {}) }, [id, store.published])
   const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks' | 'discussions'; el: HTMLElement } | null>(null)
   const iconBtn = useRef<HTMLButtonElement>(null)
   const [pickIcon, setPickIcon] = useState(false)
@@ -153,6 +155,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
       ]} />
     </div>
   )
+  const watchLabel = { all: 'All comments', replies: 'Replies and @mentions' }
   const moreItems: Item[] = [
     { icon: <Link2 size={16} />, label: 'Copy link', hint: `${mod}L`, onClick: () => { copyText(pageUrl(id)); store.toast('Copied link to clipboard') } },
     { icon: <ClipboardCopy size={16} />, label: 'Copy page contents', onClick: () => { copyText(toMarkdown(page).replace(/^# .*\n\n/, '')); store.toast('Copied page contents') } },
@@ -163,6 +166,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     { divider: true },
     { icon: <Palette size={16} />, label: 'Appearance & layout', submenu: appearance },
     { divider: true },
+    ...(!store.published && watch ? [{ icon: <Bell size={16} />, label: 'Notify me', hint: watch === 'all' ? 'Comments' : 'Replies', submenu: () => <Menu onClose={() => setPop(null)} items={(['all', 'replies'] as const).map(m => ({ label: watchLabel[m], checked: watch === m, onClick: () => { setWatch(m); api.setWatch(id, m).catch(e => store.setError(e.message)) } }))} /> }] : []),
     ...(edit ? [
       { icon: meta.locked ? <LockOpen size={16} /> : <Lock size={16} />, label: sw(meta.locked, 'Lock page'), onClick: () => { set({ locked: !meta.locked }); setVersion(v => v + 1) } },
       { icon: <Trash2 size={16} />, label: 'Move to Trash', onClick: () => trash(store, meta) },

@@ -90,6 +90,13 @@ db.exec(`
     created INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS comments_page ON comments(page_id, created);
+  -- "Notify me" on a page: 'all' comments, or only 'replies' (threads you're in) and @mentions.
+  CREATE TABLE IF NOT EXISTS watches (
+    user_id TEXT NOT NULL,
+    page_id TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    PRIMARY KEY (user_id, page_id)
+  );
 `)
 db.exec(`
   CREATE TABLE IF NOT EXISTS notifications (
@@ -371,7 +378,7 @@ export function deleteAccount(user, password) {
   // Workspaces only this person was in go with them.
   for (const m of db.prepare('SELECT workspace_id FROM members WHERE user_id = ?').all(user.id)) {
     if (db.prepare('SELECT COUNT(*) AS n FROM members WHERE workspace_id = ?').get(m.workspace_id).n === 1) {
-      for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(m.workspace_id)
+      for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(m.workspace_id)
       db.prepare('DELETE FROM pages WHERE workspace_id = ?').run(m.workspace_id)
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(m.workspace_id)
     }
@@ -561,7 +568,7 @@ export function deletePage(user, id) {
   const ids = descendants(id)
   for (const pid of ids) collab.reset(pid)
   const marks = ids.map(() => '?').join(',')
-  for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
+  for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM invites WHERE page_id IN (${marks})`).run(...ids)
   db.prepare(`DELETE FROM pages WHERE id IN (${marks})`).run(...ids)
   liveReload(wsId)
@@ -736,7 +743,7 @@ export function purgeTrash(now = Date.now()) {
   for (const p of db.prepare('SELECT id FROM pages WHERE trashed = 1 AND trashed_at < ? AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM pages WHERE trashed = 1))').all(now - 30 * 864e5)) {
     const ids = descendants(p.id)
     const marks = ids.map(() => '?').join(',')
-    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
+    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
     db.prepare(`DELETE FROM pages WHERE id IN (${marks})`).run(...ids)
   }
 }
@@ -759,15 +766,30 @@ export function addComment(user, pageId, body, { thread_id = null, block_id = nu
   const newId = !thread_id && typeof id === 'string' && /^[0-9a-f-]{36}$/.test(id) && !db.prepare('SELECT 1 FROM comments WHERE id = ?').get(id) ? id : randomUUID()
   db.prepare('INSERT INTO comments (id, page_id, user_id, body, resolved, created, thread_id, block_id, quote) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)')
     .run(newId, pageId, user.id, text.slice(0, 10000), Date.now(), thread_id, block_id ? String(block_id).slice(0, 64) : null, quote ? String(quote).slice(0, 500) : null)
-  // The page's creator and everyone already in the discussion hear about it.
+  // Everyone already in the discussion hears about it, plus whoever follows all comments on the page
+  // (the page's creator by default, unless they chose "Replies and @mentions").
   const page = db.prepare('SELECT created_by, workspace_id FROM pages WHERE id = ?').get(pageId)
-  const people = new Set([page.created_by, ...db.prepare('SELECT DISTINCT user_id FROM comments WHERE page_id = ? AND (? IS NULL OR id = ? OR thread_id = ?)').all(pageId, thread_id, thread_id, thread_id).map(r => r.user_id)])
+  const people = new Set(db.prepare('SELECT DISTINCT user_id FROM comments WHERE page_id = ? AND (? IS NULL OR id = ? OR thread_id = ?)').all(pageId, thread_id, thread_id, thread_id).map(r => r.user_id))
+  if (watchMode(page.created_by, pageId, page.created_by) === 'all') people.add(page.created_by)
+  for (const r of db.prepare("SELECT user_id FROM watches WHERE page_id = ? AND mode = 'all'").all(pageId)) people.add(r.user_id)
   for (const uid of people) if (uid && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'comment', pageId, user.id, text)
   // @-mentioned people who can open the page get a mention, unless they were already told about the comment.
   for (const uid of new Set(Array.isArray(mentions) ? mentions.slice(0, 50).map(String) : [])) {
     if (uid !== user.id && !people.has(uid) && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'mention', pageId, user.id, text)
   }
   return listComments(user, pageId)
+}
+
+/** A person's "Notify me" choice on a page; the creator follows all comments unless they said otherwise. */
+export function watchMode(userId, pageId, createdBy = db.prepare('SELECT created_by FROM pages WHERE id = ?').get(pageId)?.created_by) {
+  return db.prepare('SELECT mode FROM watches WHERE user_id = ? AND page_id = ?').get(userId, pageId)?.mode ?? (userId === createdBy ? 'all' : 'replies')
+}
+
+export function setWatch(user, pageId, mode) {
+  need(user.id, pageId, 'view')
+  if (!['all', 'replies'].includes(mode)) throw new HttpError(400, 'Choose all or replies.')
+  db.prepare('INSERT INTO watches (user_id, page_id, mode) VALUES (?, ?, ?) ON CONFLICT(user_id, page_id) DO UPDATE SET mode = excluded.mode').run(user.id, pageId, mode)
+  return { mode }
 }
 
 export function updateComment(user, commentId, body) {
@@ -922,7 +944,7 @@ const routes = [
   }],
   ['DELETE', /^\/api\/workspaces\/([\w-]+)$/, (c, id) => {
     needOwner(c.user, id)
-    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(id)
+    for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (SELECT id FROM pages WHERE workspace_id = ?)`).run(id)
     db.prepare('DELETE FROM pages WHERE workspace_id = ?').run(id)
     db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
     return { ok: true }
@@ -943,6 +965,8 @@ const routes = [
   ['GET', /^\/api\/pages\/([\w-]+)\/share$/, (c, id) => getShare(c.user, id)],
   ['PATCH', /^\/api\/pages\/([\w-]+)\/share$/, async (c, id) => setShare(c.user, id, await c.body())],
   ['GET', /^\/api\/pages\/([\w-]+)\/comments$/, (c, id) => listComments(c.user, id)],
+  ['GET', /^\/api\/pages\/([\w-]+)\/watch$/, (c, id) => { need(c.user.id, id, 'view'); return { mode: watchMode(c.user.id, id) } }],
+  ['PUT', /^\/api\/pages\/([\w-]+)\/watch$/, async (c, id) => setWatch(c.user, id, (await c.body()).mode)],
   ['POST', /^\/api\/pages\/([\w-]+)\/comments$/, async (c, id) => { const b = await c.body(); return addComment(c.user, id, b.body, b) }],
   ['GET', /^\/api\/inbox$/, c => inbox(c.user)],
   ['PATCH', /^\/api\/inbox$/, async c => updateInbox(c.user, await c.body())],
