@@ -9,7 +9,7 @@ import { iconOf, label, useStore } from '../store'
 import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
-import { aggregate, calcsFor, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
+import { aggregate, calcsFor, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
 type Store = ReturnType<typeof useStore>
 export type ViewProps = {
@@ -32,6 +32,9 @@ function reorder(store: Store, rows: Page[], id: string, beforeId: string | null
 }
 
 /* ---------- Table ---------- */
+
+/** Background for a Conditional color result (the same tints as block backgrounds). */
+const tint = (c?: string): React.CSSProperties | undefined => (c ? { background: `var(--c-${c})` } : undefined)
 
 function HeaderMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () => void }) {
   const store = useStore()
@@ -159,11 +162,12 @@ function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewPro
   const sorted = !!p.view.sort?.length
   const [from, to, rowH, ref] = useRowWindow(rows.length)
   const stick = frozen(cols, p.view, id => p.view.widths?.[id] ?? (id === 'title' ? 280 : 180))
+  const colorsOf = (r: Page) => rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id)
   return (
     <div ref={ref}>
       {from > 0 && <div style={{ height: from * rowH }} />}
       {rows.slice(from, to).map(r => (
-        <div key={r.id} className={'tr' + (selected.has(r.id) ? ' selected' : '') + (over === r.id ? ' drop-above' : '')}
+        <div key={r.id} className={'tr' + (selected.has(r.id) ? ' selected' : '') + (over === r.id ? ' drop-above' : '')} style={tint(colorsOf(r).row)}
           onDragOver={e => { if (!sorted && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
           onDragLeave={() => setOver(null)}
           onDrop={e => { setOver(null); const id = e.dataTransfer.getData('text/row'); if (id && id !== r.id && p.perm.rows) reorder(store, rows, id, r.id) }}>
@@ -172,7 +176,7 @@ function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewPro
             <input type="checkbox" checked={selected.has(r.id)} onChange={e => { const n = new Set(selected); if (e.target.checked) n.add(r.id); else n.delete(r.id); setSelected(n) }} />
           </div>
           {cols.map(c => (
-            <div key={c.id} className={'td' + (c.id === 'title' ? ' title-td' : '')} style={{ width: p.view.widths?.[c.id] ?? (c.id === 'title' ? 280 : 180), ...stick(c.id) }}>
+            <div key={c.id} className={'td' + (c.id === 'title' ? ' title-td' : '')} style={{ width: p.view.widths?.[c.id] ?? (c.id === 'title' ? 280 : 180), ...stick(c.id), ...tint(colorsOf(r).cells[c.id]) }}>
               {c.id === 'title'
                 ? <div className="title-cell">
                     {!p.view.hideIcon && <span className="row-icon">{iconOf(r, 16)}</span>}
@@ -282,9 +286,10 @@ function CardProps({ row, props, db }: { row: Page; props: Prop[]; db: Page }) {
 }
 
 function Card({ row, p, cover }: { row: Page; p: ViewProps; cover?: boolean }) {
+  const store = useStore()
   const [menu, open, close] = usePopover()
   return (
-    <div className="card" draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', row.id)} onClick={() => p.openRow(row)}>
+    <div className="card" style={tint(rowColors(row, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', row.id)} onClick={() => p.openRow(row)}>
       {cover && (p.view.cardPreview ?? 'cover') === 'cover' && <div className="card-cover" style={coverStyle(row.cover, row.cover_y)}>{!row.cover && <span className="card-cover-icon">{iconOf(row, 32)}</span>}</div>}
       <div className="card-body">
         <div className="card-title">{row.icon && <span className="card-icon">{iconOf(row, 16)}</span>}{label(row)}</div>
@@ -368,10 +373,11 @@ export function GalleryView(p: ViewProps) {
 }
 
 export function ListView(p: ViewProps) {
+  const store = useStore()
   return (
     <div className="list-view">
       {p.rows.map(r => (
-        <div key={r.id} className="list-row" onClick={() => p.openRow(r)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)}>
+        <div key={r.id} className="list-row" style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} onClick={() => p.openRow(r)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)}>
           <span className="list-title">{iconOf(r, 16)}<span>{label(r)}</span></span>
           <span className="list-props"><CardProps row={r} props={p.props} db={p.db} /></span>
         </div>
@@ -426,7 +432,7 @@ export function CalendarView(p: ViewProps) {
                 <span className="cal-num">{d.getDate() === 1 ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.getDate()}</span>
               </div>
               {on(key).map(r => (
-                <div key={r.id} className="cal-item" draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)} onClick={() => p.openRow(r)}>
+                <div key={r.id} className="cal-item" style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)} onClick={() => p.openRow(r)}>
                   <span className="cal-item-title">{r.icon && <>{iconOf(r, 12)} </>}{label(r)}</span>
                   <CardProps row={r} props={p.props.filter(x => x.id !== date.id)} db={db} />
                 </div>

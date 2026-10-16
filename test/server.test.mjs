@@ -248,6 +248,23 @@ test('synced blocks: shared content, edit needs edit access to the original page
   assert.throws(() => s.getSynced(guest, b.id), e => e.status === 403 || e.status === 404)
 })
 
+test('automations: set properties when rows are added or edited, notify people, never loop', () => {
+  const d = s.createPage(owner, { title: 'Tasks', kind: 'db', section: 'workspace', schema: { props: [{ id: 'st', name: 'Status', type: 'select' }, { id: 'done', name: 'Done', type: 'checkbox' }], automations: [
+    { id: 'a1', name: 'New → To do', enabled: true, trigger: { type: 'added' }, actions: [{ type: 'set', prop: 'st', value: 'todo' }] },
+    { id: 'a2', name: 'Done → checked', enabled: true, trigger: { type: 'edited', prop: 'st', value: 'done' }, actions: [{ type: 'set', prop: 'done', value: true }, { type: 'notify', user: member.id }, { type: 'set', prop: 'st', value: 'archived' }] },
+    { id: 'a3', name: 'Off', enabled: false, trigger: { type: 'added' }, actions: [{ type: 'set', prop: 'done', value: true }] },
+  ] } })
+  const r = s.createPage(owner, { parent_id: d.id, title: 'One' })
+  assert.equal(s.getPage(owner, r.id).props.st, 'todo')
+  assert.equal(s.getPage(owner, r.id).props.done, undefined)
+  const before = s.inbox(member).items.length
+  s.updatePage(owner, r.id, { props: { st: 'done' } })
+  const after = s.getPage(owner, r.id).props
+  assert.equal(after.done, true)
+  assert.equal(after.st, 'archived')
+  assert.equal(s.inbox(member).items.length, before + 1)
+})
+
 test('comment threads: replies, resolve and delete apply to the whole discussion', () => {
   const p = s.createPage(owner, { title: 'Thread', section: 'workspace' })
   const [root] = s.addComment(owner, p.id, 'Question?', { block_id: 'b1', quote: 'some text' })

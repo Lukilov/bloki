@@ -1,9 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownUp, ArrowUpRight, Calendar, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
-  GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
+  Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
-import { api, can, COLORS, uid, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
+import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
 import { copyText, Menu, Popover, type Item } from './ui'
 import { pageUrl } from './pageActions'
@@ -79,6 +79,109 @@ function PropertyList({ db, onPick, filter, placeholder = 'Filter by…', extra 
     <div className="menu-list">
       <input className="menu-filter" autoFocus placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} />
       {all.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p)}><span className="menu-icon">{typeIcon(p)}</span><span className="menu-label">{p.name}</span></button>)}
+    </div>
+  )
+}
+
+const colorName = (c: string) => c[0].toUpperCase() + c.slice(1)
+
+/** Notion's Conditional color: each rule is a filter plus a colour ("Match option" or a fixed one) for the row or one cell. */
+function ColorRules({ db, view, setView }: { db: Page; view: View; setView: (v: Partial<View>) => void }) {
+  const [adding, setAdding] = useState(false)
+  const rules = view.colors ?? []
+  const put = (id: string, x: Partial<ColorRule>) => setView({ colors: rules.map(r => (r.id === id ? { ...r, ...x } : r)) })
+  if (adding) return <PropertyList db={db} placeholder="Color by…" onPick={p => {
+    setView({ colors: [...rules, { id: uid(), prop: p.id, op: 'not_empty', color: ['select', 'status', 'multi_select'].includes(p.type) ? 'match' : 'blue', apply: 'row' }] }); setAdding(false)
+  }} />
+  return (
+    <div className="color-rules">
+      {!rules.length && <p className="color-rules-intro">Customize page colors to easily distinguish categories, highlight overdue events, and bring clarity to your work.</p>}
+      {rules.map(r => (
+        <div key={r.id} className="color-rule">
+          <FilterEditor f={r} db={db} onChange={f => put(r.id, f)} onRemove={() => setView({ colors: rules.filter(x => x.id !== r.id) })} />
+          <label className="color-rule-row"><span>Page background</span>
+            <select value={r.color} onChange={e => put(r.id, { color: e.target.value })}>
+              {['select', 'status', 'multi_select'].includes(propOf(db.schema, r.prop)?.type ?? '') && <option value="match">Match option</option>}
+              {COLORS.map(c => <option key={c} value={c}>{colorName(c)}</option>)}
+            </select></label>
+          <label className="color-rule-row"><span>Apply to</span>
+            <select value={r.apply} onChange={e => put(r.id, { apply: e.target.value as 'row' })}><option value="row">Entire row</option><option value="prop">This property</option></select></label>
+        </div>
+      ))}
+      <button className="menu-item color-rule-add" onClick={() => setAdding(true)}><span className="menu-icon"><Plus size={16} /></span><span className="menu-label">{rules.length ? 'Add another' : 'New color setting'}</span></button>
+    </div>
+  )
+}
+
+/** Automations (Notion's, simplified): When a page is added or a property changes (optionally to a value),
+ *  set properties or notify someone. They run on the server, so they work for every way rows change. */
+function Automations({ db, setSchema }: { db: Page; setSchema: (s: Schema) => void }) {
+  const store = useStore()
+  const list = db.schema.automations ?? []
+  const [openId, setOpenId] = useState<string | null>(null)
+  const props = db.schema.props ?? []
+  const save = (next: Automation[]) => setSchema({ ...db.schema, automations: next })
+  const put = (id: string, x: Partial<Automation>) => save(list.map(a => (a.id === id ? { ...a, ...x } : a)))
+  const valueInput = (prop: string, value: unknown, set: (v: unknown) => void, allowAny = false) => {
+    const p = propOf(db.schema, prop)
+    if (!p) return null
+    if (p.type === 'checkbox') return <select value={String(value ?? '')} onChange={e => set(allowAny && e.target.value === '' ? undefined : e.target.value === 'true')}>{allowAny && <option value="">Any change</option>}<option value="true">Checked</option><option value="false">Unchecked</option></select>
+    if (['select', 'status', 'multi_select'].includes(p.type)) return <select value={String(Array.isArray(value) ? value[0] ?? '' : value ?? '')} onChange={e => set(e.target.value === '' ? (allowAny ? undefined : null) : p.type === 'multi_select' && !allowAny ? [e.target.value] : e.target.value)}>
+      <option value="">{allowAny ? 'Any change' : 'Empty'}</option>{(p.options ?? []).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+    if (p.type === 'person') return <select value={String(Array.isArray(value) ? value[0] ?? '' : value ?? '')} onChange={e => set(e.target.value ? [e.target.value] : allowAny ? undefined : [])}>
+      <option value="">{allowAny ? 'Any change' : 'Nobody'}</option>{[...store.people.values()].map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+    if (p.type === 'date' && !allowAny) return <select value={value ? 'today' : ''} onChange={e => set(e.target.value ? { start: new Date().toISOString().slice(0, 10) } : null)}><option value="">Empty</option><option value="today">Today (when it runs)</option></select>
+    return <input placeholder={allowAny ? 'Any change' : 'Value'} defaultValue={String(value ?? '')} onBlur={e => set(e.target.value === '' && allowAny ? undefined : p.type === 'number' ? Number(e.target.value) : e.target.value)} />
+  }
+  const editing = list.find(a => a.id === openId)
+  if (editing) {
+    const a = editing
+    return (
+      <div className="automation-edit">
+        <input className="wide" defaultValue={a.name} placeholder="Automation name" onBlur={e => put(a.id, { name: e.target.value || 'Automation' })} />
+        <div className="menu-heading">When</div>
+        <div className="automation-row">
+          <select value={a.trigger.type} onChange={e => put(a.id, { trigger: e.target.value === 'added' ? { type: 'added' } : { type: 'edited', prop: props[0]?.id ?? '' } })}>
+            <option value="added">Page added</option><option value="edited">Property edited</option></select>
+          {a.trigger.type === 'edited' && <>
+            <select value={a.trigger.prop} onChange={e => put(a.id, { trigger: { type: 'edited', prop: e.target.value } })}>{props.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+            {valueInput(a.trigger.prop, a.trigger.value, v => put(a.id, { trigger: { type: 'edited', prop: (a.trigger as { prop: string }).prop, value: v as string | undefined } }), true)}
+          </>}
+        </div>
+        <div className="menu-heading">Do</div>
+        {a.actions.map((act, i) => (
+          <div key={i} className="automation-row">
+            {act.type === 'set' ? <>
+              <span>Set</span>
+              <select value={act.prop} onChange={e => put(a.id, { actions: a.actions.map((x, j) => (j === i ? { type: 'set', prop: e.target.value, value: null } : x)) })}>{props.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+              <span>to</span>{valueInput(act.prop, act.value, v => put(a.id, { actions: a.actions.map((x, j) => (j === i ? { ...act, value: v } : x)) }))}
+            </> : <>
+              <span>Notify</span>
+              <select value={act.user} onChange={e => put(a.id, { actions: a.actions.map((x, j) => (j === i ? { type: 'notify', user: e.target.value } : x)) })}>{[...store.people.values()].map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+            </>}
+            <button className="ghost" title="Remove action" onClick={() => put(a.id, { actions: a.actions.filter((_, j) => j !== i) })}><X size={14} /></button>
+          </div>
+        ))}
+        <div className="automation-add">
+          <button className="ghost" disabled={!props.length} onClick={() => put(a.id, { actions: [...a.actions, { type: 'set', prop: props[0].id, value: null }] })}><Plus size={14} /> Edit a property</button>
+          <button className="ghost" onClick={() => put(a.id, { actions: [...a.actions, { type: 'notify', user: store.me?.user.id ?? '' }] })}><Plus size={14} /> Send a notification</button>
+        </div>
+        <button className="menu-item" onClick={() => setOpenId(null)}><span className="menu-icon"><Check size={15} /></span><span className="menu-label">Done</span></button>
+      </div>
+    )
+  }
+  return (
+    <div className="automations">
+      {!list.length && <p className="color-rules-intro">Automatically edit properties and send notifications when pages are added or change.</p>}
+      {list.map(a => (
+        <div key={a.id} className="option-row automation-item" onClick={() => setOpenId(a.id)}>
+          <Zap size={15} /><span className="menu-label">{a.name}</span>
+          <button className={'switch' + (a.enabled ? ' on' : '')} title={a.enabled ? 'Turn off' : 'Turn on'} onClick={e => { e.stopPropagation(); put(a.id, { enabled: !a.enabled }) }} />
+          <button className="ghost option-more" title="Delete" onClick={e => { e.stopPropagation(); save(list.filter(x => x.id !== a.id)) }}><Trash2 size={14} /></button>
+        </div>
+      ))}
+      <button className="menu-item" onClick={() => { const a: Automation = { id: uid(), name: 'New automation', enabled: true, trigger: { type: 'added' }, actions: [] }; save([...list, a]); setOpenId(a.id) }}>
+        <span className="menu-icon"><Plus size={16} /></span><span className="menu-label">New automation</span></button>
     </div>
   )
 }
@@ -192,13 +295,20 @@ function SortEditor({ view, db, setView }: { view: View; db: Page; setView: (v: 
 
 /* ---------- view settings (the ⋯ panel) ---------- */
 
-function ViewSettings({ db, view, setView, setSchema, views, close, setViewId }: {
+function ViewSettings({ db, view, setView, setSchema, views, close, setViewId, newPage, templates, filter }: {
   db: Page; view: View; setView: (v: Partial<View>) => void; setSchema: (s: Schema) => void; views: View[]; close: () => void; setViewId: (id: string) => void
+  newPage: () => void; templates: () => void; filter: () => void
 }) {
-  const [page, setPage] = useState<'main' | 'layout' | 'props' | 'group' | 'date' | 'end' | 'open' | 'sort'>('main')
+  const [page, setPage] = useState<'main' | 'layout' | 'props' | 'group' | 'date' | 'end' | 'open' | 'sort' | 'colors' | 'automations'>('main')
+  const lock = { icon: <Lock size={15} />, label: <span className="menu-switch">Lock database<span className={'switch' + (db.schema.locked ? ' on' : '')} /></span>, onClick: () => setSchema({ ...db.schema, locked: !db.schema.locked }) }
+  if (db.schema.locked) return <Menu onClose={close} items={[
+    { note: 'This database is locked: its views and properties can’t be changed. Rows can still be edited.' },
+    lock,
+    { icon: <Link2 size={15} />, label: 'Copy link to view', onClick: () => copyText(pageUrl(db.id)) },
+  ]} />
   const props = db.schema.props ?? []
   const hidden = new Set(view.hidden ?? [])
-  const back = <button className="menu-item back" onClick={() => setPage('main')}><span className="menu-icon">‹</span><span className="menu-label"><b>{{ main: '', layout: 'Layout', props: 'Properties', group: 'Group', date: 'Date property', end: 'End date', open: 'Open pages in', sort: 'Sort' }[page]}</b></span></button>
+  const back = <button className="menu-item back" onClick={() => setPage('main')}><span className="menu-icon">‹</span><span className="menu-label"><b>{{ main: '', layout: 'Layout', props: 'Properties', group: 'Group', date: 'Date property', end: 'End date', open: 'Open pages in', sort: 'Sort', colors: 'Conditional color', automations: 'Automations' }[page]}</b></span></button>
   if (page === 'layout') return (
     <div className="menu-list">{back}
       <div className="layout-grid">{(Object.keys(VIEW_NAMES) as ViewType[]).map(t => (
@@ -244,11 +354,18 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId }:
       ))}
     </div>
   )
+  if (page === 'colors') return <div className="menu-list">{back}<ColorRules db={db} view={view} setView={setView} /></div>
+  if (page === 'automations') return <div className="menu-list">{back}<Automations db={db} setSchema={setSchema} /></div>
   if (page === 'sort') return <div className="menu-list">{back}<SortEditor view={view} db={db} setView={setView} /></div>
   const items: Item[] = [
+    // Notion's order: New page, templates, the view, then the data source and More settings.
+    { icon: <Plus size={15} />, label: <span className="accent-text">New page</span>, onClick: newPage },
+    { icon: <FileText size={15} />, label: 'Page templates', hint: '›', onClick: templates },
+    { divider: true },
     { note: <input className="wide" defaultValue={view.name} onBlur={e => e.target.value.trim() && setView({ name: e.target.value.trim() })} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} /> },
     { icon: VIEW_ICONS[view.type], label: 'Layout', hint: VIEW_NAMES[view.type] + ' ›', onClick: () => setPage('layout') },
     { icon: <Eye size={15} />, label: 'Property visibility', hint: `${props.length - hidden.size} shown ›`, onClick: () => setPage('props') },
+    { icon: <FilterIcon size={15} />, label: 'Filter', hint: `${view.filters?.length || 'None'} ›`, onClick: filter },
     { icon: <ArrowDownUp size={15} />, label: 'Sort', hint: `${view.sort?.length || 'None'} ›`, onClick: () => setPage('sort') },
     { icon: <Group size={15} />, label: 'Group', hint: (propOf(db.schema, view.groupBy ?? '')?.name ?? 'None') + ' ›', onClick: () => setPage('group') },
     ...(view.type === 'calendar' || view.type === 'timeline' ? [{ icon: <Calendar size={15} />, label: view.type === 'calendar' ? 'Show calendar by' : 'Show timeline by', hint: (propOf(db.schema, view.dateProp ?? '')?.name ?? 'None') + ' ›', onClick: () => setPage('date') }] : []),
@@ -260,9 +377,16 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId }:
     ...(view.type === 'table' ? [{ icon: <Settings2 size={15} />, label: 'Wrap all columns', checked: !!view.wrap, onClick: () => setView({ wrap: !view.wrap }) }] : []),
     { icon: <PanelRight size={15} />, label: 'Open pages in', hint: { peek: 'Side peek', center: 'Center peek', page: 'Full page' }[view.open ?? 'peek'] + ' ›', onClick: () => setPage('open') },
     { divider: true },
+    { icon: <Palette size={15} />, label: 'Conditional color', hint: `${view.colors?.length || ''} ›`.trim(), onClick: () => setPage('colors') },
     { icon: <Link2 size={15} />, label: 'Copy link to view', onClick: () => copyText(`${pageUrl(db.id)}`) },
     { icon: <Copy size={15} />, label: 'Duplicate view', onClick: () => { const v = { ...view, id: uid(), name: view.name + ' (1)' }; setSchema({ ...db.schema, views: [...views, v] }); setViewId(v.id); close() } },
     ...(views.length > 1 ? [{ icon: <Trash2 size={15} />, label: 'Delete view', danger: true, onClick: () => { setSchema({ ...db.schema, views: views.filter(v => v.id !== view.id) }); close() } }] : []),
+    { heading: 'Data source settings' },
+    { icon: <DbIcon size={15} />, label: 'Source', hint: label(db) },
+    { icon: <Settings2 size={15} />, label: 'Edit properties', hint: '›', onClick: () => setPage('props') },
+    { icon: <Zap size={15} />, label: 'Automations', hint: `${db.schema.automations?.length || ''} ›`.trim(), onClick: () => setPage('automations') },
+    { heading: 'More settings' },
+    lock,
   ]
   // Sub-pages are rendered in place, so keep the menu open when moving between them.
   return <Menu items={items} onClose={() => { /* stays open for sub-pages */ }} />
@@ -312,7 +436,9 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
   const schema = db?.schema ?? {}
   const views = schema.views ?? []
   const saved = views.find(v => v.id === viewId) ?? views[0]
-  const perm = { rows: !!db && can(db, 'edit_content') && !store.published, structure: !!db && can(db, 'edit') && !store.published }
+  // Lock database (Notion): views and properties are frozen until someone who can edit unlocks it.
+  const canStructure = !!db && can(db, 'edit') && !store.published
+  const perm = { rows: !!db && can(db, 'edit_content') && !store.published, structure: canStructure && !db?.schema.locked }
   // People who can't change the database still get personal filters and sorts, as in Notion.
   const view: View | undefined = saved && { ...saved, ...local }
   const ctx = useMemo(() => ctxOf(store), [store])
@@ -505,8 +631,10 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
         <SortEditor view={view} db={db} setView={setView} />
       </Popover>
       <Popover anchor={pop?.kind === 'settings' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={290}>
-        {perm.structure
-          ? <ViewSettings db={db} view={view} setView={setView} setSchema={setSchema} views={views} close={closePop} setViewId={setViewId} />
+        {canStructure
+          ? <ViewSettings db={db} view={view} setView={setView} setSchema={setSchema} views={views} close={closePop} setViewId={setViewId}
+              newPage={() => { closePop(); addRow({}, true) }} templates={() => { const el = pop!.el; setTimeout(() => setPop({ kind: 'new', el }), 0) }}
+              filter={() => { const el = pop!.el; setTimeout(() => setPop({ kind: 'filter-add', el }), 0) }} />
           : <Menu onClose={closePop} items={[{ note: 'You can view this database. Ask for edit access to change its views.' }, { icon: <Link2 size={15} />, label: 'Copy link', onClick: () => copyText(pageUrl(db.id)) }]} />}
       </Popover>
       <Popover anchor={pop?.kind === 'new' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={360}>

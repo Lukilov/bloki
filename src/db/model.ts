@@ -1,5 +1,5 @@
 /** Pure database logic: property values, formulas, rollups, filters, sorting, grouping, calculations. */
-import type { Filter, Option, Page, Prop, PropType, Schema, View } from '../api.ts'
+import type { ColorRule, Filter, Option, Page, Prop, PropType, Schema, View } from '../api.ts'
 import { FormulaError, run, toText, type Value } from './formula.ts'
 
 export type Ctx = { byId: Map<string, Page>; people: Map<string, { name: string }> }
@@ -269,6 +269,20 @@ export function sortKey(row: Page, p: Prop, schema: Schema, ctx: Ctx): string | 
     case 'formula': case 'rollup': { if (v instanceof FormulaError) return null; return typeof v === 'number' ? v : v instanceof Date ? v.getTime() : toText(v as Value) }
     default: return textOf(v, p, ctx).toLowerCase()
   }
+}
+
+/** Conditional color: the colour a row gets (first matching "Entire row" rule) and per-cell colours ("This property"). */
+export function rowColors(row: Page, rules: ColorRule[] | undefined, schema: Schema, ctx: Ctx, me?: string): { row?: string; cells: Record<string, string> } {
+  const out: { row?: string; cells: Record<string, string> } = { cells: {} }
+  for (const r of rules ?? []) {
+    if (!matches(row, r, schema, ctx, me)) continue
+    let c = r.color
+    if (c === 'match') { const p = propOf(schema, r.prop); const v = p ? value(row, p, schema, ctx) : null; c = p ? optionOf(p, Array.isArray(v) ? v[0] : v)?.color ?? '' : '' }
+    if (!c || c === 'default') continue
+    if (r.apply === 'row') out.row ??= c
+    else out.cells[r.prop] ??= c
+  }
+  return out
 }
 
 /** Database templates are rows marked _template: they stay out of views and are copied by "New". */

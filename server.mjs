@@ -475,6 +475,7 @@ export function createPage(user, body) {
   db.prepare(`INSERT INTO pages (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...Object.values(row))
   if (priv) db.prepare("INSERT INTO grants VALUES (?, ?, 'full')").run(id, user.id)
   liveReload(wsId)
+  if (parent?.kind === 'db') runAutomations(user, id, 'added')
   return getPage(user, id)
 }
 
@@ -502,6 +503,38 @@ export function listPages(user) {
       : others.has(p.id) || !atLeast(access.get(p.id), 'full') ? 'shared' : 'private'
     return { ...decode(p), access: access.get(p.id), favorite: favs.has(p.id), section }
   })
+}
+
+/* ---------- Automations ---------- */
+// A database's automations run here when a row is added or one of its properties changes. Their own edits don't
+// trigger further automations, so they can't loop.
+const sameVal = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+const matchesValue = (v, want) => want === undefined || want === '' || (Array.isArray(v) ? v.map(String).includes(String(want)) : String(v ?? '') === String(want))
+export function runAutomations(user, rowId, event, prevProps = {}) {
+  const r = db.prepare('SELECT id, parent_id, props, workspace_id FROM pages WHERE id = ?').get(rowId)
+  const parent = r?.parent_id && db.prepare('SELECT kind, schema FROM pages WHERE id = ?').get(r.parent_id)
+  if (parent?.kind !== 'db') return
+  const schema = JSON.parse(parent.schema || '{}')
+  const props = JSON.parse(r.props || '{}')
+  if (props._template) return
+  const known = new Set((schema.props ?? []).map(p => p.id))
+  const next = { ...props }
+  let changed = false
+  for (const a of (schema.automations ?? []).slice(0, 50)) {
+    if (!a?.enabled) continue
+    const t = a.trigger ?? {}
+    const fire = event === 'added' ? t.type === 'added' : t.type === 'edited' && !sameVal(prevProps[t.prop], props[t.prop]) && matchesValue(props[t.prop], t.value)
+    if (!fire) continue
+    for (const act of (a.actions ?? []).slice(0, 20)) {
+      if (act?.type === 'set' && known.has(act.prop)) { next[act.prop] = act.value; changed = true }
+      if (act?.type === 'notify' && typeof act.user === 'string') {
+        let ok = false
+        try { ok = atLeast(pageAccess(act.user, rowId), 'view') } catch { /* unknown person */ }
+        if (ok) notify(act.user, r.workspace_id, 'automation', rowId, user.id, String(a.name || 'Automation').slice(0, 100))
+      }
+    }
+  }
+  if (changed) { db.prepare('UPDATE pages SET props = ? WHERE id = ?').run(JSON.stringify(next), rowId); livePages(r.workspace_id, [rowId]) }
 }
 
 export function updatePage(user, id, body) {
@@ -567,6 +600,7 @@ export function updatePage(user, id, body) {
   // Trash and moves reshape the tree; anything else changes just this page.
   if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row) liveReload(prev.workspace_id)
   else livePages(prev.workspace_id, [id])
+  if ('props' in row && row.props !== prev.props) runAutomations(user, id, 'edited', JSON.parse(prev.props || '{}'))
   return getPage(user, id)
 }
 

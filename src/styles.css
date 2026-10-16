@@ -27,8 +27,9 @@
   --shadow-sm: rgba(15, 15, 15, 0.1) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 2px 4px;
   --comment-bg: rgba(255, 212, 0, 0.14);
   --comment-line: rgba(255, 212, 0, 0.8);
-  --c-gray: #f1f1ef; --c-brown: #f4eeee; --c-orange: #fbecdd; --c-yellow: #fbf3db; --c-green: #edf3ec;
-  --c-blue: #e7f3f8; --c-purple: #f6f3f9; --c-pink: #faf1f5; --c-red: #fdebec;
+  /* Block background colours, measured on Notion's colour menu (light). */
+  --c-gray: rgb(240, 239, 237); --c-brown: rgb(245, 237, 233); --c-orange: rgb(251, 235, 222); --c-yellow: rgb(249, 243, 220); --c-green: rgb(232, 241, 236);
+  --c-blue: rgb(229, 242, 252); --c-purple: rgb(243, 235, 249); --c-pink: rgb(250, 233, 241); --c-red: rgb(252, 233, 231);
   --opt-gray: rgba(227, 226, 224, 0.7); --opt-brown: rgb(238, 224, 218); --opt-orange: rgb(250, 222, 201); --opt-yellow: rgb(253, 236, 200);
   --opt-green: rgb(219, 237, 219); --opt-blue: rgb(211, 229, 239); --opt-purple: rgb(232, 222, 238); --opt-pink: rgb(245, 224, 233); --opt-red: rgb(255, 226, 221);
   --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
@@ -65,8 +66,9 @@
   --shadow-sm: rgba(15, 15, 15, 0.2) 0 0 0 1px, rgba(15, 15, 15, 0.2) 0 2px 4px;
   --comment-bg: rgba(255, 212, 0, 0.12);
   --comment-line: rgba(255, 212, 0, 0.55);
-  --c-gray: rgb(56, 56, 54); --c-brown: #4a3228; --c-orange: #5c3b23; --c-yellow: #564328; --c-green: #243d30;
-  --c-blue: #143a4e; --c-purple: #3c2d49; --c-pink: #4e2c3c; --c-red: #522e2a;
+  /* Block background colours, measured on Notion's colour menu (dark). */
+  --c-gray: rgb(56, 56, 54); --c-brown: rgb(69, 54, 45); --c-orange: rgb(83, 54, 31); --c-yellow: rgb(80, 68, 37); --c-green: rgb(38, 61, 48);
+  --c-blue: rgb(35, 56, 80); --c-purple: rgb(60, 45, 71); --c-pink: rgb(78, 43, 60); --c-red: rgb(80, 44, 41);
   --opt-gray: rgb(55, 55, 55); --opt-brown: rgb(74, 50, 40); --opt-orange: rgb(92, 59, 35); --opt-yellow: rgb(86, 67, 40);
   --opt-green: rgb(36, 61, 48); --opt-blue: rgb(20, 58, 78); --opt-purple: rgb(60, 45, 73); --opt-pink: rgb(78, 44, 60); --opt-red: rgb(82, 46, 42);
   color-scheme: dark;
@@ -1214,3 +1216,15 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .layout-thumb i:first-child { width: 50%; height: 6px; align-self: flex-start; }
 .layout-thumb i:last-child { width: 100%; height: 56px; border-radius: 4px 4px 0 0; }
 .layout-thumb.tabbed i:first-child { width: 70%; background: repeating-linear-gradient(90deg, var(--icon) 0 22%, transparent 22% 28%); opacity: 0.5; }
+/* View settings additions: Conditional color rules and Automations, as cards inside the 290px menu. */
+.accent-text { color: var(--accent); font-weight: 500; }
+.color-rules-intro { margin: 4px 14px 8px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.color-rule, .automation-edit { margin: 4px 8px 8px; padding: 8px; border-radius: 8px; background: var(--hover); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.color-rule-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; min-height: 28px; }
+.color-rule-row select, .automation-row select, .automation-row input { max-width: 150px; font-size: 13px; }
+.automation-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.automation-row > span { color: var(--muted); font-size: 13px; }
+.automation-add { display: flex; flex-wrap: wrap; gap: 4px; }
+.automation-add button { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-2); }
+.automation-item { margin: 0 4px; gap: 8px; }
+.automation-item .switch { border: none; margin-left: auto; cursor: pointer; }

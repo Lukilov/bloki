@@ -13,6 +13,14 @@ export type Prop = {
 }
 export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline'
 export type Filter = { prop: string; op: string; value?: string }
+/** Conditional color: rows matching a filter get a colour (an option's own, or a fixed one) on the row or one cell. */
+export type ColorRule = Filter & { id: string; color: string; apply: 'row' | 'prop' }
+/** Automations: when a row is added, or a property is edited (optionally to a value), set properties or notify someone. */
+export type Automation = {
+  id: string; name: string; enabled: boolean
+  trigger: { type: 'added' } | { type: 'edited'; prop: string; value?: string }
+  actions: ({ type: 'set'; prop: string; value: unknown } | { type: 'notify'; user: string })[]
+}
 export type View = {
   id: string; name: string; type: ViewType
   groupBy?: string; dateProp?: string; endProp?: string
@@ -20,11 +28,11 @@ export type View = {
   order?: string[]; widths?: Record<string, number>; calcs?: Record<string, string>; wrap?: boolean
   hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'cover' | 'none'
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
-  freeze?: string; hideIcon?: boolean
+  freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
 }
 /** "Customize layout" for a database's row pages, shared by every row. */
 export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal'; structure?: 'simple' | 'tabbed'; panel?: boolean }
-export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string }
+export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string; locked?: boolean; automations?: Automation[] }
 
 export type Level = 'none' | 'view' | 'comment' | 'edit_content' | 'edit' | 'full'
 export const LEVELS: Level[] = ['none', 'view', 'comment', 'edit_content', 'edit', 'full']
@@ -77,7 +85,7 @@ export type Share = {
 }
 export type Synced = { id: string; page_id: string; content: unknown[]; updated: number; canEdit: boolean }
 export type Comment = { id: string; body: string; resolved: boolean; created: number; user_id: string; name: string; thread_id: string | null; block_id: string | null; quote: string | null; reactions?: Record<string, string[]> }
-export type Notice = { id: string; kind: 'mention' | 'comment' | 'share'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
+export type Notice = { id: string; kind: 'mention' | 'comment' | 'share' | 'automation'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
 
 export class ApiError extends Error {
   status: number
