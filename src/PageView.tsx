@@ -7,6 +7,8 @@ import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
 import { PageEditor, toHTML, toMarkdown } from './Editor'
 import { coverStyle, Database, RowProperties } from './Database'
+import { ctxOf } from './db/Cells'
+import { propOf, textOf, value } from './db/model'
 import { personName, ShareMenu } from './Access'
 import { CommentsPanel, DiscussionsPopover, PageDiscussions } from './Comments'
 import { CoverPicker, GRADIENTS, IconPicker, randomEmoji } from './IconPicker'
@@ -85,10 +87,19 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const offlineApi = (window as { blokiDesktop?: { offline?: { set: (id: string, on: boolean, data?: object) => Promise<boolean>; has: (id: string) => Promise<boolean> } } }).blokiDesktop?.offline
   const [offline, setOffline] = useState(false)
   useEffect(() => { setOffline(false); offlineApi?.has(id).then(setOffline).catch(() => {}) }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A database is kept as a plain table of its rows (name plus every property), which is enough to read offline.
+  const dbHTML = (db: Page) => {
+    const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const props = [propOf(db.schema, 'title')!, ...(db.schema.props ?? [])]
+    const ctx = ctxOf(store)
+    const rows = store.children(db.id).filter(r => !r.trashed)
+    const cell = (r: Page, p: (typeof props)[number]) => esc(p.id === 'title' ? label(r) : textOf(value(r, p, db.schema, ctx), p, ctx))
+    return `<h1>${esc(label(db))}</h1><table><thead><tr>${props.map(p => `<th>${esc(p.name)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${props.map(p => `<td>${cell(r, p)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+  }
   const keepOffline = useCallback(async () => {
     const full = await api.get(id)
     const titleOf = (pid: string) => label(store.byId.get(pid))
-    return offlineApi!.set(id, true, { title: label(full), icon: typeof full.icon === 'string' && !full.icon.startsWith('icon:') && !full.icon.includes('/') ? full.icon : '', html: full.kind === 'page' ? toHTML(full, titleOf) : `<h1>${label(full).replace(/</g, '&lt;')}</h1><p>Databases can't be read offline yet.</p>` })
+    return offlineApi!.set(id, true, { title: label(full), icon: typeof full.icon === 'string' && !full.icon.startsWith('icon:') && !full.icon.includes('/') ? full.icon : '', html: full.kind === 'page' ? toHTML(full, titleOf) : dbHTML(full) })
   }, [id, store.byId]) // eslint-disable-line react-hooks/exhaustive-deps
   const metaUpdated = store.byId.get(id)?.updated
   useEffect(() => {
