@@ -85,7 +85,7 @@ const HINTS: Record<string, string> = {
 const DROP = new Set(['Heading 4', 'Heading 5', 'Heading 6', 'Page Break'])
 
 /** What the editor needs from the page around it. */
-type Ctx = { page: Page; onComment?: (blockId: string, quote: string, id: string) => void; moveBlock: (block: AnyBlock, anchor: HTMLElement) => void }
+type Ctx = { page: Page; onComment?: (blockId: string, quote: string, id: string) => void; moveBlock: (block: AnyBlock, anchor: HTMLElement, mode?: 'move' | 'pagein') => void }
 const EditorCtx = createContext<Ctx | null>(null)
 
 const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: Record<string, unknown> }[] = [
@@ -95,6 +95,7 @@ const TURN_INTO: { label: string; icon: React.ReactNode; type: string; props?: R
   { label: 'Heading 3', icon: <Heading3 size={16} />, type: 'heading', props: { level: 3, isToggleable: false } },
   { label: 'Heading 4', icon: <Heading4 size={16} />, type: 'heading', props: { level: 4, isToggleable: false } },
   { label: 'Page', icon: <FileText size={16} />, type: 'page' },
+  { label: 'Page in…', icon: <CornerUpRight size={16} />, type: 'pagein' },
   { label: 'To-do list', icon: <ListTodo size={16} />, type: 'checkListItem' },
   { label: 'Bulleted list', icon: <List size={16} />, type: 'bulletListItem' },
   { label: 'Numbered list', icon: <ListOrdered size={16} />, type: 'numberedListItem' },
@@ -197,7 +198,9 @@ function BlockMenu() {
             {TURN_INTO.map(t => (
               <Item key={t.label} className="bn-menu-item" icon={t.icon}
                 checked={block.type === t.type && (t.type !== 'heading' || (block.props.level === t.props?.level && !!block.props.isToggleable === !!t.props?.isToggleable))}
-                onClick={() => turnInto(editor, block, t, ctx.page.id, store)}>{t.label}</Item>
+                onClick={() => (t.type === 'pagein'
+                  ? ctx.moveBlock(block, document.querySelector(`[data-id="${block.id}"]`) as HTMLElement, 'pagein')
+                  : turnInto(editor, block, t, ctx.page.id, store))}>{t.label}</Item>
             ))}
           </C.Generic.Menu.Dropdown>
         </C.Generic.Menu.Root>
@@ -342,7 +345,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   const storeRef = useRef(store)
   storeRef.current = store
   const timer = useRef<number | undefined>(undefined)
-  const [moving, setMoving] = useState<{ block: AnyBlock; anchor: HTMLElement } | null>(null)
+  const [moving, setMoving] = useState<{ block: AnyBlock; anchor: HTMLElement; mode?: 'move' | 'pagein' } | null>(null)
   const live = useCollab(page.id, collab, onReset)
   const [synced, setSynced] = useState(!live)
 
@@ -472,7 +475,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   }
 
   const openThreads = useMemo(() => comments.filter(c => !c.thread_id && !c.resolved && c.block_id).map(c => c.id), [comments])
-  const moveBlock = useCallback((block: AnyBlock, anchor: HTMLElement) => setMoving({ block, anchor }), [])
+  const moveBlock = useCallback((block: AnyBlock, anchor: HTMLElement, mode: 'move' | 'pagein' = 'move') => setMoving({ block, anchor, mode }), [])
   const ctx = useMemo<Ctx>(() => ({ page, onComment, moveBlock }), [page, onComment, moveBlock])
 
   return (
@@ -522,7 +525,15 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       </div>
       {moving && (
         <Popover anchor={moving.anchor} onClose={() => setMoving(null)} className="menu-pop" width={320}>
-          <BlockMoveTo page={page} close={() => setMoving(null)} onPick={async target => {
+          <BlockMoveTo page={page} placeholder={moving.mode === 'pagein' ? 'Turn into page in…' : 'Move block to…'} close={() => setMoving(null)} onPick={async target => {
+            if (moving.mode === 'pagein') {
+              // "Page in…": the block's text becomes a new page under the chosen one, and leaves this page.
+              const child = await storeRef.current.create({ parent_id: target, title: plain(moving.block.content) }, false)
+              editor.removeBlocks([moving.block.id])
+              storeRef.current.toast(`Moved to ${label(storeRef.current.byId.get(target))}`)
+              setMoving(null)
+              return void child
+            }
             // Append the block to the other page, then remove it here.
             const dest = await api.get(target)
             await api.update(target, { content: [...(dest.content ?? []), stripIds(moving.block)] })
@@ -536,13 +547,13 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   )
 }
 
-function BlockMoveTo({ page, onPick, close }: { page: Page; onPick: (id: string) => void; close: () => void }) {
+function BlockMoveTo({ page, onPick, close, placeholder }: { page: Page; onPick: (id: string) => void; close: () => void; placeholder: string }) {
   const store = useStore()
   const [q, setQ] = useState('')
   const targets = store.pages.filter(p => p.id !== page.id && p.kind === 'page' && !p.trashed && can(p, 'edit') && label(p).toLowerCase().includes(q.toLowerCase())).slice(0, 30)
   return (
     <div className="move-to">
-      <input autoFocus className="menu-filter" placeholder="Move block to…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Escape' && close()} />
+      <input autoFocus className="menu-filter" placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Escape' && close()} />
       {targets.map(p => <button key={p.id} className="menu-item" onClick={() => onPick(p.id)}><span className="menu-icon">{iconText(p)}</span><span className="menu-label">{label(p)}</span></button>)}
       {!targets.length && <div className="menu-note">No results</div>}
     </div>
