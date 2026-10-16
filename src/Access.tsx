@@ -498,16 +498,30 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
         <div className="share-actions"><CopyLinkButton text={`${location.origin}/#/${page.id}`} /></div>
       </>}
 
-      {tab === 'publish' && <>
-        {share.public ? <>
-          <p>This page and its sub-pages are live on the web. Anyone with the link can view them.</p>
-          <Copy text={publicLink(page.id)} />
-          {full && <button className="danger" onClick={() => update({ public: false })}>Unpublish</button>}
-        </> : <>
-          <p className="muted">Publish a read-only copy of this page and its sub-pages. Anyone with the link can view it without an account.</p>
-          {full ? <button className="primary" onClick={() => update({ public: true })}>Publish</button> : <p className="muted small">Only people with full access can publish.</p>}
-        </>}
-      </>}
+      {tab === 'publish' && (() => {
+        // Notion's Publish tab: a heading, a preview of the page in a browser frame, Publish, and a note.
+        const first = ((page.content ?? []) as { content?: { text?: string }[] }[]).map(b => (b.content ?? []).map(c => c.text ?? '').join('')).find(t => t.trim()) ?? ''
+        return (
+          <div className="publish">
+            <div className="publish-head"><b>{share.public ? 'Live on the web' : 'Publish to web'}</b><span>{share.public ? 'Anyone with the link can view this page and its sub-pages.' : 'Create a website with Bloki'}</span></div>
+            <div className="publish-preview">
+              <div className="publish-bar"><i /><i /><i /></div>
+              <div className="publish-top"><span>{label(page)}</span></div>
+              <div className="publish-page"><b>{label(page)}</b>{first && <p>{first}</p>}</div>
+            </div>
+            {share.public ? <>
+              <Copy text={publicLink(page.id)} />
+              <div className="publish-actions">
+                <a className="button" href={publicLink(page.id)} target="_blank" rel="noreferrer">View site</a>
+                {full && <button className="danger" onClick={() => update({ public: false })}>Unpublish</button>}
+              </div>
+            </> : full
+              ? <button className="primary publish-go" onClick={() => update({ public: true })}>Publish</button>
+              : <p className="muted small">Only people with full access can publish.</p>}
+            <p className="publish-note">ⓘ When published to web, anyone with the link can view this page’s content and see contributor names.</p>
+          </div>
+        )
+      })()}
       {error && <p className="danger">{error}</p>}
     </div>
   )
