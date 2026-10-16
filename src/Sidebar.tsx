@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Archive, CheckCheck, ChevronDown, ChevronRight, ChevronsLeft, CircleHelp, FileText, Home, Inbox as InboxIcon, Keyboard, LayoutTemplate,
+  Library as LibraryIcon, Archive, CheckCheck, ChevronDown, ChevronRight, ChevronsLeft, CircleHelp, FileText, Home, Inbox as InboxIcon, Keyboard, LayoutTemplate,
   MessageSquare, MoreHorizontal, Plus, RotateCcw, Search, Settings, SquarePen, Trash2, Upload, UserPlus, Users,
 } from 'lucide-react'
 import { api, can, type Notice, type Page } from './api'
@@ -205,6 +205,7 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
         <div className="side-section">
           <NavRow icon={<Settings size={17} />} label="Settings" onClick={() => openSettings()} />
           {member && <NavRow icon={<LayoutTemplate size={17} />} label="Templates" onClick={() => setTemplates(true)} />}
+          <NavRow icon={<LibraryIcon size={17} />} label="Library" active={location.hash === '#/library'} onClick={() => { location.hash = '#/library' }} />
           {/* Notion keeps Help as a sidebar row above Trash. */}
           <NavRow icon={<CircleHelp size={17} />} label="Help" active={panel?.kind === 'help'} onClick={e => setPanel(panel?.kind === 'help' ? null : { kind: 'help', el: e.currentTarget })} />
           <NavRow icon={<Trash2 size={17} />} label="Trash" active={panel?.kind === 'trash'} onClick={e => setPanel(panel?.kind === 'trash' ? null : { kind: 'trash', el: e.currentTarget })} />

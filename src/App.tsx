@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { ChevronsRight, Clock, LayoutTemplate, Menu as MenuIcon } from 'lucide-react'
+import { ChevronsRight, Clock, Globe, LayoutTemplate, Lock, Menu as MenuIcon, Star, Users } from 'lucide-react'
 import { api, setPublicRoot, type Me } from './api'
 import { iconOf, label, parseHash, StoreProvider, useStore } from './store'
 import { applyTemplate, Sidebar } from './Sidebar'
 import { SearchDialog } from './Search'
-import { AcceptInvite, AuthScreen, SettingsDialog } from './Access'
+import { AcceptInvite, AuthScreen, personName, SettingsDialog } from './Access'
+import { Avatar } from './Comments'
 // The page view brings the editor, databases and comments: it downloads in parallel with the app shell.
 const PageView = lazy(() => import('./PageView').then(m => ({ default: m.PageView })))
 import { TEMPLATES } from './templates'
@@ -29,6 +30,49 @@ function visited(): { id: string; at: number }[] {
 }
 function recordVisit(id: string) {
   save('visited', JSON.stringify([{ id, at: Date.now() }, ...visited().filter(v => v.id !== id)].slice(0, 30)))
+}
+
+/** Notion's Library: every page you can reach in one table, with Recents, Favorites, Shared and Private tabs. */
+function Library() {
+  const store = useStore()
+  const [tab, setTab] = useState<'recents' | 'favorites' | 'shared' | 'private'>('recents')
+  const seen = new Map(visited().map(v => [v.id, v.at]))
+  const rootOf = (id: string) => { let p = store.byId.get(id); while (p?.parent_id && store.byId.get(p.parent_id)) p = store.byId.get(p.parent_id); return p }
+  const live = store.pages.filter(p => !p.trashed)
+  const rows = (tab === 'recents' ? live.filter(p => seen.has(p.id)).sort((a, b) => seen.get(b.id)! - seen.get(a.id)!)
+    : tab === 'favorites' ? live.filter(p => p.favorite)
+    : live.filter(p => rootOf(p.id)?.section === tab).sort((a, b) => b.updated - a.updated)).slice(0, 200)
+  const source = (p: (typeof live)[number]) => {
+    const parent = p.parent_id ? store.byId.get(p.parent_id) : undefined
+    if (parent) return <>{iconOf(parent, 16)} {label(parent)}</>
+    const sec = rootOf(p.id)?.section
+    return sec === 'private' ? <><Lock size={14} /> Private</> : sec === 'shared' ? <><Users size={14} /> Shared</> : <><Globe size={14} /> Workspace</>
+  }
+  const tabs = [['recents', <Clock size={16} />, 'Recents'], ['favorites', <Star size={16} />, 'Favorites'], ['shared', <Users size={16} />, 'Shared'], ['private', <Lock size={16} />, 'Private']] as const
+  return (
+    <div className="page"><div className="page-body library">
+      <div className="library-head">
+        <h1>Library</h1>
+        {store.me?.role !== 'guest' && store.me?.workspaceId && <button className="primary" onClick={() => store.create({ section: 'private' })}>New page</button>}
+      </div>
+      <div className="db-tabs library-tabs">
+        {tabs.map(([k, icon, name]) => <button key={k} className={'view-tab' + (tab === k ? ' on' : '')} onClick={() => setTab(k)}>{icon}<span>{name}</span></button>)}
+      </div>
+      <div className="library-table">
+        <div className="library-row head"><span>Page name</span><span>Created by</span><span>Source</span><span>Last edited time</span><span>Last visited time</span></div>
+        {rows.map(p => (
+          <button key={p.id} className="library-row" onClick={() => store.go(p.id)}>
+            <span className="library-name">{iconOf(p, 16)} <b>{label(p)}</b></span>
+            <span className="library-person">{p.created_by ? <><Avatar name={personName(store.people, p.created_by)} size={20} /> {personName(store.people, p.created_by)}</> : null}</span>
+            <span className="library-source">{source(p)}</span>
+            <span>{timeAgo(p.updated)}</span>
+            <span>{seen.has(p.id) ? timeAgo(seen.get(p.id)!) : ''}</span>
+          </button>
+        ))}
+        {!rows.length && <div className="muted library-empty">No pages here yet</div>}
+      </div>
+    </div></div>
+  )
 }
 
 function Home() {
@@ -96,6 +140,8 @@ function Shell({ dark }: { dark: boolean }) {
   const [dialog, setDialog] = useState<{ kind: 'search' | 'settings' | 'shortcuts'; tab?: string } | null>(null)
   const [collapsed, setCollapsed] = useState(() => readNumber('sidebarCollapsed', 0) === 1)
   const [peek, setPeek] = useState(false)
+  const [library, setLibrary] = useState(() => !!parseHash().library)
+  useEffect(() => { const on = () => setLibrary(!!parseHash().library); addEventListener('hashchange', on); return () => removeEventListener('hashchange', on) }, [])
   const [width, setWidth] = useState(() => readNumber('sidebarWidth', 248))
 
   useEffect(() => save('sidebarWidth', String(width)), [width])
@@ -115,7 +161,7 @@ function Shell({ dark }: { dark: boolean }) {
     if (started || !store.pages.length) return
     setStarted(true)
     const last = visited()[0]
-    if (!store.current && store.me?.prefs?.startPage !== 'home' && last && store.byId.get(last.id) && !store.byId.get(last.id)!.trashed) store.go(last.id)
+    if (!store.current && !parseHash().library && store.me?.prefs?.startPage !== 'home' && last && store.byId.get(last.id) && !store.byId.get(last.id)!.trashed) store.go(last.id)
   }, [store, started])
 
   useEffect(() => {
@@ -164,7 +210,7 @@ function Shell({ dark }: { dark: boolean }) {
             {peek ? <ChevronsRight size={18} /> : <MenuIcon size={18} />}
           </button>
         )}
-        <Suspense fallback={null}>{store.current ? <PageView id={store.current} dark={dark} sidebarCollapsed={collapsed} /> : <Home />}</Suspense>
+        <Suspense fallback={null}>{store.current ? <PageView id={store.current} dark={dark} sidebarCollapsed={collapsed} /> : library ? <Library /> : <Home />}</Suspense>
       </main>
       {dialog?.kind === 'search' && <SearchDialog close={() => setDialog(null)} />}
       {dialog?.kind === 'settings' && <SettingsDialog initialTab={dialog.tab} close={() => setDialog(null)} />}

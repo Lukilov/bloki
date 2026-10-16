@@ -1126,3 +1126,16 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .row-comments { margin-top: -4px; }
 .row-comments > .composer, .row-comments .discussion { padding-left: 8px; }
 .page-discussions.row-comments > .composer { padding-top: 4px; }
+/* Library measured on Notion: 32px/700 title with New page at the right, view-style tabs, a table of 36px rows. */
+.page-body.library { max-width: none; padding: 52px 96px 120px; }
+.library-head { display: flex; align-items: center; justify-content: space-between; }
+.library-head h1 { font-size: 32px; font-weight: 700; margin: 0; line-height: 1.2; }
+.library-tabs { margin: 16px 0 4px; }
+.library-table { display: flex; flex-direction: column; }
+.library-row { display: grid; grid-template-columns: 420px 200px 200px 136px 1fr; align-items: center; height: 36px; padding: 0 0 0 0; border: none; border-radius: 0; text-align: left; font-size: 14px; box-shadow: var(--line) 0 -1px 0 inset; color: var(--text); background: none; }
+.library-row:not(.head):hover { background: var(--hover); }
+.library-row.head { color: var(--icon); cursor: default; }
+.library-row > span { padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.library-name b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.library-source { font-weight: 500; color: var(--text-2); }
+.library-empty { padding: 16px 8px; }
