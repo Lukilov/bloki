@@ -113,7 +113,7 @@ const addColumns = (table, cols) => {
 }
 addColumns('pages', [['workspace_id', 'TEXT'], ['workspace_access', 'TEXT'], ['public', 'INTEGER NOT NULL DEFAULT 0'], ['created_by', 'TEXT'], ['updated_by', 'TEXT'],
   ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50']])
-addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT']])
+addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT'], ['reactions', 'TEXT']])
 addColumns('history', [['user_id', 'TEXT']])
 addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"]])
 
@@ -745,8 +745,8 @@ export function purgeTrash(now = Date.now()) {
 
 export function listComments(user, pageId) {
   need(user.id, pageId, 'view')
-  return db.prepare('SELECT c.id, c.body, c.resolved, c.created, c.user_id, c.thread_id, c.block_id, c.quote, u.name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.page_id = ? ORDER BY c.created').all(pageId)
-    .map(c => ({ ...c, resolved: !!c.resolved }))
+  return db.prepare('SELECT c.id, c.body, c.resolved, c.created, c.user_id, c.thread_id, c.block_id, c.quote, c.reactions, u.name FROM comments c JOIN users u ON u.id = c.user_id WHERE c.page_id = ? ORDER BY c.created').all(pageId)
+    .map(c => ({ ...c, resolved: !!c.resolved, reactions: c.reactions ? JSON.parse(c.reactions) : {} }))
 }
 
 /** `thread_id` replies to a discussion; `block_id` + `quote` anchor a new discussion to text in the page. */
@@ -773,6 +773,16 @@ export function updateComment(user, commentId, body) {
   if (body.delete) {
     if (c.user_id !== user.id && !atLeast(level, 'full')) deny('You can only delete your own comments.')
     db.prepare('DELETE FROM comments WHERE id = ? OR thread_id = ?').run(commentId, commentId)
+  } else if ('react' in body) {
+    // Toggle this user's emoji reaction. Only a short, letter-free string is accepted as an emoji.
+    const emoji = String(body.react ?? '')
+    if (!emoji || emoji.length > 16 || /[\x00-\x7f]/.test(emoji)) throw new HttpError(400, 'Pick an emoji.')
+    const r = c.reactions ? JSON.parse(c.reactions) : {}
+    const who = new Set(r[emoji] ?? [])
+    if (who.has(user.id)) who.delete(user.id); else who.add(user.id)
+    if (who.size) r[emoji] = [...who]; else delete r[emoji]
+    if (Object.keys(r).length > 50) throw new HttpError(400, 'Too many reactions.')
+    db.prepare('UPDATE comments SET reactions = ? WHERE id = ?').run(JSON.stringify(r), commentId)
   } else if ('resolved' in body) {
     db.prepare('UPDATE comments SET resolved = ? WHERE id = ? OR thread_id = ?').run(Number(!!body.resolved), commentId, commentId)
   } else if ('body' in body) {

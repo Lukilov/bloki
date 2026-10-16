@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUp, Check, FileText, Link2, ListFilter, MessageSquare, MoreHorizontal, PenLine, RotateCcw, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, FileText, Link2, ListFilter, MessageSquare, MoreHorizontal, PenLine, RotateCcw, SmilePlus, Trash2, X } from 'lucide-react'
+import { IconPicker } from './IconPicker'
 import { api, can, type Comment, type Page } from './api'
 import { useStore } from './store'
 import { copyText, Menu, Popover, timeAgo, usePopover } from './ui'
@@ -39,6 +40,7 @@ function Composer({ placeholder, onSend, autoFocus, initial = '', onCancel }: { 
 function CommentRow({ c, page, isRoot, setAll, quote }: { c: Comment; page: Page; isRoot: boolean; setAll: (c: Comment[]) => void; quote?: ReactNode }) {
   const store = useStore()
   const [menu, open, close] = usePopover()
+  const [react, openReact, closeReact] = usePopover()
   const [editing, setEditing] = useState(false)
   const mine = c.user_id === store.me?.user.id
   const run = (p: Promise<Comment[]>) => p.then(setAll).catch(e => store.setError(e.message))
@@ -49,6 +51,7 @@ function CommentRow({ c, page, isRoot, setAll, quote }: { c: Comment; page: Page
         <b>{c.name}</b>
         <span className="muted small">{timeAgo(c.created).replace(/ ago$/, '')}</span>
         <span className="comment-actions">
+          {can(page, 'comment') && <button className="ghost" title="Add reaction" onClick={e => openReact(e.currentTarget)}><SmilePlus size={14} /></button>}
           {isRoot && can(page, 'comment') && (
             <button className="ghost" title={c.resolved ? 'Re-open' : 'Resolve'} onClick={() => run(api.updateComment(c.id, { resolved: !c.resolved }))}>
               {c.resolved ? <RotateCcw size={14} /> : <Check size={14} />}
@@ -64,10 +67,23 @@ function CommentRow({ c, page, isRoot, setAll, quote }: { c: Comment; page: Page
           ...(mine || can(page, 'full') ? [{ icon: <Trash2 size={16} />, label: isRoot ? 'Delete discussion' : 'Delete comment', danger: true, onClick: () => run(api.updateComment(c.id, { delete: true })) }] : []),
         ]} />
       </Popover>
+      <Popover anchor={react} onClose={closeReact} className="menu-pop" width={408}>
+        <IconPicker emojiOnly onPick={v => { closeReact(); run(api.updateComment(c.id, { react: v })) }} />
+      </Popover>
       {quote && <div className="discussion-quote">{quote}</div>}
       {editing
         ? <Composer autoFocus placeholder="Edit comment…" initial={c.body} onCancel={() => setEditing(false)} onSend={async t => { setAll(await api.updateComment(c.id, { body: t })); setEditing(false) }} />
         : <div className="comment-body">{c.body}</div>}
+      {/* Reactions as in Notion: a pill per emoji with its count, highlighted when it includes you. */}
+      {Object.keys(c.reactions ?? {}).length > 0 && (
+        <div className="reactions">
+          {Object.entries(c.reactions!).map(([e, who]) => (
+            <button key={e} className={'reaction' + (who.includes(store.me?.user.id ?? '') ? ' mine' : '')} disabled={!can(page, 'comment')}
+              title={who.map(id => store.people.get(id)?.name ?? 'Someone').join(', ')} onClick={() => run(api.updateComment(c.id, { react: e }))}>{e} {who.length}</button>
+          ))}
+          {can(page, 'comment') && <button className="reaction add" title="Add reaction" onClick={ev => openReact(ev.currentTarget)}><SmilePlus size={14} /></button>}
+        </div>
+      )}
     </div>
   )
 }

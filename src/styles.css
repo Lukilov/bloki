@@ -1091,3 +1091,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .outline-panel button:hover { background: var(--hover); }
 .outline-panel button.on { color: var(--accent); }
 @media (max-width: 1100px) { .outline { display: none; } }
+/* Comment reactions: rounded pills under the comment, blue when one is yours. */
+.reactions { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 0 32px; }
+.reaction { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; border: none; font-size: 13px; background: var(--hover); color: var(--text-2); }
+.reaction.mine { background: var(--accent-soft); color: var(--accent); box-shadow: rgba(35, 131, 226, 0.4) 0 0 0 1px inset; }
+.reaction.add { padding: 0 6px; color: var(--icon); }

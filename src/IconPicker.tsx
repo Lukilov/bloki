@@ -56,7 +56,7 @@ function pushRecent(v: string) {
   try { localStorage.setItem('recentIcons', JSON.stringify([v, ...recent().filter(r => r !== v)].slice(0, 20))) } catch { /* private mode */ }
 }
 
-export function IconPicker({ onPick, onRemove }: { onPick: (v: string) => void; onRemove?: () => void }) {
+export function IconPicker({ onPick, onRemove, emojiOnly }: { onPick: (v: string) => void; onRemove?: () => void; emojiOnly?: boolean }) {
   const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji')
   const [q, setQ] = useState('')
   const [data, setData] = useState<EmojiData | null>(null)
@@ -85,7 +85,7 @@ export function IconPicker({ onPick, onRemove }: { onPick: (v: string) => void; 
   return (
     <div className="icon-picker">
       <div className="picker-tabs">
-        {(['emoji', 'icons', 'upload'] as const).map(t => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ emoji: 'Emoji', icons: 'Icons', upload: 'Upload' }[t]}</button>)}
+        {(emojiOnly ? ['emoji'] as const : ['emoji', 'icons', 'upload'] as const).map(t => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ emoji: 'Emoji', icons: 'Icons', upload: 'Upload' }[t]}</button>)}
         {onRemove && <button className="picker-remove" onClick={onRemove}>Remove</button>}
       </div>
       {tab !== 'upload' && (

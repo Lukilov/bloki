@@ -73,7 +73,7 @@ export type Share = {
   grants: { user_id: string; level: Level; name: string; email?: string; role: Role | null }[]
   invite?: string
 }
-export type Comment = { id: string; body: string; resolved: boolean; created: number; user_id: string; name: string; thread_id: string | null; block_id: string | null; quote: string | null }
+export type Comment = { id: string; body: string; resolved: boolean; created: number; user_id: string; name: string; thread_id: string | null; block_id: string | null; quote: string | null; reactions?: Record<string, string[]> }
 export type Notice = { id: string; kind: 'mention' | 'comment' | 'share'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
 
 export class ApiError extends Error {
@@ -123,7 +123,7 @@ export const api = {
   setShare: (id: string, body: object) => call<Share>('PATCH', `pages/${id}/share`, body),
   comments: (id: string) => (publicRoot ? Promise.resolve([]) : call<Comment[]>('GET', `pages/${id}/comments`)),
   addComment: (id: string, body: string, extra: { thread_id?: string; block_id?: string; quote?: string; id?: string } = {}) => call<Comment[]>('POST', `pages/${id}/comments`, { body, ...extra }),
-  updateComment: (id: string, body: { resolved?: boolean; delete?: boolean; body?: string }) => call<Comment[]>('PATCH', `comments/${id}`, body),
+  updateComment: (id: string, body: { resolved?: boolean; delete?: boolean; body?: string; react?: string }) => call<Comment[]>('PATCH', `comments/${id}`, body),
   inbox: () => call<{ items: Notice[]; unread: number }>('GET', 'inbox'),
   updateInbox: (b: { ids?: string[]; all?: boolean; read?: boolean; archived?: boolean }) => call<{ items: Notice[]; unread: number }>('PATCH', 'inbox', b),
 
