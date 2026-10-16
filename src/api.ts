@@ -22,7 +22,9 @@ export type View = {
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean
 }
-export type Schema = { props?: Prop[]; views?: View[]; titleName?: string }
+/** "Customize layout" for a database's row pages, shared by every row. */
+export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean }
+export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout }
 
 export type Level = 'none' | 'view' | 'comment' | 'edit_content' | 'edit' | 'full'
 export const LEVELS: Level[] = ['none', 'view', 'comment', 'edit_content', 'edit', 'full']

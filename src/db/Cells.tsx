@@ -559,7 +559,9 @@ export function RowProperties({ db, row, readOnly }: { db: Page; row: Page; read
   const [edit, setEdit] = useState<{ el: HTMLElement; prop: Prop } | null>(null)
   const [add, openAdd, closeAdd] = usePopover()
   const [showEmpty, setShowEmpty] = useState(true)
-  const props = db.schema.props ?? []
+  // Properties hidden with Customize layout don't show on row pages.
+  const layout = db.schema.layout ?? {}
+  const props = (db.schema.props ?? []).filter(p => !layout.hidden?.includes(p.id))
   const structure = ['full', 'edit'].includes(db.access) && !store.published
   const empty = (p: Prop) => { const v = value(row, p, db.schema, ctxOf(store)); return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) }
   const shown = props.filter(p => showEmpty || !empty(p))
@@ -567,7 +569,7 @@ export function RowProperties({ db, row, readOnly }: { db: Page; row: Page; read
     <div className="row-props">
       {shown.map(p => (
         <div className="prop-row" key={p.id}>
-          <button className="prop-name" disabled={!structure} onClick={e => setEdit({ el: e.currentTarget, prop: p })}><span className="prop-icon">{typeIcon(p)}</span>{p.name}</button>
+          <button className="prop-name" disabled={!structure} onClick={e => setEdit({ el: e.currentTarget, prop: p })}>{layout.icons !== false && <span className="prop-icon">{typeIcon(p)}</span>}{p.name}</button>
           <Cell prop={p} row={row} db={db} readOnly={readOnly} className="prop-value" placeholder="Empty" />
         </div>
       ))}
@@ -577,7 +579,7 @@ export function RowProperties({ db, row, readOnly }: { db: Page; row: Page; read
         {edit && <PropertyEditor prop={props.find(p => p.id === edit.prop.id) ?? edit.prop} db={store.byId.get(db.id) ?? db} close={() => setEdit(null)} />}
       </Popover>
       <Popover anchor={add} onClose={closeAdd} className="menu-pop" width={260}>
-        <TypePicker onPick={t => { store.patch(db.id, { schema: { ...db.schema, props: [...props, newProp(t)] } }); closeAdd() }} />
+        <TypePicker onPick={t => { store.patch(db.id, { schema: { ...db.schema, props: [...(db.schema.props ?? []), newProp(t)] } }); closeAdd() }} />
       </Popover>
       <div className="menu-divider" />
     </div>

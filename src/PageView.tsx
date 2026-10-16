@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeftRight, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
-  Bell, ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
+  Bell, PanelsTopLeft, ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
 } from 'lucide-react'
 import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
 import { PageEditor, toHTML, toMarkdown } from './Editor'
 import { coverStyle, Database, RowProperties } from './Database'
 import { ctxOf } from './db/Cells'
+import { LayoutEditor } from './db/Layout'
 import { propOf, textOf, value } from './db/model'
 import { personName, ShareMenu } from './Access'
 import { CommentsPanel, DiscussionsPopover, PageDiscussions } from './Comments'
@@ -107,6 +108,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     const t = setTimeout(() => { keepOffline().catch(() => {}) }, 2000)
     return () => clearTimeout(t)
   }, [offline, metaUpdated]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [layoutOpen, setLayoutOpen] = useState(false)
   const [watch, setWatch] = useState<'all' | 'replies' | null>(null)
   useEffect(() => { setWatch(null); if (!store.published) api.watch(id).then(w => setWatch(w.mode)).catch(() => {}) }, [id, store.published])
   const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks' | 'discussions'; el: HTMLElement } | null>(null)
@@ -232,7 +234,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
 
   return (
     <div className={`page-wrap${panel ? ' with-panel' : ''}${peek ? ' peek-page' : ''}`}>
-      <div className={`page font-${meta.font ?? 'default'}${meta.full_width || meta.kind === 'db' ? ' full' : ''}${meta.kind === 'db' ? ' db-page' : ''}${meta.small_text ? ' small-text' : ''}`}>
+      {layoutOpen && row && <LayoutEditor db={row} row={meta} close={() => setLayoutOpen(false)} />}
+      <div className={`page font-${meta.font ?? 'default'}${meta.full_width || meta.kind === 'db' || row?.schema.layout?.fullWidth ? ' full' : ''}${meta.kind === 'db' ? ' db-page' : ''}${meta.small_text ? ' small-text' : ''}`}>
         <header className={'topbar' + (sidebarCollapsed ? ' collapsed' : '') + (peek ? ' in-peek' : '')}>
           <nav className="crumbs">{!peek && <>
             {shownCrumbs.map((c, i) => (
@@ -298,7 +301,9 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
                 {/* As in Notion: a random emoji goes on at once, with the picker open on it to change it. */}
                 {!meta.icon && <button onClick={async () => { set({ icon: await randomEmoji() }); setPickIcon(true) }}><Smile size={15} /> Add icon</button>}
                 {!meta.cover && <button onClick={() => set({ cover: GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)] })}><ImageIcon size={15} /> Add cover</button>}
-                {can(meta, 'comment') && <button onClick={() => setComposing(true)}><MessageSquare size={15} /> Add comment</button>}
+                {row && ['full', 'edit'].includes(row.access)
+                  ? <button onClick={() => setLayoutOpen(true)}><PanelsTopLeft size={15} /> Customize layout</button>
+                  : can(meta, 'comment') && <button onClick={() => setComposing(true)}><MessageSquare size={15} /> Add comment</button>}
               </div>
             )}
             {!edit && can(meta, 'comment') && !store.published && <div className="head-actions"><button onClick={() => setComposing(true)}><MessageSquare size={15} /> Add comment</button></div>}
@@ -323,7 +328,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           )}
 
           {layout.toc && meta.kind === 'page' && <PageOutline key={id + version} />}
-          {(layout.discussions ?? 'expanded') !== 'off' && !store.published && (
+          {(layout.discussions ?? 'expanded') !== 'off' && !store.published && row?.schema.layout?.discussions !== false && (
             <PageDiscussions page={meta} all={comments} setAll={setComments} composing={composing} setComposing={setComposing} isRow={!!row} />
           )}
 

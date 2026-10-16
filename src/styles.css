@@ -1153,3 +1153,29 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .synced-empty { position: absolute; left: 14px; top: 8px; pointer-events: none; color: var(--faint); font-size: 16px; display: none; }
 /* Only while it holds a single empty paragraph and isn't being edited. */
 .synced:not(:focus-within):has(.bn-block-group > .bn-block-outer:only-child [data-content-type='paragraph'] .bn-inline-content:empty) .synced-empty { display: block; }
+/* Customize layout (database rows), after Notion's editor: full-screen, section cards with blue heads on the left,
+   page settings with switches on the right, Cancel / Apply to all pages at the top. */
+.layout-editor { position: fixed; inset: 0; z-index: 95; background: var(--bg); display: flex; flex-direction: column; }
+.layout-top { display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 24px; flex: none; }
+.layout-title { flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.3; }
+.layout-title b { font-size: 20px; font-weight: 600; }
+.layout-title span { font-size: 13px; font-weight: 500; color: var(--muted); }
+.layout-top button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; font-size: 16px; }
+.layout-body { flex: 1; display: flex; gap: 24px; min-height: 0; padding: 0 24px 24px; }
+.layout-canvas { flex: 1; max-width: 560px; overflow: auto; border: 2px solid rgba(35, 131, 226, 0.4); border-radius: 18px; padding: 36px 30px; display: flex; flex-direction: column; gap: 16px; }
+.layout-section { border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; cursor: pointer; }
+.layout-section.on { box-shadow: var(--accent) 0 0 0 2px; }
+.layout-section-head { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; background: rgba(35, 131, 226, 0.1); color: var(--accent); font-size: 16px; font-weight: 500; }
+.layout-heading { padding: 18px 26px 22px; font-size: 40px; font-weight: 700; line-height: 1.2; }
+.layout-prop { display: flex; align-items: center; gap: 8px; padding: 10px 26px; font-size: 16px; color: var(--text-2); }
+.layout-prop svg { width: 20px; height: 20px; }
+.layout-muted { padding: 12px 26px; color: var(--muted); }
+.layout-side { width: 330px; flex: none; display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.layout-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 14px; }
+.layout-side-head b { font-size: 20px; font-weight: 600; }
+.layout-option { display: flex; align-items: center; justify-content: space-between; height: 37px; padding: 0 6px; border: none; border-radius: 6px; font-size: 16px; text-align: left; }
+.layout-option:hover { background: var(--hover); }
+.layout-prop-name { display: inline-flex; align-items: center; gap: 8px; }
+.layout-search { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; margin-bottom: 8px; border-radius: 6px; box-shadow: var(--accent) 0 0 0 1px inset; color: var(--muted); }
+.layout-search input { flex: 1; border: none; background: none; box-shadow: none !important; padding: 0; }
+.layout-side .layout-muted { padding: 12px 6px; }
