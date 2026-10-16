@@ -113,6 +113,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [layoutOpen, setLayoutOpen] = useState(false)
   // The empty-row template hint goes away once you start typing, as Notion's does.
   const [hintGone, setHintGone] = useState(false)
+  const [rowTab, setRowTab] = useState<'content' | 'props' | 'comments'>('content')
   useEffect(() => setHintGone(false), [id])
   const [watch, setWatch] = useState<'all' | 'replies' | null>(null)
   useEffect(() => { setWatch(null); if (!store.published) api.watch(id).then(w => setWatch(w.mode)).catch(() => {}) }, [id, store.published])
@@ -299,7 +300,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           <CoverPicker onPick={c => { set({ cover: c, cover_y: 50 }); closePop() }} onRemove={() => { set({ cover: '' }); closePop() }} />
         </Popover>
 
-        <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')} onKeyDownCapture={e => { if ((e.target as HTMLElement).closest('.bn-editor')) setHintGone(true) }}>
+        <div className={'page-body' + (meta.cover ? ' has-cover' : '') + (meta.icon ? ' has-icon' : '')}
+          data-rowtab={row?.schema.layout?.structure === 'tabbed' ? rowTab : undefined} data-rowpanel={row?.schema.layout?.panel ? '' : undefined} onKeyDownCapture={e => { if ((e.target as HTMLElement).closest('.bn-editor')) setHintGone(true) }}>
           {row && isTemplate(meta) && <div className="template-banner">You’re editing a template in {iconOf(row, 16)} <b>{label(row)}</b></div>}
           <div className="page-head">
             {meta.icon && <button ref={iconBtn} className="page-icon" disabled={!edit} onClick={openPop('icon')}>{iconOf(meta, 78)}</button>}
@@ -326,6 +328,14 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
               }} />
           </div>
 
+          {/* Customize layout → Tabbed: the row's sections become tabs under the title. */}
+          {row?.schema.layout?.structure === 'tabbed' && (
+            <div className="db-tabs row-tabs">
+              {(['content', 'props', 'comments'] as const).filter(t => t !== 'comments' || row.schema.layout?.discussions !== false).map(t => (
+                <button key={t} className={'view-tab' + (rowTab === t ? ' on' : '')} onClick={() => setRowTab(t)}>{{ content: 'Content', props: 'Properties', comments: 'Comments' }[t]}</button>
+              ))}
+            </div>
+          )}
           {row && <RowProperties db={row} row={meta} readOnly={!edit} />}
           {row && edit && !hintGone && !isTemplate(meta) && emptyContent(page.content) && (() => {
             // As in Notion, an empty row offers the database's templates (or making one) before you start typing.

@@ -30,7 +30,7 @@ export function LayoutEditor({ db, row, close }: { db: Page; row: Page; close: (
         <div className="layout-canvas">
           <section className="layout-section"><div className="layout-section-head">Heading</div><div className="layout-heading">{label(row)}</div></section>
           <section className={'layout-section' + (picked === 'props' ? ' on' : '')} onClick={() => setPicked('props')}>
-            <div className="layout-section-head"><GripVertical size={14} /> Property group</div>
+            <div className="layout-section-head"><GripVertical size={14} /> {draft.panel ? 'Property panel' : 'Property group'}</div>
             {props.filter(p => !hidden.has(p.id)).map(p => <div key={p.id} className="layout-prop">{on('icons') && typeIcon(p)} {p.name}</div>)}
             {props.every(p => hidden.has(p.id)) && <div className="layout-muted">All properties are hidden</div>}
           </section>
@@ -46,8 +46,18 @@ export function LayoutEditor({ db, row, close }: { db: Page; row: Page; close: (
                 <span className="layout-prop-name">{typeIcon(p)} {p.name}</span>{hidden.has(p.id) ? <EyeOff size={16} className="muted" /> : <Eye size={16} />}
               </button>
             ))}
+            <div className="menu-divider" />
+            <button className="layout-option" onClick={() => setDraft(d => ({ ...d, panel: !d.panel }))}><span>{draft.panel ? '← Move back into the page' : 'Move to panel →'}</span></button>
           </> : <>
             <div className="layout-side-head"><b>Page settings</b></div>
+            <div className="menu-heading">Structure</div>
+            <div className="layout-structure">
+              {(['simple', 'tabbed'] as const).map(k => (
+                <button key={k} className={(draft.structure ?? 'simple') === k ? 'on' : ''} onClick={() => setDraft(d => ({ ...d, structure: k }))}>
+                  <span className={'layout-thumb ' + k}><i /><i /></span>{k === 'simple' ? 'Simple' : 'Tabbed'}
+                </button>
+              ))}
+            </div>
             <div className="menu-heading">Options</div>
             <button className="layout-option" onClick={() => setDraft(d => ({ ...d, inlineComments: d.inlineComments === 'minimal' ? 'default' : 'minimal' }))}>
               <span>Inline comments</span><span className="muted">{draft.inlineComments === 'minimal' ? 'Minimal' : 'Default'} ›</span>
