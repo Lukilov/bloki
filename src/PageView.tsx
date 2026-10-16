@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeftRight, Clock, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
-  Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
+  ArrowLeftRight, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
+  ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
 } from 'lucide-react'
 import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
@@ -207,19 +207,18 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
                   : <span className="crumb muted">…</span>}
               </span>
             ))}
-            {isPrivate && !store.published && <span className="badge-private"><Lock size={11} /> Private</span>}
+            {isPrivate && !store.published && <button className="crumb access-crumb" onClick={openPop('share')}><Lock size={14} /> Private <ChevronDown size={12} /></button>}
             </>}
             {meta.locked && <button className="badge-locked" disabled={!edit} title={edit ? 'Unlock this page' : 'This page is locked'} onClick={() => { set({ locked: false }); setVersion(v => v + 1) }}><Lock size={11} /> Locked</button>}
           </nav>
           <div className="actions">
             {!store.published && <>
-              <span className="edited muted small">Edited {timeAgo(meta.updated)}</span>
               {!edit && <span className="badge">{LEVEL_NAMES[meta.access]}</span>}
-              <button className="top-btn" onClick={openPop('share')}>Share</button>
+              <button className="top-btn share-btn" onClick={openPop('share')}>{isPrivate && <Lock size={14} />}Share</button>
+              <button className="icon-btn" title="Copy link" onClick={() => { copyText(pageUrl(id)); store.toast('Copied link to clipboard') }}><Link2 size={18} /></button>
               <button className={'icon-btn' + (panel === 'comments' ? ' on' : '')} title="View all comments" onClick={() => setPanel(panel === 'comments' ? null : 'comments')}>
                 <MessageSquare size={18} />{openComments > 0 && <span className="dot-count">{openComments}</span>}
               </button>
-              <button className={'icon-btn' + (panel === 'updates' ? ' on' : '')} title="View all updates" onClick={() => setPanel(panel === 'updates' ? null : 'updates')}><Clock size={18} /></button>
               <button className="icon-btn" title={meta.favorite ? 'Remove from Favorites' : 'Add to Favorites'} onClick={() => set({ favorite: !meta.favorite })}>
                 <Star size={18} fill={meta.favorite ? '#f5c518' : 'none'} color={meta.favorite ? '#f5c518' : 'currentColor'} />
               </button>
