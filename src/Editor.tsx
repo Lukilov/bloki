@@ -419,11 +419,13 @@ function useCollab(pageId: string, enabled: boolean, onReset?: () => void) {
   return session
 }
 
-export function PageEditor({ page, dark, editable, onComment, comments = [], openComments, collab = false, onReset }: {
+export function PageEditor({ page, dark, editable, onComment, comments = [], openComments, collab = false, onReset, minimalComments = false }: {
   page: Page; dark: boolean; editable: boolean
   onComment?: (blockId: string, quote: string, id: string) => void
   comments?: Comment[]; openComments?: () => void
   collab?: boolean; onReset?: () => void
+  /** Notion's "Inline comments: Minimal": no highlight, just an icon at the block's right edge (highlight on hover). */
+  minimalComments?: boolean
 }) {
   const store = useStore()
   const storeRef = useRef(store)
@@ -584,7 +586,9 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   return (
     <EditorCtx.Provider value={ctx}>
       {/* Highlight text with an open discussion; resolved ones fade back to plain text. Ids are server-checked UUIDs. */}
-      <style>{openThreads.map(id => `.comment-mark[data-thread="${id}"]{background:var(--comment-bg);border-bottom:2px solid var(--comment-line);cursor:pointer}`).join('\n')}</style>
+      <style>{openThreads.map(id => minimalComments
+        ? `.comment-mark[data-thread="${id}"]{cursor:pointer}.comment-mark[data-thread="${id}"]:hover{background:var(--comment-bg)}.bn-block-content:has(.comment-mark[data-thread="${id}"]){position:relative}.bn-block-content:has(.comment-mark[data-thread="${id}"])::after{content:'';position:absolute;right:-30px;top:50%;width:18px;height:18px;margin-top:-9px;opacity:.55;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center/contain no-repeat}`
+        : `.comment-mark[data-thread="${id}"]{background:var(--comment-bg);border-bottom:2px solid var(--comment-line);cursor:pointer}`).join('\n')}</style>
       <div className="editor-wrap" onClick={e => {
         const mark = (e.target as HTMLElement).closest('.comment-mark') as HTMLElement | null
         if (mark && openThreads.includes(mark.dataset.thread ?? '')) openComments?.()

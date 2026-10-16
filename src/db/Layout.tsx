@@ -49,6 +49,9 @@ export function LayoutEditor({ db, row, close }: { db: Page; row: Page; close: (
           </> : <>
             <div className="layout-side-head"><b>Page settings</b></div>
             <div className="menu-heading">Options</div>
+            <button className="layout-option" onClick={() => setDraft(d => ({ ...d, inlineComments: d.inlineComments === 'minimal' ? 'default' : 'minimal' }))}>
+              <span>Inline comments</span><span className="muted">{draft.inlineComments === 'minimal' ? 'Minimal' : 'Default'} ›</span>
+            </button>
             {sw(on('discussions'), () => setDraft(d => ({ ...d, discussions: !on('discussions') })), 'Page discussions')}
             {sw(on('icons'), () => setDraft(d => ({ ...d, icons: !on('icons') })), 'Property icons')}
             {sw(!!draft.fullWidth, () => setDraft(d => ({ ...d, fullWidth: !d.fullWidth })), 'Full width')}

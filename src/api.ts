@@ -23,7 +23,7 @@ export type View = {
   freeze?: string; hideIcon?: boolean
 }
 /** "Customize layout" for a database's row pages, shared by every row. */
-export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean }
+export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal' }
 export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string }
 
 export type Level = 'none' | 'view' | 'comment' | 'edit_content' | 'edit' | 'full'

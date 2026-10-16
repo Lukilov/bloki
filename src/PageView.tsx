@@ -69,7 +69,7 @@ const wordCount = (content: unknown[] = []) => {
   return text.split(/\s+/).filter(Boolean).length
 }
 
-type Layout = { backlinks?: 'expanded' | 'popover' | 'off'; discussions?: 'expanded' | 'minimal' | 'off'; toc?: boolean }
+type Layout = { backlinks?: 'expanded' | 'popover' | 'off'; discussions?: 'expanded' | 'minimal' | 'off'; toc?: boolean; inlineComments?: 'default' | 'minimal' }
 
 export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dark: boolean; sidebarCollapsed?: boolean; peek?: boolean }) {
   const store = useStore()
@@ -179,6 +179,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
         { icon: <ArrowLeftRight size={16} />, label: sw(meta.full_width, 'Full width'), disabled: !edit, onClick: () => set({ full_width: !meta.full_width }) },
         { icon: <ListTree size={16} />, label: sw(layout.toc, 'Table of contents'), disabled: !edit, onClick: () => setLayout({ toc: !layout.toc }) },
         { icon: <MessageSquare size={16} />, label: sw((layout.discussions ?? 'expanded') !== 'off', 'Page discussions'), disabled: !edit, onClick: () => setLayout({ discussions: (layout.discussions ?? 'expanded') === 'off' ? 'expanded' : 'off' }) },
+        { icon: <MessageSquare size={16} />, label: 'Inline comments', disabled: !edit, submenu: () => <Menu onClose={() => {}} items={(['default', 'minimal'] as const).map(v => ({ label: v === 'default' ? 'Default' : 'Minimal', checked: (layout.inlineComments ?? 'default') === v, onClick: () => setLayout({ inlineComments: v }) }))} /> },
         { icon: <LinkIcon size={16} />, label: 'Backlinks', disabled: !edit, submenu: () => <Menu onClose={() => {}} items={(['expanded', 'popover', 'off'] as const).map(v => ({ label: { expanded: 'Expanded', popover: 'Show in popover', off: 'Off' }[v], checked: (layout.backlinks ?? 'popover') === v, onClick: () => setLayout({ backlinks: v }) }))} /> },
       ]} />
     </div>
@@ -336,6 +337,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           {meta.kind === 'db'
             ? <Database id={id} />
             : <PageEditor key={id + version + meta.locked + meta.access} page={page} dark={dark} editable={edit && !meta.locked}
+                minimalComments={(row?.schema.layout?.inlineComments ?? layout.inlineComments) === 'minimal'}
                 collab={!store.published} onReset={resetEditor}
                 onComment={can(meta, 'comment') && !store.published ? (blockId, quote, cid) => { setDraft({ blockId, quote, id: cid }); setPanel('comments') } : undefined}
                 comments={comments} openComments={() => setPanel('comments')} />}
