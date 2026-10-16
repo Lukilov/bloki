@@ -884,8 +884,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .cal-day.today .cal-num { background: rgb(229, 100, 88); color: #fff; }
 .cal-add { opacity: 0; padding: 0; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .cal-day:hover .cal-add { opacity: 1; }
-/* Calendar card measured on Notion: 28px, 6px in from the cell edges, title 14px/600 (dark bg rgb(47,47,47)). */
-.cal-item { background: var(--cal-card, var(--board-card)); box-shadow: var(--cal-card-shadow, var(--board-card-shadow)); border-radius: 6px; padding: 2px 6px; min-height: 28px; justify-content: center; margin: 5px 2px 0; cursor: pointer; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+/* Calendar card measured on Notion (both themes): 28px, 6px in from the cell edges, title 14px/600. */
+.cal-item { background: var(--cal-card, #fff); box-shadow: var(--cal-card-shadow, rgba(42, 28, 0, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 4px); border-radius: 6px; padding: 2px 6px; min-height: 28px; justify-content: center; margin: 5px 2px 0; cursor: pointer; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
 .cal-item-title { font-weight: 600; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* timeline */
@@ -915,7 +915,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgb(229, 100, 88); z-index: 1; }
 .timeline-row { position: relative; height: 36px; }
 /* Timeline bar measured on Notion: 34px in a 36px row, radius 6, title 14px/500 at 6px; a short bar lets its title run past the end. */
-.bar { position: absolute; top: 1px; height: 34px; background: var(--tl-bar, var(--card)); box-shadow: var(--tl-bar-shadow, var(--shadow-sm)); border-radius: 6px; display: flex; align-items: center; cursor: grab; z-index: 2; }
+.bar { position: absolute; top: 1px; height: 34px; background: var(--tl-bar, #fff); box-shadow: var(--tl-bar-shadow, rgba(42, 28, 0, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 4px); border-radius: 6px; display: flex; align-items: center; cursor: grab; z-index: 2; }
 .bar-label { padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; font-size: 14px; flex: 1; position: absolute; left: 0; right: 0; pointer-events: none; }
 .bar.narrow .bar-label { overflow: visible; right: auto; }
 .bar-handle { border-radius: 6px; }
@@ -1079,9 +1079,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 /* Floating table of contents measured on Notion: 2px bars 14px apart (16/12/8 wide), hover panel 232px, radius 14. */
 .outline { position: fixed; right: 8px; top: 164px; z-index: 20; }
 .outline-bars { width: 28px; padding: 10px 12px 10px 0; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
-.outline-bars span { height: 2px; border-radius: 2px; background: var(--outline-bar, rgba(55, 53, 47, 0.2)); }
+.outline-bars span { height: 2px; border-radius: 2px; background: var(--outline-bar, rgba(28, 19, 1, 0.11)); }
 .outline-bars .lvl-1 { width: 16px; } .outline-bars .lvl-2 { width: 12px; } .outline-bars .lvl-3 { width: 8px; }
-.outline-bars span.on { background: var(--outline-on, rgb(55, 53, 47)); }
+.outline-bars span.on { background: var(--outline-on, rgb(50, 48, 44)); }
 .outline-panel { position: absolute; top: 0; right: 2px; width: 232px; max-height: 70vh; overflow: auto; padding: 12px 12px 12px; background: var(--bg); border-radius: 14px; box-shadow: var(--line) 0 0 0 1px, rgba(25, 25, 25, 0.2) 0 14px 28px -6px, rgba(25, 25, 25, 0.12) 0 2px 4px -1px; display: flex; flex-direction: column; opacity: 0; visibility: hidden; transform: translateX(4px); transition: opacity 120ms, transform 120ms, visibility 120ms; }
 .outline:hover .outline-panel { opacity: 1; visibility: visible; transform: none; }
 .outline-panel button { text-align: left; border: none; background: none; font-size: 13px; line-height: 17px; padding-top: 4px; padding-bottom: 4px; color: var(--muted); border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
