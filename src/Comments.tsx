@@ -149,6 +149,23 @@ export function PageDiscussions({ page, all, setAll, composing, setComposing }: 
   )
 }
 
+/** Notion's Comments button opens this: open discussions in short rows, then "See all" for the panel. */
+export function DiscussionsPopover({ all, seeAll }: { all: Comment[]; seeAll: () => void }) {
+  const list = threads(all).filter(t => !t.root.resolved).reverse()
+  return (
+    <div className="discussions-pop">
+      <div className="discussions-head">Discussions</div>
+      {list.length ? list.slice(0, 8).map(t => (
+        <button key={t.root.id} className="discussion-line" onClick={seeAll}>
+          <Avatar name={t.root.name} size={24} /><b>{t.root.name}</b><span>{t.root.body}</span>
+        </button>
+      )) : <div className="discussions-empty">No open comments on this page</div>}
+      <div className="menu-divider" />
+      <button className="discussions-all" onClick={seeAll}>See all</button>
+    </div>
+  )
+}
+
 /** Right-hand panel with every discussion on the page, as Notion's comment sidebar. */
 export function CommentsPanel({ page, all, setAll, close, draft, clearDraft }: {
   page: Page; all: Comment[]; setAll: (c: Comment[]) => void; close: () => void

@@ -8,7 +8,7 @@ import { ancestors, iconOf, label, useStore } from './store'
 import { PageEditor, toHTML, toMarkdown } from './Editor'
 import { coverStyle, Database, RowProperties } from './Database'
 import { personName, ShareMenu } from './Access'
-import { CommentsPanel, PageDiscussions } from './Comments'
+import { CommentsPanel, DiscussionsPopover, PageDiscussions } from './Comments'
 import { CoverPicker, GRADIENTS, IconPicker, randomEmoji } from './IconPicker'
 import { copyText, Menu, mod, Popover, shift, timeAgo, type Item } from './ui'
 import { duplicate, MoveTo, pageUrl, trash } from './pageActions'
@@ -81,7 +81,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [draft, setDraft] = useState<{ blockId: string; quote: string; id: string } | null>(null)
   const [composing, setComposing] = useState(false)
   const [modal, setModal] = useState<'history' | 'export' | null>(null)
-  const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks'; el: HTMLElement } | null>(null)
+  const [pop, setPop] = useState<{ kind: 'share' | 'more' | 'icon' | 'cover' | 'move' | 'backlinks' | 'discussions'; el: HTMLElement } | null>(null)
   const iconBtn = useRef<HTMLButtonElement>(null)
   const [pickIcon, setPickIcon] = useState(false)
   const [reposition, setReposition] = useState(false)
@@ -216,7 +216,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
               {!edit && <span className="badge">{LEVEL_NAMES[meta.access]}</span>}
               <button className="top-btn share-btn" onClick={openPop('share')}>{isPrivate && <Lock size={14} />}Share</button>
               <button className="icon-btn" title="Copy link" onClick={() => { copyText(pageUrl(id)); store.toast('Copied link to clipboard') }}><Link2 size={18} /></button>
-              <button className={'icon-btn' + (panel === 'comments' ? ' on' : '')} title="View all comments" onClick={() => setPanel(panel === 'comments' ? null : 'comments')}>
+              <button className={'icon-btn' + (panel === 'comments' ? ' on' : '')} title="View all comments" onClick={openPop('discussions')}>
                 <MessageSquare size={18} />{openComments > 0 && <span className="dot-count">{openComments}</span>}
               </button>
               <button className="icon-btn" title={meta.favorite ? 'Remove from Favorites' : 'Add to Favorites'} onClick={() => set({ favorite: !meta.favorite })}>
@@ -228,6 +228,9 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           </div>
         </header>
         <Popover anchor={pop?.kind === 'share' ? pop.el : null} onClose={closePop} align="end" className="share-pop" width={456}><ShareMenu page={meta} close={closePop} /></Popover>
+        <Popover anchor={pop?.kind === 'discussions' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={456}>
+          <DiscussionsPopover all={comments} seeAll={() => { closePop(); setPanel('comments') }} />
+        </Popover>
         <Popover anchor={pop?.kind === 'more' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={256}><Menu filter onClose={() => setPop(p => (p?.kind === 'more' ? null : p))} items={moreItems} /></Popover>
         <Popover anchor={pop?.kind === 'move' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={320}><MoveTo page={meta} close={closePop} /></Popover>
 

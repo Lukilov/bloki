@@ -1102,3 +1102,12 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .composer > .composer-tool + .composer-tool, .composer > .composer-tool + input + .composer-tool { margin-left: -0px; }
 .comment-mention { color: var(--muted); font-weight: 500; }
 .comment-body a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-2); word-break: break-all; }
+/* Discussions popover measured on Notion: 456px, 48px head, 44px rows (24px avatar, name 14/500, muted text), a 32px "See all". */
+.discussions-pop { margin: -6px 0; padding-bottom: 16px; }
+.discussions-head { height: 48px; display: flex; align-items: center; padding: 0 16px; font-size: 14px; font-weight: 600; }
+.discussion-line { display: flex; align-items: center; gap: 8px; width: calc(100% - 16px); margin: 0 8px; height: 44px; padding: 0 8px; border: none; border-radius: 8px; text-align: left; font-size: 14px; }
+.discussion-line b { font-weight: 500; flex: none; }
+.discussion-line span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.discussions-empty { padding: 8px 16px; color: var(--muted); font-size: 14px; }
+.discussions-pop .menu-divider { margin: 0 0 8px; }
+.discussions-all { display: block; width: calc(100% - 32px); margin: 0 16px; height: 32px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; background: var(--hover-2, var(--hover)); }
