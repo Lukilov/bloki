@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, AtSign, Check, Paperclip, FileText, Link2, ListFilter, MessageSquare, MoreHorizontal, PenLine, RotateCcw, SmilePlus, Trash2, X } from 'lucide-react'
+import { ArrowUp, AtSign, Bell, Check, Paperclip, FileText, Link2, ListFilter, MessageSquare, MoreHorizontal, PenLine, RotateCcw, SmilePlus, Trash2, X } from 'lucide-react'
 import { IconPicker } from './IconPicker'
 import { api, can, type Comment, type Page } from './api'
 import { useStore } from './store'
@@ -151,11 +151,17 @@ export function PageDiscussions({ page, all, setAll, composing, setComposing, is
 }
 
 /** Notion's Comments button opens this: open discussions in short rows, then "See all" for the panel. */
-export function DiscussionsPopover({ all, seeAll }: { all: Comment[]; seeAll: () => void }) {
+export function DiscussionsPopover({ all, seeAll, watch, setWatch }: { all: Comment[]; seeAll: () => void; watch?: 'all' | 'replies' | null; setWatch?: (m: 'all' | 'replies') => void }) {
   const list = threads(all).filter(t => !t.root.resolved).reverse()
+  const [bell, openBell, closeBell] = usePopover()
   return (
     <div className="discussions-pop">
-      <div className="discussions-head">Discussions</div>
+      <div className="discussions-head">Discussions
+        {watch && setWatch && <button className="ghost discussions-bell" title="Page notification settings" onClick={e => openBell(e.currentTarget)}><Bell size={16} /></button>}
+      </div>
+      <Popover anchor={bell} onClose={closeBell} align="end" className="menu-pop" width={240}>
+        <Menu onClose={closeBell} items={[{ heading: 'Notify me about' }, ...(['all', 'replies'] as const).map(m => ({ label: m === 'all' ? 'All comments' : 'Replies and @mentions', checked: watch === m, onClick: () => setWatch!(m) }))]} />
+      </Popover>
       {list.length ? list.slice(0, 8).map(t => (
         <button key={t.root.id} className="discussion-line" onClick={seeAll}>
           <Avatar name={t.root.name} size={24} /><b>{t.root.name}</b><span>{t.root.body}</span>

@@ -1228,3 +1228,5 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .automation-add button { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-2); }
 .automation-item { margin: 0 4px; gap: 8px; }
 .automation-item .switch { border: none; margin-left: auto; cursor: pointer; }
+.discussions-head { justify-content: space-between; }
+.discussions-bell { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--icon); border-radius: 4px; }

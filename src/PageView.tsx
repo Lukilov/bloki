@@ -274,7 +274,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
         </header>
         <Popover anchor={pop?.kind === 'share' ? pop.el : null} onClose={closePop} align="end" className="share-pop" width={456}><ShareMenu page={meta} close={closePop} /></Popover>
         <Popover anchor={pop?.kind === 'discussions' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={456}>
-          <DiscussionsPopover all={comments} seeAll={() => { closePop(); setPanel('comments') }} />
+          <DiscussionsPopover all={comments} seeAll={() => { closePop(); setPanel('comments') }} watch={watch}
+            setWatch={m => { setWatch(m); api.setWatch(id, m).catch(e => store.setError(e.message)) }} />
         </Popover>
         <Popover anchor={pop?.kind === 'more' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={256}><Menu filter onClose={() => setPop(p => (p?.kind === 'more' ? null : p))} items={moreItems} /></Popover>
         <Popover anchor={pop?.kind === 'move' ? pop.el : null} onClose={closePop} align="end" className="menu-pop" width={320}><MoveTo page={meta} close={closePop} /></Popover>
