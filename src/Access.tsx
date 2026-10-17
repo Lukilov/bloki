@@ -37,16 +37,41 @@ function Copy({ text }: { text: string }) {
 
 /* ---------- Log in / sign up ---------- */
 
+/** #/reset/<token>: the link from a password reset email. */
+export function ResetScreen({ token, onDone }: { token: string; onDone: () => void }) {
+  const [password, setPassword] = useState('')
+  const [done, setDone] = useState(false)
+  const { error, busy, run } = useAction()
+  return (
+    <div className="auth">
+      <form className="auth-card" onSubmit={e => { e.preventDefault(); run(async () => { await api.resetPassword(token, password); setDone(true) }) }}>
+        <div className="brand big">▤ Bloki</div>
+        <h2>Choose a new password</h2>
+        {done ? <>
+          <p className="muted">Your password is changed. Log in with it on each of your devices.</p>
+          <button type="button" className="primary" onClick={() => { location.hash = ''; onDone() }}>Log in</button>
+        </> : <>
+          <label>New password<input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} /></label>
+          {error && <p className="danger">{error}</p>}
+          <button className="primary" disabled={busy}>Set password</button>
+        </>}
+      </form>
+    </div>
+  )
+}
+
 export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
   const [hasUsers, setHasUsers] = useState(true)
   const [info, setInfo] = useState<Awaited<ReturnType<typeof api.inviteInfo>> | null>(null)
   const [form, setForm] = useState({ email: '', name: '', password: '', code: '' })
   const [needCode, setNeedCode] = useState(false)
+  const [canMail, setCanMail] = useState(false)
+  const [sent, setSent] = useState(false)
   const { error, busy, run } = useAction()
 
   useEffect(() => {
-    api.status().then(s => { setHasUsers(s.hasUsers); if (!s.hasUsers) setMode('register') })
+    api.status().then(s => { setHasUsers(s.hasUsers); setCanMail(!!s.mail); if (!s.hasUsers) setMode('register') })
     if (invite) api.inviteInfo(invite).then(i => { setInfo(i); setMode('register') }).catch(() => setInfo(null))
   }, [invite])
 
@@ -54,6 +79,7 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
     e.preventDefault()
     run(async () => {
       let page: string | null = null
+      if (mode === 'forgot') { await api.forgotPassword(form.email); setSent(true); return }
       if (mode === 'login') {
         // Accounts with two-step verification answer the first try with a request for the code.
         await api.login(form.email, form.password, needCode ? form.code : undefined).catch(e => { if (e instanceof ApiError && e.data.twoFactor) setNeedCode(true); throw e })
@@ -76,10 +102,17 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
         {info && <p className="muted">{info.inviter} invited you to {info.page ? <>the page <b>{info.page || 'Untitled'}</b> in </> : null}<b>{info.workspace}</b> as {info.page ? LEVEL_NAMES[info.level!] : ROLE_NAMES[info.role]}.</p>}
         {invite && !info && <p className="danger">This invite link is invalid or has expired.</p>}
         {!hasUsers && <p className="muted">Create the first account. You will own this workspace and everything already in it.</p>}
-        <h2>{mode === 'login' ? 'Log in' : 'Create your account'}</h2>
+        <h2>{mode === 'login' ? 'Log in' : mode === 'forgot' ? 'Reset your password' : 'Create your account'}</h2>
         <label>Email<input type="email" autoComplete="email" required value={form.email} onChange={set('email')} /></label>
+        {mode === 'forgot' && <>
+          {sent ? <p className="muted">If an account uses that email, a link to choose a new password is on its way.</p> : <button className="primary" disabled={busy}>Send reset link</button>}
+          {error && <p className="danger">{error}</p>}
+          <button type="button" className="ghost link" onClick={() => { setMode('login'); setSent(false) }}>Back to log in</button>
+        </>}
+        {mode !== 'forgot' && <>
         {mode === 'register' && <label>Name<input autoComplete="name" required value={form.name} onChange={set('name')} /></label>}
         <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 8 : undefined} value={form.password} onChange={set('password')} /></label>
+        {mode === 'login' && canMail && <button type="button" className="ghost link forgot-link" onClick={() => setMode('forgot')}>Forgot password?</button>}
         {needCode && mode === 'login' && <label>Verification code<input autoFocus inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code or a recovery code" required value={form.code} onChange={set('code')} /></label>}
         {error && <p className="danger">{error}</p>}
         <button className="primary" disabled={busy}>{mode === 'login' ? 'Continue' : 'Sign up'}</button>
@@ -89,6 +122,7 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
           </button>
         )}
         {!canRegister && <p className="muted small">New accounts need an invite link from a workspace owner.</p>}
+        </>}
         {desktopApp && <button type="button" className="ghost link" onClick={() => desktopApp.changeServer()}>Connect to a different server</button>}
       </form>
     </div>
@@ -437,6 +471,9 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
                 <Row key={k} label={l} desc={d}><input type="checkbox" checked={prefs.notify?.[k] !== false} onChange={e => savePrefs({ notify: { ...prefs.notify, [k]: e.target.checked } })} /></Row>
               ))}
             </Section>
+            <Section title="Email" desc="Only when this Bloki server is set up to send email.">
+              <Row label="Email notifications" desc="Get the notifications above by email too"><input type="checkbox" checked={prefs.email !== false} onChange={e => savePrefs({ email: e.target.checked })} /></Row>
+            </Section>
           </>}
 
           {tab === 'workspace' && ws && <>
@@ -549,6 +586,7 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
     const s = await api.setShare(page.id, body)
     setShare(s)
     if (s.invite) setInvite(inviteLink(s.invite))
+    if (s.emailed) store.toast('Invite sent by email')
     await store.reload()
   })
 
@@ -578,7 +616,7 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
             <button className="primary" disabled={busy}>Invite</button>
           </form>
         )}
-        {invite && <div className="invite-box"><div className="muted small">No account uses that email yet. Send them this link; they join as a guest with access to this page.</div><Copy text={invite} /></div>}
+        {invite && <div className="invite-box"><div className="muted small">{share.emailed ? 'No account uses that email yet, so we emailed them this invite link. They join as a guest with access to this page.' : 'No account uses that email yet. Send them this link; they join as a guest with access to this page.'}</div><Copy text={invite} /></div>}
 
         {share.grants.map(g => (
           <div className="share-row" key={g.user_id}>

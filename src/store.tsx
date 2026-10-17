@@ -39,6 +39,7 @@ export function parseHash() {
   if (site && !parts.length) return { public: site, page: location.pathname.split('/')[3] || site }
   if (parts[0] === 'public') return { public: parts[1], page: parts[2] ?? parts[1] }
   if (parts[0] === 'invite') return { invite: parts[1] }
+  if (parts[0] === 'reset') return { reset: parts[1], page: null }
   if (parts[0] === 'form') return { form: { db: parts[1], view: parts[2] }, page: null }
   if (parts[0] === 'quick-search') return { quickSearch: true, page: null }
   if (parts[0] === 'library') return { library: true, page: null }

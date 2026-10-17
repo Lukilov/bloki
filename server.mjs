@@ -6,6 +6,7 @@ import { join, extname, normalize } from 'node:path'
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
+import { mailer } from './mail.mjs'
 
 const ROOT = import.meta.dirname
 const DATA = process.env.BLOKI_DATA || join(ROOT, 'data')
@@ -17,6 +18,17 @@ const SECURE_COOKIE = process.env.BLOKI_SECURE_COOKIE === '1'
 // Behind a reverse proxy every request comes from the proxy; it appends the real client to X-Forwarded-For.
 const TRUST_PROXY = process.env.BLOKI_TRUST_PROXY === '1'
 const BACKUP_KEEP = Number(process.env.BLOKI_BACKUP_DAYS ?? 7)
+// Email (invites, notifications, password resets) needs an SMTP server and the address people open Bloki at, for links.
+const sendMail = mailer(process.env.BLOKI_SMTP_URL, process.env.BLOKI_MAIL_FROM)
+const APP_URL = (process.env.BLOKI_URL ?? '').replace(/\/+$/, '')
+export const mailEnabled = !!(sendMail && APP_URL)
+export const outbox = [] // the last messages handed to the mail server, for tests
+const mail = (to, subject, text) => {
+  if (!mailEnabled) return
+  subject = String(subject).replace(/\s+/g, ' ').slice(0, 200)
+  outbox.push({ to, subject, text }); if (outbox.length > 50) outbox.shift()
+  sendMail({ to, subject, text }).catch(e => console.error('Email to', to, 'failed:', e.message))
+}
 const SESSION_DAYS = 30
 const INVITE_DAYS = 7
 const MAX_JSON = 5 * 1024 * 1024
@@ -131,6 +143,7 @@ db.exec(`
   -- Personal API tokens (stored hashed) act as their owner in one workspace; webhooks post workspace events to a URL.
   CREATE TABLE IF NOT EXISTS api_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, last_used INTEGER);
   CREATE TABLE IF NOT EXISTS webhooks (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL, secret TEXT NOT NULL, created INTEGER NOT NULL, created_by TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS resets (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
 `)
 // Columns added after the first release.
@@ -373,6 +386,31 @@ export function emit(wsId, event, pageId, data) {
   }
 }
 const pageEvent = p => ({ id: p.id, title: p.title, kind: p.kind, parent_id: p.parent_id })
+
+/* ---------- Password reset by email ---------- */
+
+const resetSent = new Map()
+export function forgotPassword(email) {
+  if (!mailEnabled) throw new HttpError(400, 'This server can’t send email. Ask the workspace owner to set a new password.')
+  const u = db.prepare('SELECT id, email FROM users WHERE email = ?').get(cleanEmail(email))
+  // The answer is the same whether or not the account exists, and one email per 5 minutes per address.
+  if (!u || (resetSent.get(u.id) ?? 0) > Date.now() - 5 * 60 * 1000) return { ok: true }
+  resetSent.set(u.id, Date.now())
+  const t = token()
+  db.prepare('DELETE FROM resets WHERE user_id = ? OR expires < ?').run(u.id, Date.now())
+  db.prepare('INSERT INTO resets VALUES (?, ?, ?)').run(sha(t), u.id, Date.now() + 3600 * 1000)
+  mail(u.email, 'Reset your Bloki password', `Someone asked to reset the password for ${u.email}.\n\nChoose a new password: ${APP_URL}/#/reset/${t}\n\nThe link works for one hour. If it wasn’t you, ignore this email.`)
+  return { ok: true }
+}
+export function resetPassword(t, password) {
+  const r = db.prepare('SELECT user_id FROM resets WHERE token_hash = ? AND expires > ?').get(sha(String(t ?? '')), Date.now())
+  if (!r) throw new HttpError(400, 'This link is invalid or has expired. Ask for a new one.')
+  validateCredentials({ email: 'x@x.x', password }, false)
+  db.prepare('UPDATE users SET pass = ? WHERE id = ?').run(hashPassword(password), r.user_id)
+  db.prepare('DELETE FROM resets WHERE user_id = ?').run(r.user_id)
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(r.user_id) // every device signs in again
+  return { ok: true }
+}
 
 /* ---------- Two-step verification (TOTP, RFC 6238: 6 digits, 30 seconds, SHA-1, as authenticator apps expect) ---------- */
 
@@ -977,7 +1015,11 @@ export function setShare(user, id, body) {
       db.prepare('INSERT OR REPLACE INTO grants VALUES (?, ?, ?)').run(id, existing.id, level)
       notify(existing.id, p.workspace_id, 'share', id, user.id, LEVEL_LABELS[level])
     } else {
-      return { ...getShare(user, id), invite: createInvite(user, p.workspace_id, { role: 'guest', page_id: id, level }) }
+      const invite = createInvite(user, p.workspace_id, { role: 'guest', page_id: id, level })
+      const title = db.prepare('SELECT title FROM pages WHERE id = ?').get(id).title || 'Untitled'
+      const inviter = db.prepare('SELECT name FROM users WHERE id = ?').get(user.id).name
+      mail(email, `${inviter} invited you to ${title}`, `${inviter} invited you to the page “${title}” in Bloki.\n\nAccept the invite: ${APP_URL}/#/invite/${invite}\n\nThe link works for ${INVITE_DAYS} days.`)
+      return { ...getShare(user, id), invite, emailed: mailEnabled }
     }
   }
   // Who can see what may have changed.
@@ -996,6 +1038,13 @@ export function notify(userId, wsId, kind, pageId, actorId, text = '') {
   if (prefs.notify?.[kind] === false) return
   db.prepare('INSERT INTO notifications (id, user_id, workspace_id, kind, page_id, actor_id, text, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(randomUUID(), userId, wsId, kind, pageId, actorId, String(text).slice(0, 300), Date.now())
+  // The same news by email, unless turned off in Settings > Notifications.
+  if (!mailEnabled || prefs.email === false) return
+  const to = db.prepare('SELECT email FROM users WHERE id = ?').get(userId)?.email
+  const actor = (actorId && db.prepare('SELECT name FROM users WHERE id = ?').get(actorId)?.name) || 'Someone'
+  const page = (pageId && db.prepare('SELECT title FROM pages WHERE id = ?').get(pageId)?.title) || 'Untitled'
+  const what = { mention: `${actor} mentioned you in ${page}`, comment: `${actor} commented in ${page}`, share: `${actor} shared ${page} with you`, automation: `${text || 'An automation'} updated ${page}` }[kind] ?? `${actor} updated ${page}`
+  if (to) mail(to, what, `${what}${kind === 'comment' || kind === 'mention' ? `:\n\n${text}` : '.'}\n\nOpen it: ${APP_URL}/#/${pageId}\n\nTurn these emails off in Bloki under Settings > Notifications.`)
 }
 
 const personMentions = json => new Set([...String(json).matchAll(/"type":"person","props":\{"userId":"([\w-]+)"/g)].map(m => m[1]))
@@ -1327,7 +1376,9 @@ const routes = [
     c.setSession('', 0)
     return { ok: true }
   }, true],
-  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get() }), true],
+  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get(), mail: mailEnabled }), true],
+  ['POST', /^\/api\/auth\/forgot$/, async c => forgotPassword((await c.body()).email), true],
+  ['POST', /^\/api\/auth\/reset$/, async c => { const b = await c.body(); return resetPassword(b.token, b.password) }, true],
   ['GET', /^\/api\/invites\/([\w-]+)$/, (c, t) => inviteInfo(t), true],
   ['POST', /^\/api\/invites\/([\w-]+)\/accept$/, (c, t) => {
     const inv = useInvite(t, c.user.id)

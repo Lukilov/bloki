@@ -32,6 +32,19 @@ Without Docker, behind your own HTTPS proxy: `HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1
 (the proxy must forward WebSockets on `/collab` and `/live`, keep the `Host` header and append the client to `X-Forwarded-For`;
 leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick the address used to throttle logins).
 
+## Email
+Bloki sends email when you give it an SMTP server and the address people open it at:
+
+```bash
+BLOKI_SMTP_URL=smtps://user:password@smtp.example.com:465   # or smtp://…:587 with STARTTLS
+BLOKI_MAIL_FROM="Bloki <bloki@example.com>"
+BLOKI_URL=https://bloki.example.com
+```
+
+With that, inviting an email address without an account emails them the invite, notifications also arrive by email
+(each person can turn that off in Settings → Notifications), and the login screen offers "Forgot password?".
+Without it, invites are links you pass on and nothing is emailed.
+
 ## API
 Create a token in Settings → Connections; it can do what you can in that workspace. Send it as a bearer token:
 
@@ -68,8 +81,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
 - **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, sub-items/dependencies, chart/map views, web clipper, mobile apps or email sending
-(invites are links you pass on). Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
+No AI, sub-items/dependencies, chart/map views, web clipper, or mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)
 `desktop/` is an Electron app that opens your Bloki server in its own window, like Notion's desktop app:

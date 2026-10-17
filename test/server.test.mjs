@@ -6,6 +6,25 @@ import { join } from 'node:path'
 
 process.env.BLOKI_DATA = mkdtempSync(join(tmpdir(), 'bloki-'))
 process.env.BLOKI_DB = ':memory:'
+// A pretend mail server on this machine, so email (invites, notifications, password resets) is sent and can be read back.
+const smtp = { received: [] }
+const { createServer: tcpServer } = await import('node:net')
+const smtpServer = tcpServer(sock => {
+  let data = false, msg = ''
+  sock.write('220 test ESMTP\r\n')
+  sock.on('data', chunk => {
+    for (const line of String(chunk).split('\r\n').slice(0, -1)) {
+      if (data) { if (line === '.') { data = false; smtp.received.push(msg); msg = ''; sock.write('250 queued\r\n') } else msg += line + '\n'; continue }
+      const verb = line.slice(0, 4).toUpperCase()
+      sock.write(verb === 'EHLO' ? '250-test\r\n250 AUTH PLAIN\r\n' : verb === 'AUTH' ? '235 ok\r\n' : verb === 'DATA' ? '354 go\r\n' : verb === 'QUIT' ? '221 bye\r\n' : '250 ok\r\n')
+      if (verb === 'DATA') data = true
+    }
+  })
+}).listen(0, '127.0.0.1')
+await new Promise(r => smtpServer.once('listening', r))
+smtpServer.unref()
+process.env.BLOKI_SMTP_URL = `smtp://u:p@127.0.0.1:${smtpServer.address().port}`
+process.env.BLOKI_URL = 'https://bloki.test'
 const s = await import('../server.mjs')
 const { db } = s
 
@@ -471,4 +490,28 @@ test('sites: a published page gets an address with its title and description in 
   s.setShare(owner, p.id, { site_index: false })
   assert.equal(s.sitemap('my-site', 'https://b.test'), null)
   assert.ok(!s.robots('https://b.test').includes('my-site'))
+})
+
+test('email: invites to new people, notifications (unless turned off), and password resets', async () => {
+  const until = async f => { for (let i = 0; i < 100 && !f(); i++) await new Promise(r => setTimeout(r, 20)) }
+  const before = smtp.received.length
+  const p = s.createPage(owner, { title: 'Plans', section: 'workspace' })
+  const r = s.setShare(owner, p.id, { invite_email: 'newcomer@x.si', level: 'comment' })
+  assert.ok(r.emailed)
+  await until(() => smtp.received.length > before)
+  assert.match(smtp.received.at(-1), /To: newcomer@x\.si[\s\S]*Subject: Owner invited you to Plans[\s\S]*https:\/\/bloki\.test\/#\/invite\//)
+  s.addComment(member, p.id, 'Looks good')
+  await until(() => smtp.received.some(m => m.includes('commented in Plans')))
+  assert.ok(smtp.received.some(m => m.includes('To: owner@x.si') && m.includes('commented in Plans') && m.includes('Looks good')))
+
+  // Password reset: the emailed link sets a new password and signs every device out.
+  const n = smtp.received.length
+  assert.deepEqual(s.forgotPassword('nobody@x.si'), { ok: true }) // same answer, no email
+  s.forgotPassword('MEMBER@x.si')
+  await until(() => smtp.received.length > n)
+  const link = /#\/reset\/([\w-]+)/.exec(smtp.received.at(-1))[1]
+  assert.throws(() => s.resetPassword('nope', 'newpassword1'), e => e.status === 400)
+  s.resetPassword(link, 'newpassword1')
+  assert.equal(s.login({ email: 'member@x.si', password: 'newpassword1' }), member.id)
+  assert.throws(() => s.resetPassword(link, 'another-pass'), e => e.status === 400) // used up
 })

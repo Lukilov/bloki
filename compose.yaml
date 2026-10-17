@@ -6,6 +6,10 @@ services:
     environment:
       BLOKI_SECURE_COOKIE: "1"
       BLOKI_TRUST_PROXY: "1"
+      BLOKI_URL: https://${DOMAIN}
+      # Optional email: set these in .env too (see README → Email).
+      BLOKI_SMTP_URL: ${BLOKI_SMTP_URL:-}
+      BLOKI_MAIL_FROM: ${BLOKI_MAIL_FROM:-}
     volumes:
       - bloki:/data
   caddy:

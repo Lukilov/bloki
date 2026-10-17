@@ -46,7 +46,7 @@ export const can = (p: { access?: Level } | undefined, need: Level) => LEVELS.in
 
 export type Role = 'owner' | 'member' | 'guest'
 export type Person = { id: string; name: string; email?: string; role: Role }
-export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso' }
+export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso'; email?: boolean }
 export type Me = { user: { id: string; email: string; name: string; twoFactor?: boolean }; prefs: Prefs; workspaceId: string | null; role: Role | null; workspaces: { id: string; name: string; icon: string; role: Role }[] }
 
 export type Page = {
@@ -91,6 +91,7 @@ export type Share = {
   public: boolean
   site_slug?: string | null
   site_index?: boolean
+  emailed?: boolean
   grants: { user_id: string; level: Level; name: string; email?: string; role: Role | null }[]
   invite?: string
 }
@@ -166,7 +167,9 @@ export const api = {
   inbox: () => call<{ items: Notice[]; unread: number }>('GET', 'inbox'),
   updateInbox: (b: { ids?: string[]; all?: boolean; read?: boolean; archived?: boolean }) => call<{ items: Notice[]; unread: number }>('PATCH', 'inbox', b),
 
-  status: () => call<{ hasUsers: boolean }>('GET', 'auth/status'),
+  status: () => call<{ hasUsers: boolean; mail?: boolean }>('GET', 'auth/status'),
+  forgotPassword: (email: string) => call('POST', 'auth/forgot', { email }),
+  resetPassword: (token: string, password: string) => call('POST', 'auth/reset', { token, password }),
   login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
   tokens: () => call<ApiToken[]>('GET', 'tokens'),
   createToken: (name: string) => call<{ token: string }>('POST', 'tokens', { name }),
