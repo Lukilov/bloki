@@ -1254,3 +1254,28 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .publish-actions { display: flex; gap: 8px; }
 .publish-actions > * { flex: 1; text-align: center; }
 .publish-note { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+@media (max-width: 760px) { .sidebar-backdrop { position: fixed; inset: 0; z-index: 69; background: rgba(15, 15, 15, 0.45); } }
+@media (min-width: 761px) { .sidebar-backdrop { display: none; } }
+/* Phones: the floating sidebar takes most of the width, as in Notion's mobile layout. */
+@media (max-width: 760px) { .sidebar { width: min(300px, 85vw) !important; } }
+/* Phones: Settings fill the screen, the navigation becomes a scrolling row of tabs above the page. */
+@media (max-width: 760px) {
+  .dialog.settings { width: 100vw; height: 100dvh; max-width: none; border-radius: 0; flex-direction: column; }
+  .settings-tabs { width: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 48px 8px 8px; gap: 4px; box-shadow: var(--line) 0 -1px 0 inset; flex-shrink: 0; }
+  .settings-tabs .menu-heading { display: none; }
+  .settings-tabs button { flex: none; white-space: nowrap; width: auto; }
+  .settings-body { padding: 20px 16px 40px; }
+  .set-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .settings-close { top: 8px; right: 8px; }
+}
+.views-more.caret-only { padding: 6px 4px; margin-left: -6px; display: inline-flex; align-items: center; }
+@media (max-width: 760px) { .db-tabs { flex: 1; min-width: 0; } .db-tools { flex: none; } }
+@media (max-width: 760px) {
+  .layout-top { height: auto; flex-wrap: wrap; padding: 10px 12px; }
+  .layout-title { order: -1; flex-basis: 100%; }
+  .layout-body { flex-direction: column; overflow: auto; padding: 0 12px 24px; }
+  .layout-canvas { max-width: none; padding: 16px; }
+  .layout-side { width: auto; }
+}
+/* No popover is ever wider than the screen (phones). */
+.popover { max-width: calc(100vw - 16px); }

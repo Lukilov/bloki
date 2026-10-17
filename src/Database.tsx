@@ -438,6 +438,8 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
   const saved = views.find(v => v.id === viewId) ?? views[0]
   // Lock database (Notion): views and properties are frozen until someone who can edit unlocks it.
   const canStructure = !!db && can(db, 'edit') && !store.published
+  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 760px)').matches)
+  useEffect(() => { const m = matchMedia('(max-width: 760px)'); const on = () => setNarrow(m.matches); m.addEventListener('change', on); return () => m.removeEventListener('change', on) }, [])
   const perm = { rows: !!db && can(db, 'edit_content') && !store.published, structure: canStructure && !db?.schema.locked }
   // People who can't change the database still get personal filters and sorts, as in Notion.
   const view: View | undefined = saved && { ...saved, ...local }
@@ -531,8 +533,9 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
             ponytail: shows at most three tabs rather than measuring how many fit. */}
         <div className="db-tabs">
           {(() => {
-            const first = views.slice(0, 3)
-            const shown = first.some(v => v.id === view.id) ? first : [...views.slice(0, 2), view]
+            // In a narrow window Notion keeps only the open view, with a ▾ that lists the others.
+            const first = views.slice(0, narrow ? 1 : 3)
+            const shown = narrow ? [view] : first.some(v => v.id === view.id) ? first : [...views.slice(0, 2), view]
             return <>
               {shown.map(v => (
                 <button key={v.id} className={'view-tab' + (v.id === view.id ? ' on' : '')}
@@ -544,7 +547,9 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
                     : <span>{v.name}</span>}
                 </button>
               ))}
-              {views.length > shown.length
+              {narrow
+                ? <button className="views-more caret-only" title="All views" onClick={e => setPop({ kind: 'views', el: e.currentTarget })}><ChevronDown size={16} /></button>
+                : views.length > shown.length
                 ? <button className="views-more" onClick={e => setPop({ kind: 'views', el: e.currentTarget })}>{views.length - shown.length} more…</button>
                 : perm.structure && <button className="icon-btn view-add" title="Add view" onClick={e => setPop({ kind: 'add-view', el: e.currentTarget })}><Plus size={16} /></button>}
             </>

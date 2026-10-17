@@ -139,14 +139,16 @@ function Shortcuts({ close }: { close: () => void }) {
 function Shell({ dark }: { dark: boolean }) {
   const store = useStore()
   const [dialog, setDialog] = useState<{ kind: 'search' | 'settings' | 'shortcuts'; tab?: string } | null>(null)
-  const [collapsed, setCollapsed] = useState(() => readNumber('sidebarCollapsed', 0) === 1)
+  // Narrow windows (phones) start with the sidebar closed, as Notion's mobile layout does.
+  const narrowScreen = () => matchMedia('(max-width: 760px)').matches
+  const [collapsed, setCollapsed] = useState(() => narrowScreen() || readNumber('sidebarCollapsed', 0) === 1)
   const [peek, setPeek] = useState(false)
   const [library, setLibrary] = useState(() => !!parseHash().library)
   useEffect(() => { const on = () => setLibrary(!!parseHash().library); addEventListener('hashchange', on); return () => removeEventListener('hashchange', on) }, [])
   const [width, setWidth] = useState(() => readNumber('sidebarWidth', 248))
 
   useEffect(() => save('sidebarWidth', String(width)), [width])
-  useEffect(() => save('sidebarCollapsed', collapsed ? '1' : '0'), [collapsed])
+  useEffect(() => { if (!narrowScreen()) save('sidebarCollapsed', collapsed ? '1' : '0') }, [collapsed])
   // Desktop: edits made in the offline reader are sent once Bloki loads again. If the page changed on the server
   // meanwhile, the offline version is added as a "Changes made offline" toggle instead of replacing anything.
   useEffect(() => {
@@ -181,6 +183,8 @@ function Shell({ dark }: { dark: boolean }) {
     return () => removeEventListener('bloki:toggle-sidebar', toggle)
   }, [])
   useEffect(() => { if (store.current) recordVisit(store.current) }, [store.current])
+  // Picking a page on a phone closes the floating sidebar.
+  useEffect(() => { if (narrowScreen()) setCollapsed(true) }, [store.current]) // eslint-disable-line react-hooks/exhaustive-deps
   // Open on the last visited page unless the person prefers Home.
   const [started, setStarted] = useState(false)
   useEffect(() => {
@@ -226,6 +230,8 @@ function Shell({ dark }: { dark: boolean }) {
   return (
     <div className="app">
       {!collapsed && sidebar}
+      {/* On a phone the open sidebar floats over the page: tapping beside it closes it. */}
+      {!collapsed && narrowScreen() && <div className="sidebar-backdrop" onClick={() => setCollapsed(true)} />}
       {collapsed && (
         // Hovering the left edge peeks the sidebar, as in Notion.
         <div className={'sidebar-peek' + (peek ? ' open' : '')} onMouseLeave={() => setPeek(false)}>{peek && sidebar}</div>
