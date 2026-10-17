@@ -1285,3 +1285,15 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .cal-day.other .cal-num { color: var(--muted); }
 .share-actions { display: flex; justify-content: space-between; align-items: center; }
 .share-advanced { display: inline-flex; align-items: center; gap: 6px; height: 32px; font-size: 14px; color: var(--text); }
+/* Customize layout → + between sections, and the properties it pins into their own sections on row pages. */
+.layout-add { align-self: center; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--accent); background: var(--bg); color: var(--accent); }
+.layout-add:hover { background: rgba(35, 131, 226, 0.1); }
+.layout-unpin { margin-left: auto; padding: 2px; color: var(--accent); }
+.layout-muted-inline { color: var(--muted); }
+.menu-item.tall { height: 46px; }
+.menu-item.tall small { display: block; font-size: 12px; color: var(--muted); line-height: 1.2; }
+.menu-item.tall .menu-label { line-height: 1.25; }
+.menu-icon.boxed { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; box-shadow: var(--line) 0 0 0 1px inset; }
+.row-pinned { padding: 8px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.row-pinned-name { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
+.row-pinned .prop-value { min-height: 34px; }

@@ -387,7 +387,7 @@ export function Cell({ prop, row, db, readOnly, wrap, className = '', placeholde
 
 /* ---------- property editor (header menu > Edit property) ---------- */
 
-const PROP_TYPES: PropType[] = ['text', 'number', 'select', 'multi_select', 'status', 'date', 'person', 'files', 'checkbox', 'url', 'email', 'phone', 'formula', 'relation', 'rollup', 'created', 'created_by', 'updated', 'updated_by', 'unique_id']
+export const PROP_TYPES: PropType[] = ['text', 'number', 'select', 'multi_select', 'status', 'date', 'person', 'files', 'checkbox', 'url', 'email', 'phone', 'formula', 'relation', 'rollup', 'created', 'created_by', 'updated', 'updated_by', 'unique_id']
 
 export function newProp(type: PropType, name?: string): Prop {
   const p: Prop = { id: uid(), name: name ?? TYPE_NAMES[type], type }
@@ -561,7 +561,9 @@ export function RowProperties({ db, row, readOnly }: { db: Page; row: Page; read
   const [showEmpty, setShowEmpty] = useState(true)
   // Properties hidden with Customize layout don't show on row pages.
   const layout = db.schema.layout ?? {}
-  const props = (db.schema.props ?? []).filter(p => !layout.hidden?.includes(p.id))
+  const props = (db.schema.props ?? []).filter(p => !layout.hidden?.includes(p.id) && !layout.pinned?.includes(p.id))
+  // Customize layout → +: a property can sit in its own section below the group, as in Notion.
+  const pinned = (layout.pinned ?? []).map(id => db.schema.props?.find(p => p.id === id)).filter((p): p is Prop => !!p && !layout.hidden?.includes(p.id))
   const structure = ['full', 'edit'].includes(db.access) && !store.published
   const empty = (p: Prop) => { const v = value(row, p, db.schema, ctxOf(store)); return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) }
   const shown = props.filter(p => showEmpty || !empty(p))
@@ -582,6 +584,12 @@ export function RowProperties({ db, row, readOnly }: { db: Page; row: Page; read
         <TypePicker onPick={t => { store.patch(db.id, { schema: { ...db.schema, props: [...(db.schema.props ?? []), newProp(t)] } }); closeAdd() }} />
       </Popover>
       <div className="menu-divider" />
+      {pinned.map(p => (
+        <section className="row-pinned" key={p.id}>
+          <div className="row-pinned-name">{layout.icons !== false && <span className="prop-icon">{typeIcon(p)}</span>}{p.name}</div>
+          <Cell prop={p} row={row} db={db} readOnly={readOnly} className="prop-value" placeholder="Empty" />
+        </section>
+      ))}
     </div>
   )
 }

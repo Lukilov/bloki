@@ -31,7 +31,7 @@ export type View = {
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
 }
 /** "Customize layout" for a database's row pages, shared by every row. */
-export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal'; structure?: 'simple' | 'tabbed'; panel?: boolean }
+export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal'; structure?: 'simple' | 'tabbed'; panel?: boolean; pinned?: string[] }
 export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string; locked?: boolean; automations?: Automation[] }
 
 export type Level = 'none' | 'view' | 'comment' | 'edit_content' | 'edit' | 'full'
