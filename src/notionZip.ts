@@ -91,3 +91,31 @@ export function resolve(from: string, href: string) {
   for (const seg of target.split('/')) seg === '..' ? parts.pop() : seg !== '.' && parts.push(seg)
   return parts.join('/')
 }
+
+const COLORS = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red']
+type Column = { type: 'text' | 'number' | 'date' | 'checkbox' | 'url' | 'email' | 'select' | 'multi_select'; options?: { id: string; name: string; color: string }[]; convert: (v: string) => unknown }
+
+/** Notion's CSV has only text; guess each column's type from its values, as Notion does on import. */
+export function inferColumn(values: string[], newId: () => string): Column {
+  const vals = values.map(v => v.trim()).filter(Boolean)
+  const all = (re: RegExp) => vals.length > 0 && vals.every(v => re.test(v))
+  const day = (v: string) => { const t = Date.parse(v.replace(/\s*\(.*\)$/, '')); return Number.isNaN(t) ? null : new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 10) }
+  if (all(/^-?[\d,]*\.?\d+%?$/) && vals.some(v => /\d/.test(v))) return { type: 'number', convert: v => (v.trim() ? Number(v.replace(/[,%]/g, '')) : null) }
+  if (all(/^(Yes|No)$/i)) return { type: 'checkbox', convert: v => /^yes$/i.test(v.trim()) }
+  if (all(/^https?:\/\/\S+$/)) return { type: 'url', convert: v => v.trim() }
+  if (all(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return { type: 'email', convert: v => v.trim() }
+  // Dates: "October 17, 2026", "2026/10/17 3:00 PM", ranges "A → B".
+  if (all(/\d{4}/) && vals.every(v => v.split(' → ').every(d => day(d)))) return { type: 'date', convert: v => { if (!v.trim()) return null; const [a, b] = v.split(' → '); return b ? { start: day(a), end: day(b) } : { start: day(a) } } }
+  // A short list of repeated values is a select; comma-separated ones a multi-select.
+  const multi = vals.some(v => v.includes(', '))
+  const items = vals.flatMap(v => (multi ? v.split(', ') : [v])).map(x => x.trim())
+  const names = [...new Set(items)]
+  if (vals.length >= 2 && names.length <= 30 && names.length < items.length && names.every(n => n.length <= 60)) {
+    const options = names.map((name, i) => ({ id: newId(), name, color: COLORS[i % COLORS.length] }))
+    const idOf = (n: string) => options.find(o => o.name === n.trim())?.id
+    return multi
+      ? { type: 'multi_select', options, convert: v => v.split(', ').map(idOf).filter(Boolean) }
+      : { type: 'select', options, convert: v => idOf(v) ?? null }
+  }
+  return { type: 'text', convert: v => v }
+}

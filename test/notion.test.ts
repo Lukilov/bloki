@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { planNotion, resolve, unzip } from '../src/notionZip.ts'
+import { inferColumn, planNotion, resolve, unzip } from '../src/notionZip.ts'
 
 const id = (n: number) => String(n).padStart(32, 'a')
 
@@ -33,4 +33,22 @@ test('a Notion export (zip inside a zip) becomes pages, sub-pages, a database an
   assert.deepEqual(tasks.head, ['Name', 'Status'])
   assert.deepEqual(tasks.children.map(r => [r.title, r.cells, r.md]), [['First', ['Done'], 'Row body'], ['Second', ['To do, later'], undefined]])
   assert.equal(resolve(home.path, `Home%20${id(1)}/Child%20${id(2)}.md`), child.path)
+})
+
+test('Notion CSV columns get their types back from the values', () => {
+  let n = 0
+  const id = () => 'o' + n++
+  const conv = (vals: string[]) => { const c = inferColumn(vals, id); return [c.type, vals.map(c.convert)] }
+  assert.deepEqual(conv(['3', '1,200', '']), ['number', [3, 1200, null]])
+  assert.deepEqual(conv(['Yes', 'No']), ['checkbox', [true, false]])
+  assert.deepEqual(conv(['October 17, 2026', 'October 1, 2026 → October 3, 2026']), ['date', [{ start: '2026-10-17' }, { start: '2026-10-01', end: '2026-10-03' }]])
+  assert.deepEqual(conv(['https://a.si', 'http://b.si/x'])[0], 'url')
+  const sel = inferColumn(['Done', 'To do', 'Done'], id)
+  assert.equal(sel.type, 'select')
+  assert.deepEqual(sel.options!.map(o => o.name), ['Done', 'To do'])
+  assert.equal(sel.convert('To do'), sel.options![1].id)
+  const multi = inferColumn(['a, b', 'b', 'c, a'], id)
+  assert.equal(multi.type, 'multi_select')
+  assert.equal((multi.convert('a, b') as string[]).length, 2)
+  assert.equal(inferColumn(['one note', 'another note'], id).type, 'text')
 })

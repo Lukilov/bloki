@@ -359,23 +359,25 @@ export function importNotion(store: Store) {
     if (!f) return
     try {
       store.toast('Importing from Notion…')
-      const [{ unzip, planNotion, resolve }, { fromMarkdown }] = await Promise.all([import('./notionZip'), import('./Editor')])
+      const [{ unzip, planNotion, resolve, inferColumn }, { fromMarkdown }] = await Promise.all([import('./notionZip'), import('./Editor')])
       const files = await unzip(await f.arrayBuffer())
       const plan = planNotion(files)
       if (!plan.length) throw new Error('No Notion pages in this file. Export from Notion as "Markdown & CSV".')
       type N = (typeof plan)[number]
       // Pass 1: every page and database, so links can point at them. ponytail: one request per page; batch if imports get big.
       const ids = new Map<string, string>(), made: [N, string][] = []
-      const make = async (n: N, parent_id: string | null, cols?: string[]) => {
+      const make = async (n: N, parent_id: string | null, conv?: [string, (v: string) => unknown][]) => {
         const base = { title: n.title, ...(parent_id ? { parent_id } : { section: 'private' as const }) }
-        const props = n.head?.slice(1).map(name => ({ id: uid(), name: name || 'Column', type: 'text' as const })) ?? []
+        // Each column's type comes from its values (numbers, dates, Yes/No, links, repeated values become selects).
+        const cols = n.kind === 'db' ? (n.head ?? []).slice(1).map((_, i) => inferColumn(n.children.map(r => r.cells?.[i] ?? ''), uid)) : []
+        const props = n.head?.slice(1).map((name, i) => ({ id: uid(), name: name || 'Column', type: cols[i].type, ...(cols[i].options ? { options: cols[i].options } : {}) })) ?? []
         const page = n.kind === 'db'
           ? await api.create({ ...base, kind: 'db', schema: { titleName: n.head?.[0] || 'Name', props, views: [{ id: uid(), name: 'Table', type: 'table' }] } })
-          : await api.create({ ...base, ...(cols ? { props: Object.fromEntries(cols.map((c, i) => [c, n.cells?.[i] ?? ''])) } : {}) })
+          : await api.create({ ...base, ...(conv ? { props: Object.fromEntries(conv.map(([id, f], i) => [id, f(n.cells?.[i] ?? '')])) } : {}) })
         ids.set(n.path, page.id)
         if (n.kind === 'db') ids.set(n.path.replace(/(_all)?\.csv$/, '_all.csv'), page.id).set(n.path.replace(/_all\.csv$/, '.csv'), page.id)
         made.push([n, page.id])
-        for (const c of n.children) await make(c, page.id, n.kind === 'db' ? props.map(p => p.id) : undefined)
+        for (const c of n.children) await make(c, page.id, n.kind === 'db' ? props.map((p, i) => [p.id, cols[i].convert] as [string, (v: string) => unknown]) : undefined)
         return page.id
       }
       const first = await make(plan[0], null)
