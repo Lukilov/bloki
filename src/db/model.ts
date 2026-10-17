@@ -389,3 +389,27 @@ export function nestRows(rows: Page[], parentProp: string, open: Set<string>): N
   for (const r of rows) if (roots.includes(r)) walk(r, 0)
   return out
 }
+
+export type CalBar = { id: string; col: number; span: number; lane: number; fromBefore: boolean; toAfter: boolean }
+/** One calendar week: events laid out as bars across their days, in lanes like Notion's calendar.
+ *  Longer and earlier events take the top lanes; past `maxLanes`, each day counts what it hides ("N more"). */
+export function weekLanes(week: string[], events: { id: string; start: string; end: string }[], maxLanes: number) {
+  const first = week[0], last = week[week.length - 1]
+  const segs = events.filter(e => e.start <= last && e.end >= first).map(e => {
+    const col = e.start < first ? 0 : week.indexOf(e.start)
+    const endCol = e.end > last ? week.length - 1 : week.indexOf(e.end)
+    return { id: e.id, col, span: endCol - col + 1, fromBefore: e.start < first, toAfter: e.end > last }
+  }).sort((a, b) => a.col - b.col || b.span - a.span)
+  const lanes: number[][] = [] // the columns each lane has taken
+  const bars: CalBar[] = []
+  const more = week.map(() => 0)
+  for (const s of segs) {
+    const cols = Array.from({ length: s.span }, (_, i) => s.col + i)
+    let lane = lanes.findIndex(l => cols.every(c => !l.includes(c)))
+    if (lane < 0) { lane = lanes.length; lanes.push([]) }
+    lanes[lane].push(...cols)
+    if (lane < maxLanes) bars.push({ ...s, lane })
+    else for (const c of cols) more[c]++
+  }
+  return { bars, more }
+}

@@ -12,7 +12,7 @@ import { FormView } from './Form'
 import { ChartView } from './Chart'
 import { DashboardView, FeedView, WIDGETS } from './Feed'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
-import { aggregate, calcsFor, nestRows, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
+import { aggregate, calcsFor, nestRows, weekLanes, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
 type Store = ReturnType<typeof useStore>
 export type ViewProps = {
@@ -423,6 +423,7 @@ export function CalendarView(p: ViewProps) {
   const { db, view } = p
   const date = view.dateProp ? propOf(db.schema, view.dateProp) : undefined
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  const [moreDay, setMoreDay] = useState<{ el: HTMLElement; key: string } | null>(null)
   const monday = (store.me?.prefs?.weekStart ?? 'monday') === 'monday'
   if (!date) return <div className="view-empty">Add a Date property to use the calendar.</div>
   const days = monthGrid(cursor.y, cursor.m, monday)
@@ -431,6 +432,7 @@ export function CalendarView(p: ViewProps) {
   const startOf = (r: Page) => dateValue(value(r, date, db.schema, ctxOf(store)))?.start.slice(0, 10)
   const endOf = (r: Page) => dateValue(value(r, date, db.schema, ctxOf(store)))?.end?.slice(0, 10)
   const on = (k: string) => p.rows.filter(r => { const s = startOf(r); const e = endOf(r) ?? s; return !!s && k >= s && k <= e! })
+  const events = p.rows.flatMap(r => { const st = startOf(r); if (!st) return []; const en = endOf(r); return [{ id: r.id, start: st, end: en && en > st ? en : st }] })
   const move = (row: Page, k: string) => {
     const d = dateValue(value(row, date, db.schema, ctxOf(store)))
     if (!d) return store.patch(row.id, { props: { ...row.props, [date.id]: k } })
@@ -441,38 +443,59 @@ export function CalendarView(p: ViewProps) {
   return (
     <div className="calendar">
       <div className="cal-head">
-        <b>{new Date(cursor.y, cursor.m).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</b>
+        <b>{new Date(cursor.y, cursor.m).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</b>
         <span className="cal-nav">
           <button className="ghost" onClick={() => shift(-1)}><ChevronLeft size={16} /></button>
           <button className="ghost" onClick={() => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }) }}>Today</button>
           <button className="ghost" onClick={() => shift(1)}><ChevronRight size={16} /></button>
         </span>
       </div>
-      <div className="cal-grid">
+      <div className="cal-grid cal-dows">
         {(monday ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map(d => <div key={d} className="cal-dow">{d}</div>)}
-        {days.map(d => {
-          const key = isoDay(d)
-          return (
-            <div key={key} className={'cal-day' + (d.getMonth() !== cursor.m ? ' other' : '') + (key === today ? ' today' : '') + (d.getDay() % 6 === 0 ? ' weekend' : '')}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { const row = store.byId.get(e.dataTransfer.getData('text/row')); if (row && p.perm.rows) move(row, key) }}>
-              <div className="cal-day-head">
-                {p.perm.rows && <button className="ghost cal-add" onClick={() => p.addRow({ [date.id]: key })}><Plus size={13} /></button>}
-                <span className="cal-num">{d.getDate() === 1 ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : d.getDate()}</span>
+      </div>
+      {/* Week by week: day cells underneath, events on top as bars across their days (lanes of 28px under the date). */}
+      {Array.from({ length: days.length / 7 }, (_, w) => days.slice(w * 7, w * 7 + 7)).map(week => {
+        const keys = week.map(isoDay)
+        const { bars, more } = weekLanes(keys, events, CAL_LANES)
+        return (
+          <div key={keys[0]} className="cal-week">
+            {week.map((d, i) => (
+              <div key={keys[i]} className={'cal-day' + (d.getMonth() !== cursor.m ? ' other' : '') + (keys[i] === today ? ' today' : '') + (d.getDay() % 6 === 0 ? ' cal-weekend' : '')}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { const row = store.byId.get(e.dataTransfer.getData('text/row')); if (row && p.perm.rows) move(row, keys[i]) }}>
+                <div className="cal-day-head">
+                  {p.perm.rows && <button className="ghost cal-add" title="New page" onClick={() => p.addRow({ [date.id]: keys[i] })}><Plus size={13} /></button>}
+                  <span className="cal-num">{d.getDate() === 1 ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d.getDate()}</span>
+                </div>
+                {more[i] > 0 && <button className="ghost cal-more" style={{ top: 28 + CAL_LANES * 28 }} onClick={e => setMoreDay({ el: e.currentTarget, key: keys[i] })}>{more[i]} more</button>}
               </div>
-              {on(key).map(r => (
-                <div key={r.id} className="cal-item" style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)} onClick={() => p.openRow(r)}>
+            ))}
+            {bars.map(b => {
+              const r = store.byId.get(b.id)!
+              return (
+                <div key={b.id} className={'cal-item' + (b.fromBefore ? ' from-before' : '') + (b.toAfter ? ' to-after' : '')}
+                  style={{ left: `calc(${(b.col / 7) * 100}% + 4px)`, width: `calc(${(b.span / 7) * 100}% - 8px)`, top: 28 + b.lane * 28, ...tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row) }}
+                  draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)} onClick={() => p.openRow(r)}>
                   <span className="cal-item-title">{r.icon && <>{iconOf(r, 12)} </>}{label(r)}</span>
                   <CardProps row={r} props={p.props.filter(x => x.id !== date.id)} db={db} />
                 </div>
-              ))}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      <Popover anchor={moreDay?.el ?? null} onClose={() => setMoreDay(null)} className="menu-pop" width={260}>
+        {moreDay && <div className="menu-list">
+          <div className="menu-heading">{toDate(moreDay.key).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+          {on(moreDay.key).map(r => <button key={r.id} className="menu-item" onClick={() => { setMoreDay(null); p.openRow(r) }}><span className="menu-icon">{iconOf(r, 16)}</span><span className="menu-label">{label(r)}</span></button>)}
+        </div>}
+      </Popover>
     </div>
   )
 }
+
+// How many events show under a date before the rest fold into "N more".
+const CAL_LANES = 3
 
 /* ---------- Timeline ---------- */
 
@@ -550,7 +573,7 @@ export function TimelineView(p: ViewProps) {
                 <span key={d.getTime()} className={'tick day' + (isoDay(d) === isoDay(new Date()) ? ' today' : '')} style={{ left: x(isoDay(d)), width: dw }}>{d.getDate()}</span>
               ))}
             </div>
-            {scale === 'week' && days.map(d => (d.getDay() === 0 || d.getDay() === 6) && <div key={'w' + d.getTime()} className="weekend" style={{ left: x(isoDay(d)), width: dw }} />)}
+            {scale === 'week' && days.map(d => (d.getDay() === 0 || d.getDay() === 6) && <div key={'w' + d.getTime()} className="tl-weekend" style={{ left: x(isoDay(d)), width: dw }} />)}
             <div className="today-line" style={{ left: todayX }} />
             <div className="timeline-rows">
             {/* Dependencies: an arrow from the end of each blocking item to the start of the one it blocks. */}

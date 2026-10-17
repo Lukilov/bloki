@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregate, applyView, groupRows, matches, nestRows, newRowDefaults, parseCSV, value, visibleRange, type Ctx } from '../src/db/model.ts'
+import { aggregate, applyView, groupRows, matches, nestRows, newRowDefaults, weekLanes, parseCSV, value, visibleRange, type Ctx } from '../src/db/model.ts'
 import type { Page, Prop, Schema } from '../src/api.ts'
 
 const page = (id: string, parent: string | null, props: Record<string, unknown> = {}, extra: Partial<Page> = {}): Page => ({
@@ -85,4 +85,13 @@ test('sub-items nest under their parent; collapsed parents hide them; loops and 
   const show = (open: string[]) => nestRows(rows, 'par', new Set(open)).map(n => `${'.'.repeat(n.depth)}${n.row.id}${n.kids ? '+' + n.kids : ''}`).join(' ')
   assert.equal(show([]), 'a+1 d x+1')
   assert.equal(show(['a', 'b', 'x']), 'a+1 .b+1 ..c d x+1 .y+1')
+})
+
+test('calendar weeks: events become bars in lanes, cut at the week edges, with "more" past the last lane', () => {
+  const week = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']
+  const ev = (id: string, start: string, end = start) => ({ id, start, end })
+  const { bars, more } = weekLanes(week, [ev('trip', '2026-10-16', '2026-10-20'), ev('a', '2026-10-14'), ev('long', '2026-10-01', '2026-10-13'), ev('b', '2026-10-16'), ev('c', '2026-10-16'), ev('next', '2026-10-19')], 2)
+  const at = Object.fromEntries(bars.map(b => [b.id, `${b.col}+${b.span}@${b.lane}${b.fromBefore ? '<' : ''}${b.toAfter ? '>' : ''}`]))
+  assert.deepEqual(at, { long: '0+2@0<', a: '2+1@0', trip: '4+3@0>', b: '4+1@1' })
+  assert.deepEqual(more, [0, 0, 0, 0, 1, 0, 0]) // c doesn't fit on Friday
 })
