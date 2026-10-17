@@ -9,6 +9,7 @@ import { iconOf, label, useStore } from '../store'
 import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
 import { FormView } from './Form'
+import { ChartView } from './Chart'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
 import { aggregate, calcsFor, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
@@ -546,5 +547,5 @@ export function TimelineView(p: ViewProps) {
 }
 
 export const VIEW_COMPONENTS: Record<View['type'], (p: ViewProps) => ReactNode> = {
-  table: TableView, board: BoardView, gallery: GalleryView, list: ListView, calendar: CalendarView, timeline: TimelineView, form: FormView,
+  table: TableView, board: BoardView, gallery: GalleryView, list: ListView, calendar: CalendarView, timeline: TimelineView, form: FormView, chart: ChartView,
 }

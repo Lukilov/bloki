@@ -1407,3 +1407,34 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .site-link:hover { background: var(--hover); }
 .site-link.on { color: var(--text); font-weight: 500; }
 .forgot-link { align-self: flex-end; font-size: 13px; margin-top: -6px; }
+
+/* Chart view: bars and line on a shared plot, a donut from a conic gradient. */
+.chart-view { padding: 12px 0 24px; }
+.chart-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 16px; font-size: 13px; color: var(--muted); }
+.chart-bar label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; }
+.chart-bar select { height: 28px; font-size: 13px; width: auto; }
+.chart-plot { display: flex; flex-direction: column; }
+.chart-area { position: relative; display: flex; align-items: flex-end; gap: 12px; height: 280px; padding-top: 22px; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(to top, var(--line) 0 1px, transparent 1px 25%) bottom / 100% calc(100% - 22px) no-repeat; }
+.chart-col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.chart-col i { display: block; width: min(64px, 70%); border-radius: 4px 4px 0 0; transition: height 200ms ease; }
+.chart-col b { position: absolute; transform: translateY(-4px); font-size: 12px; font-weight: 500; color: var(--text-2); }
+.chart-col em { position: absolute; width: 8px; height: 8px; margin-bottom: -4px; border-radius: 50%; background: var(--t-blue); }
+.chart-line { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: calc(100% - 22px); overflow: visible; }
+.chart-line polyline { fill: none; stroke: var(--t-blue); stroke-width: 2; }
+.chart-x { display: flex; gap: 12px; padding-top: 6px; }
+.chart-x span { flex: 1; text-align: center; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-hbars { display: flex; flex-direction: column; gap: 8px; }
+.chart-hrow { display: grid; grid-template-columns: minmax(80px, 160px) 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+.chart-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.chart-track { height: 22px; }
+.chart-track i { display: block; height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+.chart-hrow b { font-weight: 500; color: var(--text-2); }
+.chart-donut-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 32px; }
+.chart-donut { width: 220px; height: 220px; border-radius: 50%; display: grid; place-items: center; }
+.chart-donut > span { width: 62%; height: 62%; border-radius: 50%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.chart-donut b { font-size: 24px; font-weight: 600; }
+.chart-donut small { font-size: 12px; color: var(--muted); text-align: center; padding: 0 8px; }
+.chart-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.chart-legend li { display: flex; align-items: center; gap: 8px; }
+.chart-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.chart-legend b { margin-left: 12px; font-weight: 500; color: var(--text-2); }
