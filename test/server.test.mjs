@@ -515,3 +515,12 @@ test('email: invites to new people, notifications (unless turned off), and passw
   assert.equal(s.login({ email: 'member@x.si', password: 'newpassword1' }), member.id)
   assert.throws(() => s.resetPassword(link, 'another-pass'), e => e.status === 400) // used up
 })
+
+test('button notifications reach people who can open the page', () => {
+  const p = s.createPage(owner, { title: 'Release', section: 'workspace' })
+  const before = s.inbox(member).items.length
+  s.notifyFromButton(owner, p.id, { user_id: member.id, text: 'Ready for review' })
+  assert.equal(s.inbox(member).items.length, before + 1)
+  assert.throws(() => s.notifyFromButton(owner, p.id, { user_id: guest.id, text: 'x' }), e => e.status === 400) // guest can't open it
+  throws403(() => s.notifyFromButton(guest, p.id, { user_id: member.id, text: 'x' }))
+})

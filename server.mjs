@@ -771,6 +771,15 @@ export function setTeamMember(user, id, { user_id, role }) {
   return user_id === user.id && role == null ? { ok: true } : teamMembers(user, id)
 }
 
+/** A button's "Send notification to…": tells someone about a page both of you can open. */
+export function notifyFromButton(user, pageId, { user_id, text }) {
+  need(user.id, pageId, 'view')
+  const page = db.prepare('SELECT workspace_id FROM pages WHERE id = ?').get(pageId)
+  if (!roleOf(page.workspace_id, user_id) || !atLeast(pageAccess(user_id, pageId), 'view')) throw new HttpError(400, 'That person can’t open this page.')
+  notify(user_id, page.workspace_id, 'automation', pageId, user.id, String(text ?? '').slice(0, 300) || 'Button')
+  return { ok: true }
+}
+
 /* ---------- Automations ---------- */
 // A database's automations run here when a row is added or one of its properties changes. Their own edits don't
 // trigger further automations, so they can't loop.
@@ -1385,6 +1394,7 @@ const routes = [
     db.prepare('UPDATE sessions SET workspace_id = ? WHERE token_hash = ?').run(inv.workspace_id, c.user.tokenHash)
     return { workspace_id: inv.workspace_id, page_id: inv.page_id }
   }],
+  ['POST', /^\/api\/pages\/([\w-]+)\/notify$/, async (c, id) => notifyFromButton(c.user, id, await c.body())],
   ['GET', /^\/api\/teams$/, c => listTeams(c.user)],
   ['POST', /^\/api\/teams$/, async c => createTeam(c.user, await c.body())],
   ['PATCH', /^\/api\/teams\/([\w-]+)$/, async (c, id) => updateTeam(c.user, id, await c.body())],

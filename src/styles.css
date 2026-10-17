@@ -1379,7 +1379,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .button-editor-name .button-editor-icon { flex: none; width: 32px; height: 32px; padding: 0; text-align: center; border-radius: 6px; box-shadow: var(--line) 0 0 0 1px inset !important; font-size: 16px; }
 .button-editor-label { font-size: 12px; color: var(--muted); }
 .button-step { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 8px; background: var(--hover); font-size: 14px; }
-.button-step:first-of-type, .button-step.add { flex-direction: row; align-items: center; gap: 10px; }
+.button-step.when, .button-step.add { flex-direction: row; align-items: center; gap: 10px; }
 .button-step.add { border: none; box-shadow: var(--line) 0 0 0 1px inset; background: none; color: var(--text-2); }
 .button-step-head { display: flex; align-items: center; gap: 10px; }
 .button-step-head b { flex: 1; }
@@ -1438,3 +1438,4 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .chart-legend li { display: flex; align-items: center; gap: 8px; }
 .chart-legend i { width: 10px; height: 10px; border-radius: 3px; }
 .chart-legend b { margin-left: 12px; font-weight: 500; color: var(--text-2); }
+.button-row { display: flex; gap: 8px; } .button-row > * { flex: 1; min-width: 0; }

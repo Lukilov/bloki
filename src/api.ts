@@ -151,6 +151,7 @@ export const api = {
     return data.url as string
   },
 
+  notifyFromButton: (page: string, user_id: string, text: string) => call('POST', `pages/${page}/notify`, { user_id, text }),
   formDef: (db: string, view: string) => call<FormDef>('GET', `forms/${db}/${view}`),
   submitForm: (db: string, view: string, answers: Record<string, unknown>) => call<{ id: string }>('POST', `forms/${db}/${view}`, { answers }),
 

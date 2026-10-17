@@ -67,7 +67,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
   Customize page, Version history, Export (Markdown, HTML, PDF), Import, backlinks, word count.
 - **Editor**: Notion's `/` menu, `@` people/pages/dates, `[[` page links, block ⋮⋮ menu (Turn into, Color, Copy link to block,
   Duplicate, Move to, Delete, Comment), formatting toolbar with comments, toggles and toggle headings, callouts, code,
-  tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media, buttons (insert blocks, add a page to a database, confirm, open a page or link).
+  tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media, buttons (insert blocks, add a page to a database, edit pages in a database, send a notification, confirm, open a page or link).
 - **Comments**: page discussions, comments on selected text, replies, resolve, edit, delete, comment sidebar, Updates sidebar.
 - **Databases**: table, board, gallery, list, calendar, timeline, chart (vertical or horizontal bars, line, donut; count, sum or average by any groupable property) and form views (forms add rows; share them with members or anyone with the link); filters, sorts, grouping, hidden groups, calculations,
   column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
