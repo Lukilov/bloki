@@ -1385,3 +1385,5 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .button-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
 .button-editor-line { width: 1px; height: 32px; background: var(--line); align-self: center; margin: 4px 0; }
 .button-done { height: 32px; margin-top: 8px; }
+.two-step { max-width: 320px; }
+.setup-key, .recovery-codes { display: block; padding: 8px 10px; border-radius: 6px; background: var(--hover); font-size: 14px; letter-spacing: 0.06em; white-space: pre; user-select: all; }

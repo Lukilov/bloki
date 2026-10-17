@@ -47,7 +47,7 @@ export const can = (p: { access?: Level } | undefined, need: Level) => LEVELS.in
 export type Role = 'owner' | 'member' | 'guest'
 export type Person = { id: string; name: string; email?: string; role: Role }
 export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso' }
-export type Me = { user: { id: string; email: string; name: string }; prefs: Prefs; workspaceId: string | null; role: Role | null; workspaces: { id: string; name: string; icon: string; role: Role }[] }
+export type Me = { user: { id: string; email: string; name: string; twoFactor?: boolean }; prefs: Prefs; workspaceId: string | null; role: Role | null; workspaces: { id: string; name: string; icon: string; role: Role }[] }
 
 export type Page = {
   id: string
@@ -96,7 +96,8 @@ export type Notice = { id: string; kind: 'mention' | 'comment' | 'share' | 'auto
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) { super(message); this.status = status }
+  data: Record<string, unknown>
+  constructor(status: number, message: string, data: Record<string, unknown> = {}) { super(message); this.status = status; this.data = data }
 }
 
 /** Set when viewing a published page: reads go to the public endpoints. */
@@ -113,7 +114,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   if (!res.ok) {
     // A session that expired mid-use: start over at the login screen.
     if (res.status === 401 && path !== 'me' && !path.startsWith('auth/')) location.reload()
-    throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`)
+    throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`, data)
   }
   return data
 }
@@ -162,7 +163,10 @@ export const api = {
   updateInbox: (b: { ids?: string[]; all?: boolean; read?: boolean; archived?: boolean }) => call<{ items: Notice[]; unread: number }>('PATCH', 'inbox', b),
 
   status: () => call<{ hasUsers: boolean }>('GET', 'auth/status'),
-  login: (email: string, password: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password }),
+  login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
+  twoFactorSetup: () => call<{ secret: string; uri: string }>('POST', 'me/2fa/setup', {}),
+  twoFactorEnable: (code: string) => call<{ codes: string[] }>('POST', 'me/2fa/enable', { code }),
+  twoFactorDisable: (password: string, code: string) => call('POST', 'me/2fa/disable', { password, code }),
   register: (b: { email: string; name: string; password: string; invite?: string }) => call<{ page_id: string | null }>('POST', 'auth/register', b),
   logout: () => call('POST', 'auth/logout', {}),
   me: () => call<Me>('GET', 'me'),

@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, createReadStream, existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname, normalize } from 'node:path'
-import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto'
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
 
@@ -139,7 +139,7 @@ addColumns('pages', [['workspace_id', 'TEXT'], ['workspace_access', 'TEXT'], ['p
   ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50'], ['team_id', 'TEXT']])
 addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT'], ['reactions', 'TEXT']])
 addColumns('history', [['user_id', 'TEXT']])
-addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"]])
+addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"], ['totp', 'TEXT'], ['totp_pending', 'TEXT'], ['totp_recovery', 'TEXT'], ['totp_last', 'INTEGER']])
 
 // Full-text search index (FTS5), kept in step with pages by triggers so every write path is covered.
 // The body is the text of the page's blocks, pulled out of the BlockNote JSON by SQLite itself.
@@ -171,7 +171,7 @@ export const atLeast = (have, need) => rank(have) >= rank(need)
 const ROLES = ['owner', 'member', 'guest']
 
 export class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status }
+  constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra }
 }
 const deny = (msg = 'You do not have access to this page.') => { throw new HttpError(403, msg) }
 
@@ -299,7 +299,7 @@ export function register({ email, name, password, invite }) {
 
 // ponytail: in-memory throttle, resets on restart; fine for one process
 const failures = new Map()
-export function login({ email, password }, ip = '') {
+export function login({ email, password, code }, ip = '') {
   const key = ip + '|' + cleanEmail(email)
   const f = failures.get(key)
   if (f && f.count >= 10 && f.until > Date.now()) throw new HttpError(429, 'Too many attempts. Try again in 15 minutes.')
@@ -309,8 +309,70 @@ export function login({ email, password }, ip = '') {
     failures.set(key, { count: n, until: Date.now() + 15 * 60 * 1000 })
     throw new HttpError(401, 'Wrong email or password.')
   }
+  // With two-step verification on, the password alone isn't enough: the app asks for a code and sends both again.
+  if (user.totp) {
+    if (!code) throw new HttpError(401, 'Enter the code from your authenticator app.', { twoFactor: true })
+    if (!checkSecondFactor(user, code)) {
+      const n = f && f.until > Date.now() ? f.count + 1 : 1
+      failures.set(key, { count: n, until: Date.now() + 15 * 60 * 1000 })
+      throw new HttpError(401, 'That code didn’t work. Try again.', { twoFactor: true })
+    }
+  }
   failures.delete(key)
   return user.id
+}
+
+/* ---------- Two-step verification (TOTP, RFC 6238: 6 digits, 30 seconds, SHA-1, as authenticator apps expect) ---------- */
+
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+const toBase32 = buf => [...buf].map(b => b.toString(2).padStart(8, '0')).join('').match(/.{1,5}/g).map(c => B32[parseInt(c.padEnd(5, '0'), 2)]).join('')
+const fromBase32 = s => Buffer.from([...s.toUpperCase()].map(c => B32.indexOf(c).toString(2).padStart(5, '0')).join('').match(/.{8}/g).map(b => parseInt(b, 2)))
+export function totp(secret, step) {
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(step))
+  const h = createHmac('sha1', fromBase32(secret)).update(counter).digest()
+  return String((h.readUInt32BE(h[19] & 15) & 0x7fffffff) % 1e6).padStart(6, '0')
+}
+// A code from the current 30 seconds or either neighbour (clock drift), each usable once; or an unused recovery code.
+function checkSecondFactor(user, input, secret = user.totp) {
+  const code = String(input ?? '').replace(/[\s-]/g, '').toLowerCase()
+  const now = Math.floor(Date.now() / 30000)
+  if (/^\d{6}$/.test(code)) {
+    const step = [now - 1, now, now + 1].find(t => t > (user.totp_last ?? 0) && timingSafeEqual(Buffer.from(totp(secret, t)), Buffer.from(code)))
+    if (step === undefined) return false
+    db.prepare('UPDATE users SET totp_last = ? WHERE id = ?').run(step, user.id)
+    return true
+  }
+  const left = JSON.parse(user.totp_recovery ?? '[]')
+  if (!left.includes(sha(code))) return false
+  db.prepare('UPDATE users SET totp_recovery = ? WHERE id = ?').run(JSON.stringify(left.filter(h => h !== sha(code))), user.id)
+  return true
+}
+
+export function setupTwoFactor(user) {
+  const u = db.prepare('SELECT totp FROM users WHERE id = ?').get(user.id)
+  if (u.totp) throw new HttpError(400, 'Two-step verification is already on.')
+  const secret = toBase32(randomBytes(20))
+  db.prepare('UPDATE users SET totp_pending = ? WHERE id = ?').run(secret, user.id)
+  return { secret, uri: `otpauth://totp/Bloki:${encodeURIComponent(user.email)}?secret=${secret}&issuer=Bloki` }
+}
+
+export function enableTwoFactor(user, code) {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)
+  if (!u.totp_pending) throw new HttpError(400, 'Start the setup again.')
+  if (!checkSecondFactor(u, code, u.totp_pending)) throw new HttpError(400, 'That code didn’t work. Check the time on your phone and try again.')
+  // Recovery codes: shown once, stored hashed; each signs in once if the phone is lost.
+  const codes = Array.from({ length: 8 }, () => randomBytes(5).toString('hex').replace(/^(.{5})/, '$1-'))
+  db.prepare('UPDATE users SET totp = totp_pending, totp_pending = NULL, totp_recovery = ? WHERE id = ?').run(JSON.stringify(codes.map(c => sha(c.replace('-', '')))), user.id)
+  return { codes }
+}
+
+export function disableTwoFactor(user, { password, code }) {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id)
+  if (typeof password !== 'string' || !checkPassword(password, u.pass)) throw new HttpError(400, 'Current password is wrong.')
+  if (u.totp && !checkSecondFactor(u, code)) throw new HttpError(400, 'That code didn’t work.')
+  db.prepare('UPDATE users SET totp = NULL, totp_pending = NULL, totp_recovery = NULL WHERE id = ?').run(user.id)
+  return { ok: true }
 }
 
 export function startSession(userId, workspaceId) {
@@ -336,7 +398,8 @@ export function sessionUser(rawToken) {
 export function me(user) {
   const prefs = JSON.parse(db.prepare('SELECT prefs FROM users WHERE id = ?').get(user.id)?.prefs ?? '{}')
   const workspaces = db.prepare('SELECT w.id, w.name, w.icon, m.role FROM members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? ORDER BY w.created').all(user.id)
-  return { user: { id: user.id, email: user.email, name: user.name }, prefs, workspaceId: user.workspaceId, role: user.workspaceId ? roleOf(user.workspaceId, user.id) : null, workspaces }
+  const twoFactor = !!db.prepare('SELECT totp FROM users WHERE id = ?').get(user.id)?.totp
+  return { user: { id: user.id, email: user.email, name: user.name, twoFactor }, prefs, workspaceId: user.workspaceId, role: user.workspaceId ? roleOf(user.workspaceId, user.id) : null, workspaces }
 }
 
 export function people(user, wsId) {
@@ -1207,6 +1270,9 @@ const routes = [
     }
     return me({ ...c.user, ...db.prepare('SELECT name FROM users WHERE id = ?').get(c.user.id) })
   }],
+  ['POST', /^\/api\/me\/2fa\/setup$/, c => setupTwoFactor(c.user)],
+  ['POST', /^\/api\/me\/2fa\/enable$/, async c => enableTwoFactor(c.user, (await c.body()).code)],
+  ['POST', /^\/api\/me\/2fa\/disable$/, async c => disableTwoFactor(c.user, await c.body())],
   ['POST', /^\/api\/me\/logout-all$/, c => { db.prepare('DELETE FROM sessions WHERE user_id = ?').run(c.user.id); c.setSession('', 0); return { ok: true } }],
   ['DELETE', /^\/api\/me$/, async c => { deleteAccount(c.user, (await c.body()).password); c.setSession('', 0); return { ok: true } }],
   ['GET', /^\/api\/workspaces\/([\w-]+)\/export$/, (c, id) => exportWorkspace(c.user, id)],
@@ -1291,7 +1357,7 @@ async function handle(req, res) {
       try {
         return send(await fn(ctx, ...m.slice(1)), 200, headers)
       } catch (e) {
-        if (e instanceof HttpError) return send({ error: e.message }, e.status, headers)
+        if (e instanceof HttpError) return send({ error: e.message, ...e.extra }, e.status, headers)
         throw e
       }
     }

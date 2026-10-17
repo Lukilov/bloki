@@ -394,3 +394,25 @@ test('teamspaces: members see and add pages, open ones can be joined, private on
   s.deleteTeam(member, secret.id)
   assert.ok(!s.listTeams(member).some(t => t.id === secret.id))
 })
+
+test('two-step verification: RFC 6238 codes, login needs the code, each code and recovery code works once', () => {
+  assert.equal(s.totp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 1), '287082') // RFC 6238 test vector at T = 59s, last 6 digits
+  const u = join_('twofa@x.si', 'member')
+  const user = { ...u, email: 'twofa@x.si' }
+  const { secret, uri } = s.setupTwoFactor(user)
+  assert.match(uri, /^otpauth:\/\/totp\/Bloki:twofa%40x\.si\?secret=[A-Z2-7]{32}&issuer=Bloki$/)
+  const now = Math.floor(Date.now() / 30000)
+  assert.throws(() => s.enableTwoFactor(user, '000000'), e => e.status === 400)
+  const { codes } = s.enableTwoFactor(user, s.totp(secret, now))
+  assert.equal(codes.length, 8)
+  const creds = { email: 'twofa@x.si', password: 'password1' }
+  assert.throws(() => s.login(creds), e => e.status === 401 && e.extra.twoFactor)
+  assert.throws(() => s.login({ ...creds, code: s.totp(secret, now) }), e => e.status === 401) // already used
+  assert.equal(s.login({ ...creds, code: s.totp(secret, now + 1) }), u.id)
+  assert.equal(s.login({ ...creds, code: codes[0].toUpperCase() }), u.id)
+  assert.throws(() => s.login({ ...creds, code: codes[0] }), e => e.status === 401) // recovery codes work once
+  assert.ok(s.me(user).user.twoFactor)
+  assert.throws(() => s.disableTwoFactor(user, { password: 'nope-nope', code: codes[1] }), e => e.status === 400)
+  s.disableTwoFactor(user, { password: 'password1', code: codes[1] })
+  assert.equal(s.login(creds), u.id)
+})

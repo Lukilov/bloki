@@ -4,7 +4,7 @@ import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Li
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
 import { Menu, Popover, usePopover } from './ui'
-import { api, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share } from './api'
+import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share } from './api'
 import { iconOf, label, useStore } from './store'
 
 const ROLE_NAMES: Record<Role, string> = { owner: 'Workspace owner', member: 'Member', guest: 'Guest' }
@@ -41,7 +41,8 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [hasUsers, setHasUsers] = useState(true)
   const [info, setInfo] = useState<Awaited<ReturnType<typeof api.inviteInfo>> | null>(null)
-  const [form, setForm] = useState({ email: '', name: '', password: '' })
+  const [form, setForm] = useState({ email: '', name: '', password: '', code: '' })
+  const [needCode, setNeedCode] = useState(false)
   const { error, busy, run } = useAction()
 
   useEffect(() => {
@@ -54,7 +55,8 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
     run(async () => {
       let page: string | null = null
       if (mode === 'login') {
-        await api.login(form.email, form.password)
+        // Accounts with two-step verification answer the first try with a request for the code.
+        await api.login(form.email, form.password, needCode ? form.code : undefined).catch(e => { if (e instanceof ApiError && e.data.twoFactor) setNeedCode(true); throw e })
         if (invite) page = (await api.acceptInvite(invite)).page_id
       } else {
         page = (await api.register({ ...form, invite })).page_id
@@ -78,6 +80,7 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
         <label>Email<input type="email" autoComplete="email" required value={form.email} onChange={set('email')} /></label>
         {mode === 'register' && <label>Name<input autoComplete="name" required value={form.name} onChange={set('name')} /></label>}
         <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 8 : undefined} value={form.password} onChange={set('password')} /></label>
+        {needCode && mode === 'login' && <label>Verification code<input autoFocus inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code or a recovery code" required value={form.code} onChange={set('code')} /></label>}
         {error && <p className="danger">{error}</p>}
         <button className="primary" disabled={busy}>{mode === 'login' ? 'Continue' : 'Sign up'}</button>
         {canRegister && hasUsers && (
@@ -214,6 +217,42 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'public' | 'offline'
 
+/** Settings → Account → 2-step verification: an authenticator app's code on top of the password. */
+function TwoStep({ on }: { on: boolean }) {
+  const store = useStore()
+  const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null)
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const [f, setF] = useState({ code: '', password: '' })
+  const { error, busy, run } = useAction()
+  const finish = async () => { setSetup(null); setF({ code: '', password: '' }); await store.reloadMe() }
+  return (
+    <Row label="2-step verification" desc={on ? 'On: logging in asks for a code from your authenticator app.' : 'Add a code from an authenticator app (1Password, Google Authenticator, Authy…) to logging in.'}>
+      <span className="col two-step">
+        {codes ? <>
+          <b>Save these recovery codes</b>
+          <span className="muted small">Each one logs you in once if you lose your phone. They won’t be shown again.</span>
+          <code className="recovery-codes">{codes.join('\n')}</code>
+          <button onClick={() => { navigator.clipboard?.writeText(codes.join('\n')); setCodes(null) }}>Copy and close</button>
+        </> : setup ? <>
+          <span className="muted small">In your authenticator app, add an account with this setup key (or open the link on your phone), then enter the 6-digit code it shows.</span>
+          <code className="setup-key">{setup.secret.match(/.{1,4}/g)!.join(' ')}</code>
+          <a className="small" href={setup.uri}>Open in authenticator app</a>
+          <input inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code" value={f.code} onChange={e => setF({ ...f, code: e.target.value })} />
+          <span className="row">
+            <button className="primary" disabled={busy || f.code.replace(/\s/g, '').length < 6} onClick={() => run(async () => { const r = await api.twoFactorEnable(f.code); setCodes(r.codes); await finish() })}>Turn on</button>
+            <button className="ghost" onClick={() => setSetup(null)}>Cancel</button>
+          </span>
+        </> : on ? <>
+          <input type="password" autoComplete="current-password" placeholder="Current password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} />
+          <input inputMode="numeric" autoComplete="one-time-code" placeholder="Code or recovery code" value={f.code} onChange={e => setF({ ...f, code: e.target.value })} />
+          <button className="danger" disabled={busy || !f.password || !f.code} onClick={() => run(async () => { await api.twoFactorDisable(f.password, f.code); await finish() })}>Turn off</button>
+        </> : <button onClick={() => run(async () => setSetup(await api.twoFactorSetup()))}>Add verification method</button>}
+        {error && <span className="danger small">{error}</span>}
+      </span>
+    </Row>
+  )
+}
+
 function Section({ title, children, desc }: { title: string; desc?: string; children: React.ReactNode }) {
   return <section className="set-section"><h4>{title}</h4>{desc && <p className="muted small">{desc}</p>}{children}</section>
 }
@@ -286,6 +325,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
                   <button disabled={busy || !pw.password || pw.new_password.length < 8} onClick={() => run(async () => { await api.updateMe(pw); setPw({ password: '', new_password: '' }); done('Password changed. Other devices were logged out.') })}>Change password</button>
                 </span>
               </Row>
+              <TwoStep on={!!me.user.twoFactor} />
             </Section>
             <Section title="Support">
               <Row label="Log out of all devices" desc="Log out of all other active sessions on other devices besides this one.">
