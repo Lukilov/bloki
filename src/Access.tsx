@@ -217,6 +217,24 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'public' | 'offline'
 
+/** Publish → site settings: a short address (/s/<slug>) and whether search engines may index the site. */
+function SiteSettings({ slug, indexed, update }: { slug: string; indexed: boolean; update: (b: object) => void }) {
+  const [draft, setDraft] = useState(slug)
+  useEffect(() => setDraft(slug), [slug])
+  const clean = draft.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+  return (
+    <div className="site-settings">
+      <label className="site-address"><span className="muted small">Site address</span>
+        <span className="row"><span className="site-prefix">{location.host}/s/</span>
+          <input value={draft} placeholder="my-site" onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && update({ site_slug: clean || null })} />
+          <button disabled={clean === slug} onClick={() => update({ site_slug: clean || null })}>Save</button></span>
+      </label>
+      <label className="site-index"><span><b>Search engine indexing</b><small className="muted">Let Google and others list this site</small></span>
+        <input type="checkbox" checked={indexed} onChange={e => update({ site_index: e.target.checked })} /></label>
+    </div>
+  )
+}
+
 /** Settings → Connections: personal API tokens (act as you in this workspace) and the workspace's webhooks. */
 function Connections({ owner }: { owner: boolean }) {
   const [tokens, setTokens] = useState<ApiToken[]>([])
@@ -610,9 +628,10 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
               <div className="publish-page"><b>{label(page)}</b>{first && <p>{first}</p>}</div>
             </div>
             {share.public ? <>
-              <Copy text={publicLink(page.id)} />
+              <Copy text={publicLink(page.id, share.site_slug)} />
+              {full && <SiteSettings slug={share.site_slug ?? ''} indexed={!!share.site_index} update={update} />}
               <div className="publish-actions">
-                <a className="button" href={publicLink(page.id)} target="_blank" rel="noreferrer">View site</a>
+                <a className="button" href={publicLink(page.id, share.site_slug)} target="_blank" rel="noreferrer">View site</a>
                 {full && <button className="danger" onClick={() => update({ public: false })}>Unpublish</button>}
               </div>
             </> : full

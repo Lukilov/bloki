@@ -1,7 +1,7 @@
 // Bloki server: one SQLite file, a JSON API, uploaded files and the built app.
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, createReadStream, existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, createReadStream, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname, normalize } from 'node:path'
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac } from 'node:crypto'
 import { WebSocketServer } from 'ws'
@@ -139,7 +139,9 @@ const addColumns = (table, cols) => {
     if (!db.prepare('SELECT 1 FROM pragma_table_info(?) WHERE name = ?').get(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`)
 }
 addColumns('pages', [['workspace_id', 'TEXT'], ['workspace_access', 'TEXT'], ['public', 'INTEGER NOT NULL DEFAULT 0'], ['created_by', 'TEXT'], ['updated_by', 'TEXT'],
-  ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50'], ['team_id', 'TEXT']])
+  ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50'], ['team_id', 'TEXT'], ['site_slug', 'TEXT'], ['site_index', 'INTEGER NOT NULL DEFAULT 0']])
+// A published page's site address (/s/<slug>) is unique across the server.
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS pages_site_slug ON pages(site_slug) WHERE site_slug IS NOT NULL')
 addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT'], ['reactions', 'TEXT']])
 addColumns('history', [['user_id', 'TEXT']])
 addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"], ['totp', 'TEXT'], ['totp_pending', 'TEXT'], ['totp_recovery', 'TEXT'], ['totp_last', 'INTEGER']])
@@ -915,7 +917,7 @@ export function backlinks(user, id) {
 
 export function getShare(user, id) {
   const level = need(user.id, id, 'view')
-  const p = db.prepare('SELECT workspace_id, workspace_access, public, parent_id FROM pages WHERE id = ?').get(id)
+  const p = db.prepare('SELECT workspace_id, workspace_access, public, parent_id, site_slug, site_index FROM pages WHERE id = ?').get(id)
   // What the page inherits when it has no override of its own.
   let inherited = 'full'
   for (let a = p.parent_id && db.prepare('SELECT parent_id, workspace_access FROM pages WHERE id = ?').get(p.parent_id); a; a = a.parent_id && db.prepare('SELECT parent_id, workspace_access FROM pages WHERE id = ?').get(a.parent_id)) {
@@ -928,6 +930,8 @@ export function getShare(user, id) {
     workspace_access: p.workspace_access,
     inherited_workspace_access: inherited,
     public: !!p.public,
+    site_slug: p.site_slug,
+    site_index: !!p.site_index,
     grants: grants.map(g => (guestView && g.user_id !== user.id ? { ...g, email: undefined } : g)),
   }
 }
@@ -944,6 +948,13 @@ export function setShare(user, id, body) {
     if (!atLeast(pageAccess(user.id, id), 'full')) db.prepare("INSERT OR REPLACE INTO grants VALUES (?, ?, 'full')").run(id, user.id)
   }
   if ('public' in body) db.prepare('UPDATE pages SET public = ? WHERE id = ?').run(Number(!!body.public), id)
+  if ('site_slug' in body) {
+    const slug = body.site_slug ? String(body.site_slug).trim().toLowerCase() : null
+    if (slug && !/^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(slug)) throw new HttpError(400, 'Use lowercase letters, numbers and dashes.')
+    if (slug && db.prepare('SELECT 1 FROM pages WHERE site_slug = ? AND id != ?').get(slug, id)) throw new HttpError(400, 'That address is taken.')
+    db.prepare('UPDATE pages SET site_slug = ? WHERE id = ?').run(slug, id)
+  }
+  if ('site_index' in body) db.prepare('UPDATE pages SET site_index = ? WHERE id = ?').run(Number(!!body.site_index), id)
   if ('grant' in body) {
     const { user_id, level } = body.grant
     if (!roleOf(p.workspace_id, user_id)) throw new HttpError(400, 'That person is not in this workspace. Invite them first.')
@@ -1234,6 +1245,25 @@ export function publicPage(rootId, id) {
   return { ...p, access: 'view', favorite: false, parent_id: id === rootId ? null : p.parent_id }
 }
 
+/** /s/<slug>[/<page>]: the app's page with the published page's title and description in its <head>, so links preview
+ *  and search engines (when indexing is on) read them; the app then shows the page as on #/public/…. */
+export function sitePage(slug, pageId, html) {
+  const root = db.prepare('SELECT id, site_index FROM pages WHERE site_slug = ? AND public = 1 AND trashed = 0').get(slug)
+  if (!root) return null
+  const id = pageId ?? root.id
+  if (!publicRoot(root.id).includes(id)) return null
+  const p = db.prepare('SELECT title, content FROM pages WHERE id = ? AND trashed = 0').get(id)
+  if (!p) return null
+  const texts = []
+  const walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') { if (v.type === 'text' && typeof v.text === 'string') texts.push(v.text); Object.values(v).forEach(walk) } }
+  try { walk(JSON.parse(p.content || '[]')) } catch { /* no text */ }
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+  const title = esc(p.title || 'Untitled'), desc = esc(texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 160))
+  const head = `<title>${title}</title><meta name="description" content="${desc}"><meta property="og:title" content="${title}"><meta property="og:description" content="${desc}">` +
+    `<meta name="robots" content="${root.site_index ? 'index, follow' : 'noindex'}"><meta name="bloki-site" content="${root.id}"><meta name="bloki-site-page" content="${esc(id)}">`
+  return html.replace(/<title>[^<]*<\/title>/, '').replace('</head>', head + '</head>')
+}
+
 /* ---------- HTTP ---------- */
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.woff2': 'font/woff2', '.json': 'application/json' }
@@ -1440,6 +1470,12 @@ async function handle(req, res) {
     return sendFile(res, p, safe ? {} : { 'content-disposition': 'attachment', 'content-type': 'application/octet-stream' })
   }
 
+  const site = /^\/s\/([a-z0-9-]+)(?:\/([\w-]+))?\/?$/.exec(url.pathname)
+  if (site && existsSync(join(DIST, 'index.html'))) {
+    const html = sitePage(site[1], site[2], readFileSync(join(DIST, 'index.html'), 'utf8'))
+    res.writeHead(html ? 200 : 404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' })
+    return res.end(html ?? '<!doctype html><title>Not found</title><p>This site doesn’t exist or isn’t published.</p>')
+  }
   const p = normalize(join(DIST, url.pathname))
   if (p.startsWith(DIST) && existsSync(p) && statSync(p).isFile()) return sendFile(res, p)
   if (existsSync(join(DIST, 'index.html'))) return sendFile(res, join(DIST, 'index.html'))

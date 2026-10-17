@@ -446,3 +446,22 @@ test('API tokens act as their owner; webhooks are signed and only carry pages th
     s.deleteWebhook(owner, s.listWebhooks(owner)[0].id)
   } finally { sink.close() }
 })
+
+test('sites: a published page gets an address with its title and description in the page head', () => {
+  const p = s.createPage(owner, { title: 'My <site>', section: 'workspace', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello & welcome' }] }] })
+  const sub = s.createPage(owner, { title: 'About', parent_id: p.id })
+  const html = '<html><head><title>Bloki</title></head><body></body></html>'
+  s.setShare(owner, p.id, { site_slug: 'my-site' })
+  assert.equal(s.sitePage('my-site', undefined, html), null) // not published yet
+  s.setShare(owner, p.id, { public: true })
+  const page = s.sitePage('my-site', undefined, html)
+  assert.match(page, /<title>My &lt;site&gt;<\/title>/)
+  assert.match(page, /name="description" content="Hello &amp; welcome"/)
+  assert.match(page, /name="robots" content="noindex"/)
+  s.setShare(owner, p.id, { site_index: true })
+  assert.match(s.sitePage('my-site', sub.id, html), /<title>About<\/title>.*content="index, follow"/)
+  assert.equal(s.sitePage('my-site', s.createPage(owner, { title: 'Elsewhere', section: 'workspace' }).id, html), null)
+  assert.throws(() => s.setShare(owner, sub.id, { site_slug: 'my-site' }), e => e.status === 400) // taken
+  assert.throws(() => s.setShare(owner, sub.id, { site_slug: 'Bad Slug!' }), e => e.status === 400)
+  assert.equal(s.getShare(owner, p.id).site_slug, 'my-site')
+})

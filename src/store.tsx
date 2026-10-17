@@ -31,6 +31,9 @@ export const useStore = () => useContext(Ctx)
 /** Routes: #/<page>, #/library, #/form/<database>/<view>, #/public/<root>/<page>, #/invite/<token>, #/quick-search (the desktop app's Command Search) */
 export function parseHash() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
+  // A site address (/s/<slug>/<page>): the server names the published root and page in the page head.
+  const site = document.querySelector('meta[name="bloki-site"]')?.getAttribute('content')
+  if (site && !parts.length) return { public: site, page: document.querySelector('meta[name="bloki-site-page"]')?.getAttribute('content') ?? site }
   if (parts[0] === 'public') return { public: parts[1], page: parts[2] ?? parts[1] }
   if (parts[0] === 'invite') return { invite: parts[1] }
   if (parts[0] === 'form') return { form: { db: parts[1], view: parts[2] }, page: null }

@@ -89,6 +89,8 @@ export type Share = {
   workspace_access: Level | null
   inherited_workspace_access: Level
   public: boolean
+  site_slug?: string | null
+  site_index?: boolean
   grants: { user_id: string; level: Level; name: string; email?: string; role: Role | null }[]
   invite?: string
 }
@@ -196,6 +198,6 @@ export const api = {
 }
 
 export const inviteLink = (token: string) => `${location.origin}/#/invite/${token}`
-export const publicLink = (id: string) => `${location.origin}/#/public/${id}`
+export const publicLink = (id: string, slug?: string | null) => (slug ? `${location.origin}/s/${slug}` : `${location.origin}/#/public/${id}`)
 export const uid = () => crypto.randomUUID().slice(0, 8)
 export const COLORS = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red']

@@ -359,6 +359,8 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .head-actions button:hover { color: var(--text-2); }
 .title-input { width: 100%; border: none; background: none; resize: none; font-size: 40px; font-weight: 700; line-height: 1.2; padding: 0 2px; margin-bottom: 5px; outline: none; overflow: hidden; color: var(--text); font-family: inherit; box-shadow: none !important; }
 .title-input::placeholder { color: var(--faint); }
+/* Sized by its text, even when the page first lays out hidden (a background tab or pane has no width yet). */
+@supports (field-sizing: content) { .title-input { field-sizing: content; height: auto !important; } }
 .small-text .title-input { font-size: 32px; }
 .backlinks-toggle { border: none; color: var(--muted); font-size: 14px; padding: 2px 4px; margin: 4px 0; }
 .backlinks.open { display: flex; flex-direction: column; align-items: flex-start; margin: 4px 0; }
@@ -1392,3 +1394,11 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .connection-secret button { align-self: flex-start; }
 .webhook-events { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
 .webhook-events label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; margin: 0; color: var(--text-2); }
+.site-settings { display: flex; flex-direction: column; gap: 10px; margin: 8px 0; }
+.site-address { display: flex; flex-direction: column; gap: 4px; }
+.site-address .row { display: flex; align-items: center; gap: 6px; }
+.site-address input { flex: 1; min-width: 0; }
+.site-prefix { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.site-index { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-direction: row; }
+.site-index b { display: block; font-size: 14px; font-weight: 500; }
+.site-index small { display: block; font-size: 12px; }
