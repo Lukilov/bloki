@@ -85,7 +85,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
 - **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, map view, or native mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
+No AI or map view. On phones Bloki installs as an app from the browser (Add to Home Screen); there are no App Store apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)
 `desktop/` is an Electron app that opens your Bloki server in its own window, like Notion's desktop app:
