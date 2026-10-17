@@ -1402,3 +1402,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .site-index { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-direction: row; }
 .site-index b { display: block; font-size: 14px; font-weight: 500; }
 .site-index small { display: block; font-size: 12px; }
+.site-nav { display: flex; gap: 2px; margin-right: 8px; }
+.site-link { height: 28px; padding: 0 8px; border: none; background: none; border-radius: 6px; font-size: 14px; color: var(--text-2); }
+.site-link:hover { background: var(--hover); }
+.site-link.on { color: var(--text); font-weight: 500; }

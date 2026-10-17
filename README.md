@@ -60,7 +60,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
   column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
   rollup, formula (Notion 2.0 style), created/edited time and by, and unique IDs.
 - **People**: workspaces, teamspaces (open, closed or private, with owners and members, in their own sidebar section), owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
-  Can comment, Can view), general access, publish to web (with a site address /s/<name> and optional search engine indexing), Inbox notifications with per-person settings.
+  Can comment, Can view), general access, publish to web (with a site address /s/<name>, header links to its top pages, and optional search engine indexing with robots.txt and a sitemap), Inbox notifications with per-person settings.
 - **Live co-editing**: several people on one page at once, with named cursors. View-only people can't change the shared doc.
 - **Live sidebar and databases**: edits by others appear without reloading; only the changed page is fetched, and only by people who can see it.
 - **Search**: full-text index (SQLite FTS5) over titles and page text, matching word starts and ignoring accents; titles rank first.

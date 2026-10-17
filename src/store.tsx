@@ -29,11 +29,14 @@ const Ctx = createContext<Store>(null!)
 export const useStore = () => useContext(Ctx)
 
 /** Routes: #/<page>, #/library, #/form/<database>/<view>, #/public/<root>/<page>, #/invite/<token>, #/quick-search (the desktop app's Command Search) */
+/** On a site address, the slug in /s/<slug>/…; pages there move by path instead of by #/public/…. */
+const siteSlug = () => (document.querySelector('meta[name="bloki-site"]') ? /^\/s\/([a-z0-9-]+)/.exec(location.pathname)?.[1] : undefined)
+
 export function parseHash() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   // A site address (/s/<slug>/<page>): the server names the published root and page in the page head.
   const site = document.querySelector('meta[name="bloki-site"]')?.getAttribute('content')
-  if (site && !parts.length) return { public: site, page: document.querySelector('meta[name="bloki-site-page"]')?.getAttribute('content') ?? site }
+  if (site && !parts.length) return { public: site, page: location.pathname.split('/')[3] || site }
   if (parts[0] === 'public') return { public: parts[1], page: parts[2] ?? parts[1] }
   if (parts[0] === 'invite') return { invite: parts[1] }
   if (parts[0] === 'form') return { form: { db: parts[1], view: parts[2] }, page: null }
@@ -97,7 +100,8 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
   useEffect(() => {
     const on = () => setCurrent(parseHash().page ?? null)
     addEventListener('hashchange', on)
-    return () => removeEventListener('hashchange', on)
+    addEventListener('popstate', on) // back and forward on a site address
+    return () => { removeEventListener('hashchange', on); removeEventListener('popstate', on) }
   }, [])
 
   const value = useMemo<Store>(() => {
@@ -118,7 +122,12 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
       setError,
       toastText,
       toast: t => setToast(t),
-      go: id => { location.hash = publicRoot ? `/public/${publicRoot}/${id ?? publicRoot}` : id ? '/' + id : '' },
+      go: id => {
+        const slug = publicRoot && siteSlug()
+        if (!slug) { location.hash = publicRoot ? `/public/${publicRoot}/${id ?? publicRoot}` : id ? '/' + id : ''; return }
+        history.pushState(null, '', `/s/${slug}${id && id !== publicRoot ? '/' + id : ''}`)
+        dispatchEvent(new HashChangeEvent('hashchange'))
+      },
       patch: async (id, p) => {
         setPages(ps => ps.map(x => (x.id === id ? { ...x, ...p, updated: Date.now() } : x)))
         try {

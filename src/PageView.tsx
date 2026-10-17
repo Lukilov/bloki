@@ -272,6 +272,10 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
               </button>
               <button className="icon-btn more-btn" title="Style, export, and more…" onClick={openPop('more')}><MoreHorizontal size={18} /></button>
             </>}
+            {/* A published site links its top pages in the header, as Notion Sites' navigation does. */}
+            {store.published && <nav className="site-nav">{store.children(store.pages.find(p => !p.parent_id)?.id ?? null).filter(p => p.kind === 'page').slice(0, 6).map(p => (
+              <button key={p.id} className={'site-link' + (crumbs.some(c => c?.id === p.id) ? ' on' : '')} onClick={() => store.go(p.id)}>{label(p)}</button>
+            ))}</nav>}
             {store.published && <span className="badge">Published with Bloki</span>}
           </div>
         </header>

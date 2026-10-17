@@ -464,4 +464,11 @@ test('sites: a published page gets an address with its title and description in 
   assert.throws(() => s.setShare(owner, sub.id, { site_slug: 'my-site' }), e => e.status === 400) // taken
   assert.throws(() => s.setShare(owner, sub.id, { site_slug: 'Bad Slug!' }), e => e.status === 400)
   assert.equal(s.getShare(owner, p.id).site_slug, 'my-site')
+  // Crawlers: robots.txt opens only indexed sites, whose sitemap lists every published page.
+  assert.match(s.robots('https://b.test'), /Allow: \/s\/my-site\nDisallow: \/\n\nSitemap: https:\/\/b\.test\/s\/my-site\/sitemap\.xml/)
+  const xml = s.sitemap('my-site', 'https://b.test')
+  assert.ok(xml.includes('<loc>https://b.test/s/my-site</loc>') && xml.includes(`<loc>https://b.test/s/my-site/${sub.id}</loc>`))
+  s.setShare(owner, p.id, { site_index: false })
+  assert.equal(s.sitemap('my-site', 'https://b.test'), null)
+  assert.ok(!s.robots('https://b.test').includes('my-site'))
 })

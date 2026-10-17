@@ -1264,6 +1264,20 @@ export function sitePage(slug, pageId, html) {
   return html.replace(/<title>[^<]*<\/title>/, '').replace('</head>', head + '</head>')
 }
 
+/** robots.txt: only sites with search engine indexing on are open to crawlers; the app and everything else stay out. */
+export function robots(origin) {
+  const sites = db.prepare('SELECT site_slug FROM pages WHERE site_slug IS NOT NULL AND site_index = 1 AND public = 1 AND trashed = 0').all()
+  return ['User-agent: *', ...sites.map(s => `Allow: /s/${s.site_slug}`), 'Disallow: /', '', ...sites.map(s => `Sitemap: ${origin}/s/${s.site_slug}/sitemap.xml`)].join('\n') + '\n'
+}
+export function sitemap(slug, origin) {
+  const root = db.prepare('SELECT id FROM pages WHERE site_slug = ? AND site_index = 1 AND public = 1 AND trashed = 0').get(slug)
+  if (!root) return null
+  const ids = publicRoot(root.id)
+  const rows = db.prepare(`SELECT id, updated FROM pages WHERE id IN (${ids.map(() => '?').join(',')}) AND trashed = 0`).all(...ids)
+  const url = r => `<url><loc>${origin}/s/${slug}${r.id === root.id ? '' : '/' + r.id}</loc><lastmod>${new Date(r.updated).toISOString().slice(0, 10)}</lastmod></url>`
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${rows.map(url).join('')}</urlset>\n`
+}
+
 /* ---------- HTTP ---------- */
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.woff2': 'font/woff2', '.json': 'application/json' }
@@ -1470,6 +1484,10 @@ async function handle(req, res) {
     return sendFile(res, p, safe ? {} : { 'content-disposition': 'attachment', 'content-type': 'application/octet-stream' })
   }
 
+  const origin = `${TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https' || SECURE_COOKIE ? 'https' : 'http'}://${req.headers.host}`
+  if (url.pathname === '/robots.txt') { res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); return res.end(robots(origin)) }
+  const map = /^\/s\/([a-z0-9-]+)\/sitemap\.xml$/.exec(url.pathname)
+  if (map) { const xml = sitemap(map[1], origin); res.writeHead(xml ? 200 : 404, { 'content-type': 'application/xml; charset=utf-8' }); return res.end(xml ?? '') }
   const site = /^\/s\/([a-z0-9-]+)(?:\/([\w-]+))?\/?$/.exec(url.pathname)
   if (site && existsSync(join(DIST, 'index.html'))) {
     const html = sitePage(site[1], site[2], readFileSync(join(DIST, 'index.html'), 'utf8'))
