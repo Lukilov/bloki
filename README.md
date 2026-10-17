@@ -32,6 +32,21 @@ Without Docker, behind your own HTTPS proxy: `HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1
 (the proxy must forward WebSockets on `/collab` and `/live`, keep the `Host` header and append the client to `X-Forwarded-For`;
 leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick the address used to throttle logins).
 
+## API
+Create a token in Settings → Connections; it can do what you can in that workspace. Send it as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer bloki_…" https://bloki.example.com/api/pages
+curl -H "Authorization: Bearer bloki_…" -H "content-type: application/json" -d '{"title":"From a script","section":"private"}' https://bloki.example.com/api/pages
+```
+
+The useful calls: `GET /api/pages` (the tree), `GET/PATCH/DELETE /api/pages/<id>` (one page with its blocks; PATCH takes `title`, `content`, `props`, `parent_id`…),
+`POST /api/pages` (`parent_id` or `section`, `title`, `content`, `props`; a database row has the database as parent), `GET /api/search?q=…`,
+`GET/POST /api/pages/<id>/comments`. Tokens can't change the account, other tokens or webhooks.
+
+Workspace owners can add webhooks there too: Bloki POSTs `{ event, at, workspace_id, data }` for `page.created`, `page.updated`, `page.deleted`
+and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body with the webhook's secret>`. A webhook only hears about pages its creator can see.
+
 ## What's in it
 - **Sidebar**: workspace switcher, Search, Home, Inbox, Favorites/Workspace/Shared/Private sections, page "⋯" menus
   (favorite, copy link, duplicate, rename, move, trash, open in new tab), drag to nest, resizable and collapsible, Settings, Templates, Trash.

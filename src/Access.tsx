@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plug, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
 import { Menu, Popover, usePopover } from './ui'
-import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share } from './api'
+import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share, type ApiToken, type Webhook } from './api'
 import { iconOf, label, useStore } from './store'
 
 const ROLE_NAMES: Record<Role, string> = { owner: 'Workspace owner', member: 'Member', guest: 'Guest' }
@@ -215,7 +215,54 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 /* ---------- Settings & members ---------- */
 
-type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'public' | 'offline'
+type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'public' | 'offline'
+
+/** Settings → Connections: personal API tokens (act as you in this workspace) and the workspace's webhooks. */
+function Connections({ owner }: { owner: boolean }) {
+  const [tokens, setTokens] = useState<ApiToken[]>([])
+  const [hooks, setHooks] = useState<Webhook[]>([])
+  const [shown, setShown] = useState<{ label: string; value: string } | null>(null)
+  const [name, setName] = useState('')
+  const [hook, setHook] = useState({ url: '', events: ['page.created', 'page.updated'] as string[] })
+  const { error, busy, run } = useAction()
+  const load = useCallback(() => { api.tokens().then(setTokens); if (owner) api.webhooks().then(setHooks) }, [owner])
+  useEffect(load, [load])
+  const EVENTS = ['page.created', 'page.updated', 'page.deleted', 'comment.created']
+  return <>
+    <h3>Connections</h3>
+    <p className="settings-sub">Let scripts and other apps read and change your pages through the Bloki API</p>
+    {shown && <div className="connection-secret"><b>{shown.label}</b><span className="muted small">Copy it now; it won’t be shown again.</span><code>{shown.value}</code>
+      <button onClick={() => { navigator.clipboard?.writeText(shown.value); setShown(null) }}>Copy and close</button></div>}
+    <Section title="API tokens" desc="A token can do what you can in this workspace. Send it as Authorization: Bearer <token> to the same /api/… URLs the app uses.">
+      {tokens.map(t => (
+        <Row key={t.id} label={t.name} desc={`Created ${new Date(t.created).toLocaleDateString()} · ${t.last_used ? 'last used ' + new Date(t.last_used).toLocaleDateString() : 'never used'}`}>
+          <button className="danger" onClick={() => run(async () => { await api.deleteToken(t.id); load() })}>Revoke</button>
+        </Row>
+      ))}
+      <Row label="New token" desc="Name it after what will use it.">
+        <span className="row"><input placeholder="e.g. Backup script" value={name} onChange={e => setName(e.target.value)} />
+          <button disabled={busy || !name.trim()} onClick={() => run(async () => { const r = await api.createToken(name); setShown({ label: 'Your new API token', value: r.token }); setName(''); load() })}>Create</button></span>
+      </Row>
+    </Section>
+    {owner && <Section title="Webhooks" desc="Bloki posts JSON to these URLs when things change, signed with X-Bloki-Signature (sha256 HMAC of the body). Only pages the webhook’s creator can see are sent.">
+      {hooks.map(h => (
+        <Row key={h.id} label={h.url} desc={h.events.join(', ')}>
+          <button className="danger" onClick={() => run(async () => { await api.deleteWebhook(h.id); load() })}>Delete</button>
+        </Row>
+      ))}
+      <Row label="New webhook" desc="An https:// URL that accepts POST requests.">
+        <span className="col">
+          <input placeholder="https://example.com/bloki-hook" value={hook.url} onChange={e => setHook({ ...hook, url: e.target.value })} />
+          <span className="webhook-events">{EVENTS.map(ev => (
+            <label key={ev}><input type="checkbox" checked={hook.events.includes(ev)} onChange={e => setHook({ ...hook, events: e.target.checked ? [...hook.events, ev] : hook.events.filter(x => x !== ev) })} /> {ev}</label>
+          ))}</span>
+          <button disabled={busy || !hook.url || !hook.events.length} onClick={() => run(async () => { const r = await api.createWebhook(hook.url, hook.events); setShown({ label: 'Signing secret', value: r.secret }); setHook({ ...hook, url: '' }); load() })}>Add webhook</button>
+        </span>
+      </Row>
+    </Section>}
+    {error && <p className="danger small">{error}</p>}
+  </>
+}
 
 /** Settings → Account → 2-step verification: an authenticator app's code on top of the password. */
 function TwoStep({ on }: { on: boolean }) {
@@ -300,6 +347,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             {nav('workspace', 'General', <Settings size={16} />)}
             {nav('people', 'People', <Users size={16} />)}
             {nav('import', 'Import', <Download size={16} />)}
+            {nav('connections', 'Connections', <Plug size={16} />)}
             <div className="menu-heading">Features</div>
             {nav('public', 'Public pages', <Globe size={16} />)}
             {desktopApp && 'offline' in desktopApp && nav('offline', 'Offline', <WifiOff size={16} />)}
@@ -448,6 +496,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             </Section>
           </>}
           {tab === 'public' && <PublicPages />}
+          {tab === 'connections' && <Connections owner={me.role === 'owner'} />}
           {tab === 'offline' && <OfflinePages />}
           {error && <p className="danger">{error}</p>}
           {msg && <p className="ok">{msg}</p>}

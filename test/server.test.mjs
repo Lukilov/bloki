@@ -416,3 +416,33 @@ test('two-step verification: RFC 6238 codes, login needs the code, each code and
   s.disableTwoFactor(user, { password: 'password1', code: codes[1] })
   assert.equal(s.login(creds), u.id)
 })
+
+test('API tokens act as their owner; webhooks are signed and only carry pages their creator can see', async () => {
+  const { createServer: http } = await import('node:http')
+  const { createHmac } = await import('node:crypto')
+  const got = []
+  const sink = http((req, res) => { let b = ''; req.on('data', d => (b += d)); req.on('end', () => { got.push({ headers: req.headers, body: b }); res.end() }) })
+  await new Promise(r => sink.listen(0, '127.0.0.1', r))
+  try {
+    const { token } = s.createToken(member, 'Script')
+    assert.match(token, /^bloki_/)
+    assert.equal(s.tokenUser(token).id, member.id)
+    assert.equal(s.tokenUser('bloki_nope'), null)
+    assert.ok(s.listTokens(member).some(t => t.name === 'Script' && t.last_used))
+    s.deleteToken(member, s.listTokens(member)[0].id)
+    assert.equal(s.tokenUser(token), null)
+
+    throws403(() => s.createWebhook(member, { url: 'https://x.test', events: ['page.created'] }))
+    const { secret } = s.createWebhook(owner, { url: `http://127.0.0.1:${sink.address().port}/hook`, events: ['page.created'] })
+    s.createPage(member, { title: 'Only mine', section: 'private' }) // the owner can't see it, so it isn't sent
+    s.createPage(member, { title: 'For everyone', section: 'workspace' })
+    for (let i = 0; i < 50 && !got.length; i++) await new Promise(r => setTimeout(r, 20))
+    await new Promise(r => setTimeout(r, 100))
+    assert.equal(got.length, 1)
+    const { headers, body } = got[0]
+    assert.equal(JSON.parse(body).data.title, 'For everyone')
+    assert.equal(headers['x-bloki-event'], 'page.created')
+    assert.equal(headers['x-bloki-signature'], 'sha256=' + createHmac('sha256', secret).update(body).digest('hex'))
+    s.deleteWebhook(owner, s.listWebhooks(owner)[0].id)
+  } finally { sink.close() }
+})

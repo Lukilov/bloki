@@ -128,6 +128,9 @@ db.exec(`
     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
     access TEXT NOT NULL DEFAULT 'open', created INTEGER NOT NULL, created_by TEXT
   );
+  -- Personal API tokens (stored hashed) act as their owner in one workspace; webhooks post workspace events to a URL.
+  CREATE TABLE IF NOT EXISTS api_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, last_used INTEGER);
+  CREATE TABLE IF NOT EXISTS webhooks (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL, secret TEXT NOT NULL, created INTEGER NOT NULL, created_by TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
 `)
 // Columns added after the first release.
@@ -321,6 +324,53 @@ export function login({ email, password, code }, ip = '') {
   failures.delete(key)
   return user.id
 }
+
+/* ---------- API tokens and webhooks ---------- */
+
+export function tokenUser(raw) {
+  const t = db.prepare('SELECT t.id AS token_id, t.workspace_id, u.id, u.email, u.name FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?').get(sha(raw))
+  if (!t || !roleOf(t.workspace_id, t.id)) return null
+  db.prepare('UPDATE api_tokens SET last_used = ? WHERE id = ?').run(Date.now(), t.token_id)
+  return { id: t.id, email: t.email, name: t.name, workspaceId: t.workspace_id, tokenHash: null, viaToken: true }
+}
+export const listTokens = user => db.prepare('SELECT id, name, created, last_used FROM api_tokens WHERE user_id = ? AND workspace_id = ? ORDER BY created').all(user.id, user.workspaceId)
+export function createToken(user, name) {
+  if (!user.workspaceId) throw new HttpError(400, 'No workspace selected.')
+  if (!String(name ?? '').trim()) throw new HttpError(400, 'Name the token.')
+  const raw = 'bloki_' + token()
+  db.prepare('INSERT INTO api_tokens VALUES (?, ?, ?, ?, ?, ?, NULL)').run(randomUUID(), user.id, user.workspaceId, String(name).trim().slice(0, 100), sha(raw), Date.now())
+  return { token: raw } // shown once
+}
+export const deleteToken = (user, id) => (db.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, user.id), { ok: true })
+
+export const WEBHOOK_EVENTS = ['page.created', 'page.updated', 'page.deleted', 'comment.created']
+export function listWebhooks(user) { needOwner(user, user.workspaceId); return db.prepare('SELECT id, url, events, created FROM webhooks WHERE workspace_id = ? ORDER BY created').all(user.workspaceId).map(w => ({ ...w, events: JSON.parse(w.events) })) }
+export function createWebhook(user, { url, events }) {
+  needOwner(user, user.workspaceId)
+  let u
+  try { u = new URL(url) } catch { throw new HttpError(400, 'Enter a valid URL.') }
+  if (!['https:', 'http:'].includes(u.protocol)) throw new HttpError(400, 'Webhooks post to http(s) URLs.')
+  const ev = (Array.isArray(events) ? events : []).filter(e => WEBHOOK_EVENTS.includes(e))
+  if (!ev.length) throw new HttpError(400, 'Pick at least one event.')
+  const secret = 'whsec_' + token()
+  const id = randomUUID()
+  db.prepare('INSERT INTO webhooks VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, user.workspaceId, u.href, JSON.stringify(ev), secret, Date.now(), user.id)
+  return { id, secret } // the signing secret is shown once
+}
+export function deleteWebhook(user, id) { needOwner(user, user.workspaceId); db.prepare('DELETE FROM webhooks WHERE id = ? AND workspace_id = ?').run(id, user.workspaceId); return { ok: true } }
+
+/** Posts an event to the workspace's webhooks, signed with each one's secret (X-Bloki-Signature: sha256=<hex HMAC of the body>).
+ *  A webhook only hears about pages its creator can see, so private pages don't leak through it. */
+export function emit(wsId, event, pageId, data) {
+  for (const w of db.prepare('SELECT * FROM webhooks WHERE workspace_id = ?').all(wsId)) {
+    if (!JSON.parse(w.events).includes(event) || !atLeast(pageAccess(w.created_by, pageId), 'view')) continue
+    const body = JSON.stringify({ event, at: Date.now(), workspace_id: wsId, data })
+    const signature = 'sha256=' + createHmac('sha256', w.secret).update(body).digest('hex')
+    // ponytail: fire-and-forget with no retries or delivery log; add a queue if receivers need guaranteed delivery.
+    fetch(w.url, { method: 'POST', body, redirect: 'manual', signal: AbortSignal.timeout(5000), headers: { 'content-type': 'application/json', 'user-agent': 'Bloki-Webhook', 'x-bloki-event': event, 'x-bloki-signature': signature } }).catch(() => {})
+  }
+}
+const pageEvent = p => ({ id: p.id, title: p.title, kind: p.kind, parent_id: p.parent_id })
 
 /* ---------- Two-step verification (TOTP, RFC 6238: 6 digits, 30 seconds, SHA-1, as authenticator apps expect) ---------- */
 
@@ -556,6 +606,7 @@ export function createPage(user, body, { viaForm = false } = {}) {
   if (priv) db.prepare("INSERT INTO grants VALUES (?, ?, 'full')").run(id, user.id)
   liveReload(wsId)
   if (parent?.kind === 'db') runAutomations(user, id, 'added')
+  emit(wsId, 'page.created', id, pageEvent({ ...row, kind: row.kind ?? 'page' }))
   return viaForm ? { id } : getPage(user, id)
 }
 
@@ -785,6 +836,8 @@ export function updatePage(user, id, body) {
   if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row || 'team_id' in row) liveReload(prev.workspace_id)
   else livePages(prev.workspace_id, [id])
   if ('props' in row && row.props !== prev.props) runAutomations(user, id, 'edited', JSON.parse(prev.props || '{}'))
+  if (row.trashed) emit(prev.workspace_id, 'page.deleted', id, pageEvent(prev))
+  else if (['title', 'content', 'props', 'parent_id'].some(k => k in row)) emit(prev.workspace_id, 'page.updated', id, { ...pageEvent({ ...prev, ...row }), changed: Object.keys(row).filter(k => !['updated', 'updated_by'].includes(k)) })
   return getPage(user, id)
 }
 
@@ -1002,6 +1055,7 @@ export function addComment(user, pageId, body, { thread_id = null, block_id = nu
   // @-mentioned people who can open the page get a mention, unless they were already told about the comment.
   for (const uid of new Set(Array.isArray(mentions) ? mentions.slice(0, 50).map(String) : [])) {
     if (uid !== user.id && !people.has(uid) && atLeast(pageAccess(uid, pageId), 'view')) notify(uid, page.workspace_id, 'mention', pageId, user.id, text)
+  emit(page.workspace_id, 'comment.created', pageId, { page_id: pageId, author: user.name, text: String(body).slice(0, 2000) })
   }
   return listComments(user, pageId)
 }
@@ -1270,6 +1324,12 @@ const routes = [
     }
     return me({ ...c.user, ...db.prepare('SELECT name FROM users WHERE id = ?').get(c.user.id) })
   }],
+  ['GET', /^\/api\/tokens$/, c => listTokens(c.user)],
+  ['POST', /^\/api\/tokens$/, async c => createToken(c.user, (await c.body()).name)],
+  ['DELETE', /^\/api\/tokens\/([\w-]+)$/, (c, id) => deleteToken(c.user, id)],
+  ['GET', /^\/api\/webhooks$/, c => listWebhooks(c.user)],
+  ['POST', /^\/api\/webhooks$/, async c => createWebhook(c.user, await c.body())],
+  ['DELETE', /^\/api\/webhooks\/([\w-]+)$/, (c, id) => deleteWebhook(c.user, id)],
   ['POST', /^\/api\/me\/2fa\/setup$/, c => setupTwoFactor(c.user)],
   ['POST', /^\/api\/me\/2fa\/enable$/, async c => enableTwoFactor(c.user, (await c.body()).code)],
   ['POST', /^\/api\/me\/2fa\/disable$/, async c => disableTwoFactor(c.user, await c.body())],
@@ -1342,8 +1402,14 @@ async function handle(req, res) {
 
   if (url.pathname.startsWith('/api/')) {
     // Cross-site pages can't set custom headers without a CORS preflight, which this server never allows.
-    if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'bloki') return send({ error: 'Missing request header.' }, 403)
-    const user = sessionUser(readCookie(req, 'bloki_session'))
+    // API tokens come in the Authorization header, which browsers never add on their own, so they need no CSRF header;
+    // they can't manage the account (password, 2-step verification, tokens) or sign in.
+    const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
+    if (bearer) {
+      if (req.method !== 'GET' && /^\/api\/(me|tokens|auth|webhooks)(\/|$)/.test(url.pathname)) return send({ error: 'API tokens can’t change account settings.' }, 403)
+    } else if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'bloki') return send({ error: 'Missing request header.' }, 403)
+    const user = bearer ? tokenUser(bearer) : sessionUser(readCookie(req, 'bloki_session'))
+    if (bearer && !user) return send({ error: 'Invalid API token.' }, 401)
     const headers = {}
     const ctx = {
       req, url, user, ip: (TRUST_PROXY && String(req.headers['x-forwarded-for'] ?? '').split(',').at(-1).trim()) || (req.socket.remoteAddress ?? ''),

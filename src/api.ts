@@ -78,6 +78,8 @@ export type Page = {
   team_id?: string | null
   content?: unknown[]
 }
+export type ApiToken = { id: string; name: string; created: number; last_used: number | null }
+export type Webhook = { id: string; url: string; events: string[]; created: number }
 export type TeamAccess = 'open' | 'closed' | 'private'
 export type Team = { id: string; name: string; icon: string; description: string; access: TeamAccess; role: 'owner' | 'member' | null; members: number; created: number }
 export type TeamMember = { id: string; name: string; email: string; role: 'owner' | 'member' }
@@ -164,6 +166,12 @@ export const api = {
 
   status: () => call<{ hasUsers: boolean }>('GET', 'auth/status'),
   login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
+  tokens: () => call<ApiToken[]>('GET', 'tokens'),
+  createToken: (name: string) => call<{ token: string }>('POST', 'tokens', { name }),
+  deleteToken: (id: string) => call('DELETE', `tokens/${id}`),
+  webhooks: () => call<Webhook[]>('GET', 'webhooks'),
+  createWebhook: (url: string, events: string[]) => call<{ id: string; secret: string }>('POST', 'webhooks', { url, events }),
+  deleteWebhook: (id: string) => call('DELETE', `webhooks/${id}`),
   twoFactorSetup: () => call<{ secret: string; uri: string }>('POST', 'me/2fa/setup', {}),
   twoFactorEnable: (code: string) => call<{ codes: string[] }>('POST', 'me/2fa/enable', { code }),
   twoFactorDisable: (password: string, code: string) => call('POST', 'me/2fa/disable', { password, code }),

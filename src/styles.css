@@ -1387,3 +1387,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .button-done { height: 32px; margin-top: 8px; }
 .two-step { max-width: 320px; }
 .setup-key, .recovery-codes { display: block; padding: 8px 10px; border-radius: 6px; background: var(--hover); font-size: 14px; letter-spacing: 0.06em; white-space: pre; user-select: all; }
+.connection-secret { display: flex; flex-direction: column; gap: 6px; padding: 12px; margin: 8px 0 16px; border-radius: 8px; background: var(--hover); }
+.connection-secret code { font-size: 13px; word-break: break-all; user-select: all; }
+.connection-secret button { align-self: flex-start; }
+.webhook-events { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+.webhook-events label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; margin: 0; color: var(--text-2); }
