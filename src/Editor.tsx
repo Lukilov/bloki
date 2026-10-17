@@ -19,7 +19,7 @@ import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColum
 import {
   AtSign, Bookmark, CalendarDays, RefreshCw, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
   ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
-  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting, ClipboardPen,
+  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting, ClipboardPen, MousePointerClick,
 } from 'lucide-react'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
@@ -29,12 +29,13 @@ import { newDatabase } from './Database'
 import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate, setMentionDateFormat } from './blocks'
 import { copyText, isMac, mod, Popover, shift } from './ui'
 import { pageUrl } from './pageActions'
+import { ButtonBlock } from './ButtonBlock'
 
 // Blocks a synced block may hold (no databases or nested synced blocks).
 const innerSpecs = {
   // Notion has four heading levels.
   ...defaultBlockSpecs, heading: createHeadingBlockSpec({ levels: [1, 2, 3, 4] }), codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), page: PageLink(),
-  embed: Embed(), equation: Equation(),
+  embed: Embed(), equation: Equation(), button: ButtonBlock(),
 }
 const inlineSpecs = { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention }
 const innerSchema = BlockNoteSchema.create({ blockSpecs: innerSpecs, inlineContentSpecs: inlineSpecs, styleSpecs: defaultStyleSpecs })
@@ -544,6 +545,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
         } },
       { title: 'Heading 4', subtext: 'Smallest section heading.', group: 'Basic blocks', aliases: ['h4', '####'], icon: <Heading4 size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4 } }) },
       { title: 'Toggle heading 4', subtext: 'Hide content inside a small heading.', group: 'Advanced blocks', aliases: ['h4', 'toggle'], icon: <ChevronRightSquare size={18} />, onItemClick: insert({ type: 'heading', props: { level: 4, isToggleable: true } }) },
+      { title: 'Button', subtext: 'Run actions with a click.', group: 'Advanced blocks', aliases: ['button', 'action', 'automation'], icon: <MousePointerClick size={18} />, onItemClick: insert({ type: 'button' }) },
       { title: 'Block equation', subtext: 'Display a standalone math equation.', group: 'Advanced blocks', aliases: ['math', 'latex', 'tex', 'formula'], icon: <Sigma size={18} />, onItemClick: insert({ type: 'equation' }) },
       { title: 'Breadcrumb', subtext: 'Show where this page sits.', group: 'Advanced blocks', aliases: ['path', 'location'], icon: <Navigation size={18} />, onItemClick: insert({ type: 'breadcrumb' }) },
       ...getMultiColumnSlashMenuItems(e as never).map((i, n) => ({ ...i, group: 'Advanced blocks', icon: [<Columns2 size={18} />, <Columns3 size={18} />, <Columns4 size={18} />][n] ?? <Columns4 size={18} /> })),

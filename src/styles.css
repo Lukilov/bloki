@@ -1363,3 +1363,25 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .team-member-name { flex: 1; min-width: 0; }
 .team-member select { width: auto; }
 .team-add { align-self: flex-start; width: auto; }
+
+/* Button block (measured on Notion's: 32px, 8px 12px, 6px corners, outlined) and its editor. */
+.button-block { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
+.bn-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 8px 12px; border-radius: 6px; background: none; box-shadow: var(--line) 0 0 0 1px inset; font-size: 14px; font-weight: 500; color: var(--text); }
+.bn-btn:hover { background: var(--hover); }
+.bn-btn-warn { color: rgb(205, 73, 69); }
+.bn-btn-edit { opacity: 0; width: 24px; height: 24px; }
+.button-block:hover .bn-btn-edit { opacity: 1; }
+.button-editor-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.button-editor-name { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.button-editor-name input { border: none; background: none; box-shadow: none !important; font-size: 18px; flex: 1; }
+.button-editor-name .button-editor-icon { flex: none; width: 32px; height: 32px; padding: 0; text-align: center; border-radius: 6px; box-shadow: var(--line) 0 0 0 1px inset !important; font-size: 16px; }
+.button-editor-label { font-size: 12px; color: var(--muted); }
+.button-step { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 8px; background: var(--hover); font-size: 14px; }
+.button-step:first-of-type, .button-step.add { flex-direction: row; align-items: center; gap: 10px; }
+.button-step.add { border: none; box-shadow: var(--line) 0 0 0 1px inset; background: none; color: var(--text-2); }
+.button-step-head { display: flex; align-items: center; gap: 10px; }
+.button-step-head b { flex: 1; }
+.button-step textarea, .button-step input:not([type=checkbox]), .button-step select { font-size: 14px; width: 100%; box-sizing: border-box; }
+.button-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.button-editor-line { width: 1px; height: 32px; background: var(--line); align-self: center; margin: 4px 0; }
+.button-done { height: 32px; margin-top: 8px; }

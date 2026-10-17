@@ -39,7 +39,7 @@ leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick t
   Customize page, Version history, Export (Markdown, HTML, PDF), Import, backlinks, word count.
 - **Editor**: Notion's `/` menu, `@` people/pages/dates, `[[` page links, block ⋮⋮ menu (Turn into, Color, Copy link to block,
   Duplicate, Move to, Delete, Comment), formatting toolbar with comments, toggles and toggle headings, callouts, code,
-  tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media.
+  tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media, buttons (insert blocks, add a page to a database, confirm, open a page or link).
 - **Comments**: page discussions, comments on selected text, replies, resolve, edit, delete, comment sidebar, Updates sidebar.
 - **Databases**: table, board, gallery, list, calendar, timeline and form views (forms add rows; share them with members or anyone with the link); filters, sorts, grouping, hidden groups, calculations,
   column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
@@ -53,7 +53,7 @@ leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick t
 - **Settings**: My account, My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, buttons, sub-items/dependencies, chart/map views, web clipper, mobile apps or email sending
+No AI, sub-items/dependencies, chart/map views, web clipper, mobile apps or email sending
 (invites are links you pass on). Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)
