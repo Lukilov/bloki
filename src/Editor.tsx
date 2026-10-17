@@ -19,7 +19,7 @@ import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColum
 import {
   AtSign, Bookmark, CalendarDays, RefreshCw, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
   ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
-  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting,
+  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting, ClipboardPen,
 } from 'lucide-react'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
@@ -394,7 +394,7 @@ const darkTheme = {
     },
   },
 }
-const viewIcon: Record<ViewType, React.JSX.Element> = { table: <Table size={18} />, board: <Kanban size={18} />, gallery: <LayoutGrid size={18} />, list: <ListIcon size={18} />, calendar: <Calendar size={18} />, timeline: <GanttChart size={18} /> }
+const viewIcon: Record<ViewType, React.JSX.Element> = { table: <Table size={18} />, board: <Kanban size={18} />, gallery: <LayoutGrid size={18} />, list: <ListIcon size={18} />, calendar: <Calendar size={18} />, timeline: <GanttChart size={18} />, form: <ClipboardPen size={18} /> }
 
 const COLLAB_COLORS = ['#e03e3e', '#d9730d', '#cb912f', '#448361', '#337ea9', '#9065b0', '#c14c8a', '#a27763']
 const colorFor = (s: string) => COLLAB_COLORS[[...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLLAB_COLORS.length]
@@ -526,7 +526,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       { title: 'Callout', subtext: 'Make writing stand out.', group: 'Basic blocks', aliases: ['note', 'tip', 'info'], icon: <StickyNote size={18} />, onItemClick: insert({ type: 'callout' }) },
       { title: 'Bookmark', subtext: 'Save a link as a visual bookmark.', group: 'Media', aliases: ['link', 'url'], icon: <Bookmark size={18} />, onItemClick: insert({ type: 'embed', props: { mode: 'bookmark' } }) },
       { title: 'Embed', subtext: 'For YouTube, Vimeo, Figma, Loom, Spotify, Maps and more.', group: 'Media', aliases: ['iframe', 'youtube'], icon: <Globe size={18} />, onItemClick: insert({ type: 'embed', props: { mode: 'embed' } }) },
-      ...(['table', 'board', 'gallery', 'list', 'calendar', 'timeline'] as ViewType[]).map(v => ({
+      ...(['table', 'board', 'gallery', 'list', 'calendar', 'timeline', 'form'] as ViewType[]).map(v => ({
         title: `${v[0].toUpperCase() + v.slice(1)} view`, subtext: `Add a database in ${v} view.`, group: 'Database', aliases: ['database', 'db', v === 'board' ? 'kanban' : v], icon: viewIcon[v],
         onItemClick: () => { insertDb(v, true) },
       })),

@@ -12,6 +12,8 @@ import { TEMPLATES } from './templates'
 import { isTemplate } from './db/model'
 import { alt, coverStyle, mod, shift, timeAgo, Toast, Tooltips } from './ui'
 import './styles.css'
+// A shared form (#/form/…) opens without the rest of the app.
+const FormPage = lazy(() => import('./db/Form').then(m => ({ default: m.FormPage })))
 
 const desktop = (window as { blokiDesktop?: { ready: () => void; openPage: (id: string, newTab: boolean) => void; closeCommandSearch: () => void; offline?: { pending: () => Promise<{ id: string; html: string; base: number }[]>; sent: (id: string) => Promise<void> }; chrome?: (info: { workspace: string; icon: string; width: number; collapsed: boolean }) => void } }).blokiDesktop
 
@@ -276,6 +278,7 @@ export default function App() {
   const [theme, setThemeState] = useState(readTheme)
   const [sysDark, setSysDark] = useState(systemDark)
   const [route, setRoute] = useState(parseHash)
+  const [formLogin, setFormLogin] = useState(false)
   // undefined = loading, null = logged out
   const [me, setMe] = useState<Me | null | undefined>(undefined)
   const [session, setSession] = useState(0)
@@ -311,6 +314,9 @@ export default function App() {
   }
   setPublicRoot(null)
   if (me === undefined) return null
+  if (route.form) return me === null && formLogin
+    ? <AuthScreen onDone={() => { setFormLogin(false); refresh() }} />
+    : <Suspense fallback={null}><FormPage dbId={route.form.db} viewId={route.form.view} who={me?.user.name} login={() => setFormLogin(true)} key={me?.user.id ?? 'anon'} /></Suspense>
   if (me === null) return <AuthScreen invite={route.invite} onDone={refresh} />
   if (route.invite) return <AcceptInvite token={route.invite} onDone={refresh} />
   if (route.quickSearch) return <StoreProvider me={me}><CommandSearch /></StoreProvider>

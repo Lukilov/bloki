@@ -447,10 +447,10 @@ function canCreateIn(user, wsId, parentId) {
 }
 
 /** `section`: 'workspace' or 'private' for top-level pages. Private pages start visible only to their creator. */
-export function createPage(user, body) {
+export function createPage(user, body, { viaForm = false } = {}) {
   const wsId = body.parent_id ? db.prepare('SELECT workspace_id FROM pages WHERE id = ?').get(body.parent_id)?.workspace_id : user.workspaceId
   if (!wsId) throw new HttpError(400, 'No workspace selected.')
-  canCreateIn(user, wsId, body.parent_id)
+  if (!viaForm) canCreateIn(user, wsId, body.parent_id)
   const parent = body.parent_id ? db.prepare('SELECT kind FROM pages WHERE id = ?').get(body.parent_id) : null
   // Only full editors of a database may change its structure, so rows can't carry a schema in.
   const fields = ['title', 'icon', 'cover', 'content', 'props', 'full_width', ...(parent?.kind === 'db' ? [] : ['kind', 'schema'])]
@@ -479,7 +479,7 @@ export function createPage(user, body) {
   if (priv) db.prepare("INSERT INTO grants VALUES (?, ?, 'full')").run(id, user.id)
   liveReload(wsId)
   if (parent?.kind === 'db') runAutomations(user, id, 'added')
-  return getPage(user, id)
+  return viaForm ? { id } : getPage(user, id)
 }
 
 export function getPage(user, id, { meta = false } = {}) {
@@ -919,6 +919,65 @@ export function updateComment(user, commentId, body) {
   return listComments(user, c.page_id)
 }
 
+/* ---------- Forms (a database's Form view) ---------- */
+
+// Types a form can ask for; others (people, files, relations, computed) aren't offered as questions, as in Notion.
+export const FORM_TYPES = ['text', 'number', 'select', 'multi_select', 'status', 'date', 'checkbox', 'url', 'email', 'phone']
+
+function formOf(dbId, viewId, user) {
+  const page = db.prepare("SELECT id, title, schema, workspace_id FROM pages WHERE id = ? AND kind = 'db' AND trashed = 0").get(dbId)
+  const schema = page && JSON.parse(page.schema || '{}')
+  const view = schema?.views?.find(v => v.id === viewId && v.type === 'form')
+  if (!view) throw new HttpError(404, 'This form does not exist.')
+  const form = view.form ?? {}
+  // "Anyone with the link" forms are open; otherwise only the workspace's owners and members may answer.
+  if (!form.anyone && !(user && ['owner', 'member'].includes(roleOf(page.workspace_id, user.id)))) throw new HttpError(user ? 403 : 401, 'Only members of this workspace can fill out this form.')
+  const props = new Map((schema.props ?? []).map(p => [p.id, p]))
+  const questions = (form.questions ?? []).map(q => {
+    if (q.prop === 'title') return { prop: 'title', name: q.name || schema.titleName || 'Name', type: 'text', required: !!q.required }
+    const p = props.get(q.prop)
+    return p && FORM_TYPES.includes(p.type) ? { prop: p.id, name: q.name || p.name, type: p.type, required: !!q.required, options: p.options?.map(o => ({ id: o.id, name: o.name, color: o.color })) } : null
+  }).filter(Boolean)
+  return { page, schema, form, questions }
+}
+
+export function formDef(dbId, viewId, user) {
+  const { page, form, questions } = formOf(dbId, viewId, user)
+  return { title: form.title || page.title || 'Form', description: form.description ?? '', anyone: !!form.anyone, questions }
+}
+
+const formSubmits = new Map()
+export function submitForm(dbId, viewId, user, answers, ip = '') {
+  const { schema, questions } = formOf(dbId, viewId, user)
+  if (!user) {
+    // ponytail: per-address count in memory; resets on restart, enough to stop a script from filling the table.
+    const f = formSubmits.get(ip)
+    const n = f && f.until > Date.now() ? f.n + 1 : 1
+    if (n > 30) throw new HttpError(429, 'Too many responses. Try again later.')
+    formSubmits.set(ip, { n, until: f && f.until > Date.now() ? f.until : Date.now() + 3600 * 1000 })
+  }
+  const bad = q => { throw new HttpError(400, `“${q.name}” has an invalid answer.`) }
+  const props = {}
+  let title = ''
+  for (const q of questions) {
+    let v = answers?.[q.prop]
+    if (v === '' || v === undefined || v === null || (Array.isArray(v) && !v.length) || v === false) v = undefined
+    if (v === undefined) { if (q.required) throw new HttpError(400, `“${q.name}” is required.`); continue }
+    const ids = new Set(q.options?.map(o => o.id))
+    if (['text', 'url', 'email', 'phone'].includes(q.type)) { if (typeof v !== 'string') bad(q); v = v.slice(0, 5000) }
+    else if (q.type === 'number') { v = Number(v); if (!Number.isFinite(v)) bad(q) }
+    else if (q.type === 'checkbox') { if (v !== true) bad(q) }
+    else if (q.type === 'date') { if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) bad(q); v = { start: v } }
+    else if (q.type === 'select' || q.type === 'status') { if (!ids.has(v)) bad(q) }
+    else if (q.type === 'multi_select') { if (!Array.isArray(v) || !v.every(x => ids.has(x))) bad(q); v = [...new Set(v)] }
+    if (q.prop === 'title') title = v
+    else props[q.prop] = v
+  }
+  // Unanswered Status starts at its first to-do option, as rows added any other way do.
+  for (const p of schema.props ?? []) if (p.type === 'status' && props[p.id] === undefined) props[p.id] = (p.options?.find(o => o.group === 'todo') ?? p.options?.[0])?.id
+  return createPage(user ?? { id: null }, { parent_id: dbId, title, props }, { viaForm: true })
+}
+
 /* ---------- Published pages (Share to web) ---------- */
 
 function publicRoot(rootId) {
@@ -996,6 +1055,8 @@ const routes = [
     db.prepare('UPDATE sessions SET workspace_id = ? WHERE token_hash = ?').run(inv.workspace_id, c.user.tokenHash)
     return { workspace_id: inv.workspace_id, page_id: inv.page_id }
   }],
+  ['GET', /^\/api\/forms\/([\w-]+)\/([\w-]+)$/, (c, dbId, viewId) => formDef(dbId, viewId, c.user), true],
+  ['POST', /^\/api\/forms\/([\w-]+)\/([\w-]+)$/, async (c, dbId, viewId) => submitForm(dbId, viewId, c.user, (await c.body()).answers, c.ip), true],
   ['GET', /^\/api\/public\/([\w-]+)\/pages$/, (c, root) => publicPages(root), true],
   ['GET', /^\/api\/public\/([\w-]+)\/pages\/([\w-]+)$/, (c, root, id) => publicPage(root, id), true],
 

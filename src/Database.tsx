@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowDownUp, ArrowUpRight, Calendar, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
+  ArrowDownUp, ArrowUpRight, Calendar, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
   Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
@@ -9,6 +9,7 @@ import { copyText, Menu, Popover, type Item } from './ui'
 import { pageUrl } from './pageActions'
 import { Chip, ctxOf, StatusChip, typeIcon } from './db/Cells'
 import { VIEW_COMPONENTS } from './db/Views'
+import { defaultForm } from './db/Form'
 import { applyView, groupable, isTemplate, needsValue, newRowDefaults, OP_NAMES, opsFor, propOf, textOf, value } from './db/model'
 import { PageView } from './PageView'
 
@@ -16,9 +17,9 @@ export { RowProperties } from './db/Cells'
 
 type Store = ReturnType<typeof useStore>
 
-export const VIEW_NAMES: Record<ViewType, string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline' }
+export const VIEW_NAMES: Record<ViewType, string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', form: 'Form' }
 export const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
-  table: <Table size={14} />, board: <Kanban size={14} />, list: <List size={14} />, gallery: <LayoutGrid size={14} />, calendar: <Calendar size={14} />, timeline: <GanttChart size={14} />,
+  table: <Table size={14} />, board: <Kanban size={14} />, list: <List size={14} />, gallery: <LayoutGrid size={14} />, calendar: <Calendar size={14} />, timeline: <GanttChart size={14} />, form: <ClipboardPen size={14} />,
 }
 
 const opt = (name: string, i: number, group?: Option['group']): Option => ({ id: uid(), name, color: COLORS[i % COLORS.length], ...(group ? { group } : {}) })
@@ -31,6 +32,7 @@ export function newDatabase(store: Store, parent_id: string | null, title = '', 
     views: [{ id: uid(), name: VIEW_NAMES[first] === 'Table' ? 'Table' : VIEW_NAMES[first], type: first, groupBy: status.id, dateProp: date.id }],
   }
   if (first === 'table') schema.views![0].groupBy = undefined
+  if (first === 'form') schema.views![0].form = defaultForm({ schema } as Page)
   return store.create({ parent_id, kind: 'db', title, schema, section: parent_id ? undefined : section }, false)
 }
 
@@ -316,6 +318,7 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId, n
           const v: Partial<View> = { type: t }
           if (t === 'board' && !view.groupBy) v.groupBy = props.find(p => p.type === 'status' || p.type === 'select')?.id
           if ((t === 'calendar' || t === 'timeline') && !view.dateProp) v.dateProp = props.find(p => p.type === 'date')?.id
+          if (t === 'form' && !view.form) v.form = defaultForm(db)
           setView(v)
         }}>{VIEW_ICONS[t]}<span>{VIEW_NAMES[t]}</span></button>
       ))}</div>
@@ -501,6 +504,7 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
     const v: View = { id: uid(), name: VIEW_NAMES[type], type }
     if (type === 'board') v.groupBy = schema.props?.find(p => p.type === 'status' || p.type === 'select')?.id
     if (type === 'calendar' || type === 'timeline') v.dateProp = schema.props?.find(p => p.type === 'date')?.id
+    if (type === 'form') v.form = defaultForm(db)
     setSchema({ ...schema, views: [...views, v] })
     setViewId(v.id)
   }
@@ -556,13 +560,16 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
           })()}
         </div>
         <div className="db-tools">
+          {/* A form adds rows instead of showing them, so it has its own Preview and Share form instead of these. */}
+          {view.type !== 'form' && <>
           <button className={'icon-btn' + (filters.length ? ' on-accent' : '')} title="Filter" onClick={e => (filters.length ? setPop({ kind: 'filter-add', el: e.currentTarget }) : setPop({ kind: 'filter-add', el: e.currentTarget }))}><FilterIcon size={15} /></button>
           <button className={'icon-btn' + (sorts.length ? ' on-accent' : '')} title="Sort" onClick={e => setPop({ kind: 'sort', el: e.currentTarget })}><ArrowDownUp size={15} /></button>
           {query === null
             ? <button className="icon-btn" title="Search" onClick={() => setQuery('')}><Search size={15} /></button>
             : <span className="db-search"><Search size={14} /><input autoFocus placeholder="Type to search…" value={query} onChange={e => setQuery(e.target.value)} onBlur={() => !query && setQuery(null)} onKeyDown={e => e.key === 'Escape' && setQuery(null)} /></span>}
+          </>}
           <button className="icon-btn" title="Settings" onClick={e => setPop({ kind: 'settings', el: e.currentTarget })}><MoreHorizontal size={16} /></button>
-          {perm.rows && (
+          {perm.rows && view.type !== 'form' && (
             <span className="new-split">
               <button className="primary" onClick={() => (schema.defaultTemplate && store.byId.get(schema.defaultTemplate) && !store.byId.get(schema.defaultTemplate)!.trashed ? fromTemplate(schema.defaultTemplate) : addRow())}>New</button>
               <button className="primary caret" onClick={e => setPop({ kind: 'new', el: e.currentTarget })}><ChevronDown size={14} /></button>
@@ -595,13 +602,13 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
 
       <Body db={db} rows={rows} props={props} view={view} setView={setView} addRow={addRow} openRow={openRow} perm={perm} addFilter={addFilter} />
 
-      {!rows.length && view.type !== 'table' && view.type !== 'calendar' && view.type !== 'timeline' && <div className="view-empty muted">{query || filters.length ? 'No results' : 'No pages yet'}</div>}
+      {!rows.length && !['table', 'calendar', 'timeline', 'form'].includes(view.type) && <div className="view-empty muted">{query || filters.length ? 'No results' : 'No pages yet'}</div>}
 
       <Popover anchor={pop?.kind === 'add-view' ? pop.el : null} onClose={closePop} className="add-view-pop" width={390}>
         {/* Notion shows the layouts as a grid of tiles, in this order. */}
         <div className="add-view-head">Add a new view</div>
         <div className="add-view-grid">
-          {(['table', 'board', 'gallery', 'list', 'timeline', 'calendar'] as ViewType[]).map(t => (
+          {(['table', 'board', 'gallery', 'list', 'timeline', 'calendar', 'form'] as ViewType[]).map(t => (
             <button key={t} onClick={() => { addView(t); closePop() }}>{VIEW_ICONS[t]}<span>{VIEW_NAMES[t]}</span></button>
           ))}
         </div>

@@ -26,11 +26,12 @@ type Store = {
 const Ctx = createContext<Store>(null!)
 export const useStore = () => useContext(Ctx)
 
-/** Routes: #/<page>, #/library, #/public/<root>/<page>, #/invite/<token>, #/quick-search (the desktop app's Command Search) */
+/** Routes: #/<page>, #/library, #/form/<database>/<view>, #/public/<root>/<page>, #/invite/<token>, #/quick-search (the desktop app's Command Search) */
 export function parseHash() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   if (parts[0] === 'public') return { public: parts[1], page: parts[2] ?? parts[1] }
   if (parts[0] === 'invite') return { invite: parts[1] }
+  if (parts[0] === 'form') return { form: { db: parts[1], view: parts[2] }, page: null }
   if (parts[0] === 'quick-search') return { quickSearch: true, page: null }
   if (parts[0] === 'library') return { library: true, page: null }
   return { page: parts[0] ?? null }

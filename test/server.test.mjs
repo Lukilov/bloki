@@ -339,3 +339,23 @@ test('backups are readable copies and only the newest are kept', async () => {
   assert.deepEqual(readdirSync(dir).sort(), ['bloki-2020-01-03.db', file.split('/').at(-1)])
   assert.ok(new DatabaseSync(file).prepare('SELECT COUNT(*) AS n FROM users').get().n >= 1)
 })
+
+test('forms: members answer, the link opens it to anyone, answers are checked against the questions', () => {
+  const opts = [{ id: 'o1', name: 'Bug', color: 'red' }]
+  const status = [{ id: 's1', name: 'Not started', color: 'gray', group: 'todo' }]
+  const view = { id: 'f', name: 'Form', type: 'form', form: { title: 'Report', questions: [{ prop: 'title', required: true }, { prop: 'kind' }, { prop: 'when' }, { prop: 'who' }] } }
+  const d = s.createPage(owner, { title: 'Issues', kind: 'db', section: 'workspace', schema: { props: [{ id: 'kind', name: 'Kind', type: 'select', options: opts }, { id: 'when', name: 'When', type: 'date' }, { id: 'who', name: 'Who', type: 'person' }, { id: 'st', name: 'Status', type: 'status', options: status }], views: [view] } })
+  assert.deepEqual(s.formDef(d.id, 'f', member).questions.map(q => q.name), ['Name', 'Kind', 'When']) // people aren't asked for
+  assert.throws(() => s.formDef(d.id, 'f', null), e => e.status === 401)
+  throws403(() => s.formDef(d.id, 'f', guest))
+  assert.throws(() => s.submitForm(d.id, 'f', member, { kind: 'o1' }), e => e.status === 400) // name is required
+  assert.throws(() => s.submitForm(d.id, 'f', member, { title: 'x', kind: 'nope' }), e => e.status === 400)
+  assert.throws(() => s.submitForm(d.id, 'f', member, { title: 'x', when: 'tomorrow' }), e => e.status === 400)
+  const r = s.submitForm(d.id, 'f', member, { title: 'Crash', kind: 'o1', when: '2026-10-17', who: owner.id, st: 'other' })
+  const row = s.getPage(owner, r.id)
+  assert.deepEqual([row.title, row.props.kind, row.props.when, row.props.who, row.props.st], ['Crash', 'o1', { start: '2026-10-17' }, undefined, 's1'])
+  // Turning on "Anyone with the link" lets people without an account answer.
+  s.updatePage(owner, d.id, { schema: { ...s.getPage(owner, d.id).schema, views: [{ ...view, form: { ...view.form, anyone: true } }] } })
+  const anon = s.submitForm(d.id, 'f', null, { title: 'From outside' }, '203.0.113.9')
+  assert.equal(s.getPage(owner, anon.id).created_by, null)
+})

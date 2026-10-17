@@ -11,7 +11,7 @@ export type Prop = {
   prefix?: string
   description?: string
 }
-export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline'
+export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'form'
 export type Filter = { prop: string; op: string; value?: string }
 /** Conditional color: rows matching a filter get a colour (an option's own, or a fixed one) on the row or one cell. */
 export type ColorRule = Filter & { id: string; color: string; apply: 'row' | 'prop' }
@@ -29,7 +29,10 @@ export type View = {
   hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'cover' | 'none'
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
+  form?: { title?: string; description?: string; anyone?: boolean; questions?: { prop: string; name?: string; required?: boolean }[] }
 }
+export type FormQuestion = { prop: string; name: string; type: PropType; required: boolean; options?: Option[] }
+export type FormDef = { title: string; description: string; anyone: boolean; questions: FormQuestion[] }
 /** "Customize layout" for a database's row pages, shared by every row. */
 export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal'; structure?: 'simple' | 'tabbed'; panel?: boolean; pinned?: string[] }
 export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string; locked?: boolean; automations?: Automation[] }
@@ -129,6 +132,9 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, data.error)
     return data.url as string
   },
+
+  formDef: (db: string, view: string) => call<FormDef>('GET', `forms/${db}/${view}`),
+  submitForm: (db: string, view: string, answers: Record<string, unknown>) => call<{ id: string }>('POST', `forms/${db}/${view}`, { answers }),
 
   createSynced: (pageId: string, content: unknown[]) => call<Synced>('POST', 'synced', { page_id: pageId, content }),
   getSynced: (id: string) => call<Synced>('GET', `synced/${id}`),

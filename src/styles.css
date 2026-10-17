@@ -1297,3 +1297,46 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .row-pinned { padding: 8px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .row-pinned-name { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
 .row-pinned .prop-value { min-height: 34px; }
+
+/* Form view (measured on Notion's form builder) and the form people fill out. */
+.form-view { padding: 8px 0 48px; }
+.form-bar { display: flex; justify-content: flex-end; gap: 8px; }
+.form-bar button { height: 28px; padding: 0 8px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; }
+.form-preview { background: none; box-shadow: var(--line) 0 0 0 1px inset; }
+.form-sheet { max-width: 462px; margin: 0 auto; padding: 56px 0 0; display: flex; flex-direction: column; gap: 24px; }
+.form-sheet > input { border: none; background: none; box-shadow: none !important; padding: 0 22px; width: 100%; box-sizing: border-box; }
+.form-title { font-size: 36px; font-weight: 700; line-height: 1.2; margin-bottom: -12px; }
+.form-desc { font-size: 16px; color: var(--text-2); }
+.form-access { display: flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 6px; background: var(--hover); font-size: 14px; color: var(--text-2); }
+.form-access span { flex: 1; }
+.form-access button { font-weight: 500; color: var(--text-2); }
+.form-q { position: relative; padding: 20px 10px 10px; border-radius: 10px; box-shadow: rgba(35, 131, 226, 0.35) 0 0 0 1px inset; cursor: pointer; }
+.form-q.on { box-shadow: rgba(35, 131, 226, 0.7) 0 0 0 2px inset; }
+.form-q-more { position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; color: var(--accent); background: rgba(35, 131, 226, 0.12); }
+.form-q-name { display: flex; align-items: baseline; padding: 0 12px 12px; }
+.form-q-name input { flex: 1; min-width: 0; border: none; background: none; box-shadow: none !important; padding: 0; font-size: 22px; font-weight: 700; }
+.form-required { color: rgb(235, 87, 87); margin-left: 4px; font-weight: 600; }
+.form-answer { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 10px; border-radius: 6px; box-shadow: var(--line) 0 0 0 1px inset; color: var(--muted); font-size: 15px; }
+.form-add { align-self: center; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: none; background: rgba(35, 131, 226, 0.15); color: var(--accent); }
+.form-add:hover { background: rgba(35, 131, 226, 0.25); }
+.form-link { display: flex; gap: 8px; padding: 4px 8px 8px; }
+.form-link input { flex: 1; min-width: 0; font-size: 13px; }
+
+.form-fill { max-width: 600px; margin: 0 auto; padding: 64px 0; display: flex; flex-direction: column; }
+.form-fill h1 { font-size: 32px; font-weight: 700; margin: 0 0 8px; }
+.form-fill-desc { color: var(--text-2); margin: 0 0 16px; white-space: pre-wrap; }
+.form-who { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: var(--hover); font-size: 14px; color: var(--text-2); margin: 8px 0 16px; }
+.form-field { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+.form-field > label { font-size: 22px; font-weight: 700; }
+.form-field > input:not([type=checkbox]), .form-field > select { height: 38px; padding: 0 10px; border-radius: 6px; font-size: 15px; width: 100%; box-sizing: border-box; }
+.form-field > input[type=checkbox] { width: 18px; height: 18px; }
+.form-multi { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-multi label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: var(--hover); font-size: 14px; cursor: pointer; }
+.form-submit { align-self: flex-start; margin-top: 40px; height: 36px; padding: 0 12px; border-radius: 6px; border: none; background: var(--hover-2, var(--hover)); font-weight: 600; font-size: 15px; }
+.form-error { color: rgb(235, 87, 87); margin: 16px 0 0; }
+.form-done p { color: var(--text-2); }
+.form-done button { align-self: flex-start; }
+.form-modal { position: fixed; inset: 0; z-index: 90; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; }
+.form-modal-card { position: relative; width: min(960px, calc(100vw - 32px)); height: 86vh; overflow: auto; background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 0 24px; box-sizing: border-box; }
+.form-modal-close { position: absolute; top: 12px; right: 12px; }
+.form-page { min-height: 100vh; background: var(--bg); padding: 0 16px; }
