@@ -4,7 +4,7 @@ import { api, setPublicRoot, type Me } from './api'
 import { iconOf, label, parseHash, StoreProvider, useStore } from './store'
 import { applyTemplate, importCSV, importHTML, importMarkdown, importNotion, Sidebar } from './Sidebar'
 import { SearchDialog } from './Search'
-import { AcceptInvite, AuthScreen, personName, ResetScreen, SettingsDialog } from './Access'
+import { AcceptInvite, AuthScreen, ClipScreen, personName, ResetScreen, SettingsDialog } from './Access'
 import { Avatar } from './Comments'
 // The page view brings the editor, databases and comments: it downloads in parallel with the app shell.
 const PageView = lazy(() => import('./PageView').then(m => ({ default: m.PageView })))
@@ -321,5 +321,6 @@ export default function App() {
   if (me === null) return <AuthScreen invite={route.invite} onDone={refresh} />
   if (route.invite) return <AcceptInvite token={route.invite} onDone={refresh} />
   if (route.quickSearch) return <StoreProvider me={me}><CommandSearch /></StoreProvider>
+  if (route.clip) return <StoreProvider me={me}><ClipScreen clip={route.clip} /></StoreProvider>
   return <StoreProvider key={session + (me.workspaceId ?? '')} me={me}><Shell dark={dark} /></StoreProvider>
 }

@@ -45,6 +45,10 @@ With that, inviting an email address without an account emails them the invite, 
 (each person can turn that off in Settings → Notifications), and the login screen offers "Forgot password?".
 Without it, invites are links you pass on and nothing is emailed.
 
+## Web clipper
+Settings → Connections has a **Save to Bloki** button: drag it to your bookmarks bar. On any web page, click it to save a bookmark
+of the page (and any text you selected, as a quote) to your private pages, after you confirm.
+
 ## API
 Create a token in Settings → Connections; it can do what you can in that workspace. Send it as a bearer token:
 
@@ -81,7 +85,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
 - **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, map views, web clipper, or mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
+No AI, map view, or native mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)
 `desktop/` is an Electron app that opens your Bloki server in its own window, like Notion's desktop app:

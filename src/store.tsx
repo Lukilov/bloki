@@ -33,6 +33,9 @@ export const useStore = () => useContext(Ctx)
 const siteSlug = () => (document.querySelector('meta[name="bloki-site"]') ? /^\/s\/([a-z0-9-]+)/.exec(location.pathname)?.[1] : undefined)
 
 export function parseHash() {
+  // #/clip?u=<url>&t=<title>&s=<selection>: the web clipper bookmarklet.
+  const raw = location.hash.replace(/^#\/?/, '')
+  if (raw.startsWith('clip?')) return { clip: Object.fromEntries(new URLSearchParams(raw.slice(5))) as { u?: string; t?: string; s?: string }, page: null }
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   // A site address (/s/<slug>/<page>): the server names the published root and page in the page head.
   const site = document.querySelector('meta[name="bloki-site"]')?.getAttribute('content')

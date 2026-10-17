@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plug, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
@@ -251,6 +251,47 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'public' | 'offline'
 
+/** The web clipper's landing page: what the bookmarklet sent, saved as a private page only when you say so. */
+export function ClipScreen({ clip }: { clip: { u?: string; t?: string; s?: string } }) {
+  const store = useStore()
+  const url = /^https?:\/\//i.test(clip.u ?? '') ? clip.u! : ''
+  const [title, setTitle] = useState(clip.t ?? url)
+  const { error, busy, run } = useAction()
+  const save = () => run(async () => {
+    const content = [
+      ...(url ? [{ type: 'embed', props: { url, mode: 'bookmark' } }] : []),
+      ...(clip.s ? [{ type: 'quote', content: [{ type: 'text', text: clip.s.slice(0, 5000), styles: {} }] }] : []),
+    ]
+    const page = await store.create({ title: title.slice(0, 300), section: 'private', content }, false)
+    location.hash = '/' + page.id
+  })
+  return (
+    <div className="auth">
+      <div className="auth-card">
+        <div className="brand big">▤ Bloki</div>
+        <h2>Save to Bloki</h2>
+        <label>Title<input autoFocus value={title} onChange={e => setTitle(e.target.value)} /></label>
+        {url ? <p className="muted small clip-url">{url}</p> : <p className="danger small">This link can’t be saved.</p>}
+        {clip.s && <blockquote className="clip-quote">{clip.s.slice(0, 500)}</blockquote>}
+        {error && <p className="danger">{error}</p>}
+        <button className="primary" disabled={busy || !url} onClick={save}>Save to Private</button>
+        <button className="ghost link" onClick={() => { location.hash = '' }}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+/** Settings → Connections → Web clipper: a bookmark that sends the page you're on to Bloki. */
+function Clipper() {
+  const ref = useRef<HTMLAnchorElement>(null)
+  // React won't render javascript: links, so the bookmarklet is set on the element directly.
+  useEffect(() => {
+    const target = `${location.origin}${location.pathname}#/clip?`
+    ref.current?.setAttribute('href', `javascript:(()=>{window.open(${JSON.stringify(target)}+new URLSearchParams({u:location.href,t:document.title,s:String(getSelection()||'').slice(0,2000)}),'_blank')})()`)
+  }, [])
+  return <a ref={ref} className="button clip-bookmarklet" onClick={e => e.preventDefault()}>Save to Bloki</a>
+}
+
 /** Publish → site settings: a short address (/s/<slug>) and whether search engines may index the site. */
 function SiteSettings({ slug, indexed, update }: { slug: string; indexed: boolean; update: (b: object) => void }) {
   const [draft, setDraft] = useState(slug)
@@ -285,6 +326,9 @@ function Connections({ owner }: { owner: boolean }) {
     <p className="settings-sub">Let scripts and other apps read and change your pages through the Bloki API</p>
     {shown && <div className="connection-secret"><b>{shown.label}</b><span className="muted small">Copy it now; it won’t be shown again.</span><code>{shown.value}</code>
       <button onClick={() => { navigator.clipboard?.writeText(shown.value); setShown(null) }}>Copy and close</button></div>}
+    <Section title="Web clipper" desc="Drag this button to your browser’s bookmarks bar. On any page, click the bookmark to save it (and any text you selected) to your private pages.">
+      <Row label="Bookmarklet" desc="Works in every browser, no extension needed."><Clipper /></Row>
+    </Section>
     <Section title="API tokens" desc="A token can do what you can in this workspace. Send it as Authorization: Bearer <token> to the same /api/… URLs the app uses.">
       {tokens.map(t => (
         <Row key={t.id} label={t.name} desc={`Created ${new Date(t.created).toLocaleDateString()} · ${t.last_used ? 'last used ' + new Date(t.last_used).toLocaleDateString() : 'never used'}`}>
