@@ -427,6 +427,7 @@ function levelsFor(page: Page): Level[] {
 export function ShareMenu({ page }: { page: Page; close: () => void }) {
   const store = useStore()
   const [tab, setTab] = useState<'share' | 'publish'>('share')
+  const [advanced, setAdvanced] = useState(false)
   const [share, setShare] = useState<Share | null>(null)
   const [email, setEmail] = useState('')
   const [level, setLevel] = useState<Level>('edit')
@@ -457,16 +458,20 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
 
       {tab === 'share' && <>
         {full && (
-          <form className="row invite-row" onSubmit={e => { e.preventDefault(); if (email.trim()) update({ invite_email: email.trim(), level }); setEmail('') }}>
-            <input list="share-people" placeholder="Add people by email" value={email} onChange={e => setEmail(e.target.value)} />
+          <form className="row invite-row" onSubmit={async e => {
+            e.preventDefault()
+            // As in Notion, several addresses can go in at once, separated by commas.
+            for (const one of email.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean)) await update({ invite_email: one, level })
+            setEmail('')
+          }}>
+            <input list="share-people" placeholder="Email or group, separated by commas" value={email} onChange={e => setEmail(e.target.value)} />
             <datalist id="share-people">{members.filter(p => p.email).map(p => <option key={p.id} value={p.email}>{p.name}</option>)}</datalist>
-            <select value={level} onChange={e => setLevel(e.target.value as Level)}>{levels.map(l => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}</select>
+            {email.trim() && <select value={level} onChange={e => setLevel(e.target.value as Level)}>{levels.map(l => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}</select>}
             <button className="primary" disabled={busy}>Invite</button>
           </form>
         )}
         {invite && <div className="invite-box"><div className="muted small">No account uses that email yet. Send them this link; they join as a guest with access to this page.</div><Copy text={invite} /></div>}
 
-        <div className="muted small section-label">People with access</div>
         {share.grants.map(g => (
           <div className="share-row" key={g.user_id}>
             <span className="share-person"><span className="avatar big">{g.name[0]}</span><span>{g.name}{g.user_id === store.me?.user.id && <span className="muted"> (You)</span>} {g.role === 'guest' && <span className="badge">Guest</span>}<div className="muted small">{g.email}</div></span></span>
@@ -493,9 +498,14 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
             </select>
           ) : <span className="muted">{LEVEL_NAMES[wsLevel]}</span>}
         </div>
-        <div className="share-row muted small"><span>Workspace owners</span><span>{wsLevel === 'none' ? 'Only if invited' : 'Full access'}</span></div>
-        <div className="muted small share-foot">Your access: {LEVEL_NAMES[share.access]}. Sub-pages inherit these settings unless changed.</div>
-        <div className="share-actions"><CopyLinkButton text={`${location.origin}/#/${page.id}`} /></div>
+        {advanced && <>
+          <div className="share-row muted small"><span>Workspace owners</span><span>{wsLevel === 'none' ? 'Only if invited' : 'Full access'}</span></div>
+          <div className="muted small share-foot">Your access: {LEVEL_NAMES[share.access]}. Sub-pages inherit these settings unless changed.</div>
+        </>}
+        <div className="share-actions">
+          <button className="ghost share-advanced" onClick={() => setAdvanced(a => !a)}><Settings size={16} /> Advanced</button>
+          <CopyLinkButton text={`${location.origin}/#/${page.id}`} />
+        </div>
       </>}
 
       {tab === 'publish' && (() => {
