@@ -1439,3 +1439,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .chart-legend i { width: 10px; height: 10px; border-radius: 3px; }
 .chart-legend b { margin-left: 12px; font-weight: 500; color: var(--text-2); }
 .button-row { display: flex; gap: 8px; } .button-row > * { flex: 1; min-width: 0; }
+.row-twisty { flex: none; width: 20px; height: 20px; padding: 0; display: inline-grid; place-items: center; color: var(--muted); }
+/* Timeline dependencies: elbow arrows under the bars, red when the blocked item starts before its blocker ends. */
+.timeline-rows { position: relative; }
+.tl-deps { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; overflow: visible; }
+.tl-deps path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.tl-deps marker path { fill: var(--muted); stroke: none; }
+.tl-deps path.late { stroke: rgb(235, 87, 87); }

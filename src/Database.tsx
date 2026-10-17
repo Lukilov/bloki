@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
+  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
   Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
@@ -389,10 +389,25 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId, n
     { icon: <Settings2 size={15} />, label: 'Edit properties', hint: '›', onClick: () => setPage('props') },
     { icon: <Zap size={15} />, label: 'Automations', hint: `${db.schema.automations?.length || ''} ›`.trim(), onClick: () => setPage('automations') },
     { heading: 'More settings' },
+    // Sub-items and Dependencies are pairs of two-way relations from the database to itself, as in Notion.
+    ...(can(db, 'edit') && !db.schema.locked ? [
+      { icon: <ListTree size={15} />, label: 'Sub-items', checked: !!db.schema.subItems, onClick: () => setSchema(db.schema.subItems ? { ...db.schema, subItems: undefined } : selfPair(db, 'Parent item', 'Sub-items', (a, b) => ({ subItems: { parent: a, children: b } }))) },
+      { icon: <Waypoints size={15} />, label: 'Dependencies', checked: !!db.schema.deps, onClick: () => setSchema(db.schema.deps ? { ...db.schema, deps: undefined } : selfPair(db, 'Blocked by', 'Blocking', (a, b) => ({ deps: { blockedBy: a, blocking: b } }))) },
+    ] : []),
     lock,
   ]
   // Sub-pages are rendered in place, so keep the menu open when moving between them.
   return <Menu items={items} onClose={() => { /* stays open for sub-pages */ }} />
+}
+
+/** Two relation properties linking the database to itself, each the other's two-way side; turning the feature
+ *  back on reuses the pair it made before (by name), so values aren't lost. */
+function selfPair(db: Page, nameA: string, nameB: string, mark: (a: string, b: string) => Partial<Schema>): Schema {
+  const props = db.schema.props ?? []
+  const old = [nameA, nameB].map(n => props.find(p => p.type === 'relation' && p.relation?.db === db.id && p.name === n))
+  if (old[0] && old[1]) return { ...db.schema, ...mark(old[0].id, old[1].id) }
+  const a = uid(), b = uid()
+  return { ...db.schema, props: [...props, { id: a, name: nameA, type: 'relation', relation: { db: db.id, synced: b } }, { id: b, name: nameB, type: 'relation', relation: { db: db.id, synced: a } }], ...mark(a, b) }
 }
 
 /* ---------- peek ---------- */

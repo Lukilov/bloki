@@ -36,7 +36,7 @@ export type FormQuestion = { prop: string; name: string; type: PropType; require
 export type FormDef = { title: string; description: string; anyone: boolean; questions: FormQuestion[] }
 /** "Customize layout" for a database's row pages, shared by every row. */
 export type RowLayout = { hidden?: string[]; icons?: boolean; discussions?: boolean; fullWidth?: boolean; inlineComments?: 'default' | 'minimal'; structure?: 'simple' | 'tabbed'; panel?: boolean; pinned?: string[] }
-export type Schema = { props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string; locked?: boolean; automations?: Automation[] }
+export type Schema = { subItems?: { parent: string; children: string }; deps?: { blockedBy: string; blocking: string }; props?: Prop[]; views?: View[]; titleName?: string; layout?: RowLayout; defaultTemplate?: string; locked?: boolean; automations?: Automation[] }
 
 export type Level = 'none' | 'view' | 'comment' | 'edit_content' | 'edit' | 'full'
 export const LEVELS: Level[] = ['none', 'view', 'comment', 'edit_content', 'edit', 'full']

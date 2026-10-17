@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregate, applyView, groupRows, matches, newRowDefaults, parseCSV, value, visibleRange, type Ctx } from '../src/db/model.ts'
+import { aggregate, applyView, groupRows, matches, nestRows, newRowDefaults, parseCSV, value, visibleRange, type Ctx } from '../src/db/model.ts'
 import type { Page, Prop, Schema } from '../src/api.ts'
 
 const page = (id: string, parent: string | null, props: Record<string, unknown> = {}, extra: Partial<Page> = {}): Page => ({
@@ -77,4 +77,12 @@ test('long tables render only the rows near the screen', () => {
 test('parseCSV handles quotes, doubled quotes, commas and newlines inside quotes, and CRLF', () => {
   assert.deepEqual(parseCSV('Name,Note\r\nA,"x, y"\r\nB,"say ""hi""\nnext"\r\n\r\n'), [['Name', 'Note'], ['A', 'x, y'], ['B', 'say "hi"\nnext']])
   assert.deepEqual(parseCSV('a,b\n1,'), [['a', 'b'], ['1', '']])
+})
+
+test('sub-items nest under their parent; collapsed parents hide them; loops and missing parents show at the top', () => {
+  const r = (id: string, parent?: string) => page(id, 'db', parent ? { par: [parent] } : {})
+  const rows = [r('a'), r('b', 'a'), r('c', 'b'), r('d', 'gone'), r('x', 'y'), r('y', 'x')]
+  const show = (open: string[]) => nestRows(rows, 'par', new Set(open)).map(n => `${'.'.repeat(n.depth)}${n.row.id}${n.kids ? '+' + n.kids : ''}`).join(' ')
+  assert.equal(show([]), 'a+1 d x+1')
+  assert.equal(show(['a', 'b', 'x']), 'a+1 .b+1 ..c d x+1 .y+1')
 })

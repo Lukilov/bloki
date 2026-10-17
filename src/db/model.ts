@@ -364,3 +364,28 @@ export function parseCSV(text: string): string[][] {
   return rows.filter(r => r.some(x => x.trim()))
 }
 
+
+export type Nested = { row: Page; depth: number; kids: number }
+/** Sub-items: rows under their parent (the first page in `parentProp`), children shown only for rows in `open`.
+ *  A row whose parent isn't in the list (filtered out, or a loop of parents) shows at the top. */
+export function nestRows(rows: Page[], parentProp: string, open: Set<string>): Nested[] {
+  const ids = new Set(rows.map(r => r.id))
+  const parentOf = (r: Page) => { const v = r.props?.[parentProp]; const p = Array.isArray(v) ? v[0] : undefined; return typeof p === 'string' && p !== r.id && ids.has(p) ? p : null }
+  const kids = new Map<string, Page[]>()
+  for (const r of rows) { const p = parentOf(r); if (p) kids.set(p, [...(kids.get(p) ?? []), r]) }
+  const reach = new Set<string>()
+  const mark = (r: Page) => { if (reach.has(r.id)) return; reach.add(r.id); for (const c of kids.get(r.id) ?? []) mark(c) }
+  const roots = rows.filter(r => !parentOf(r))
+  roots.forEach(mark)
+  for (const r of rows) if (!reach.has(r.id)) { roots.push(r); mark(r) }
+  const out: Nested[] = [], seen = new Set<string>()
+  const walk = (r: Page, depth: number) => {
+    if (seen.has(r.id)) return
+    seen.add(r.id)
+    const k = kids.get(r.id) ?? []
+    out.push({ row: r, depth, kids: k.length })
+    if (open.has(r.id)) for (const c of k) walk(c, depth + 1)
+  }
+  for (const r of rows) if (roots.includes(r)) walk(r, 0)
+  return out
+}

@@ -70,7 +70,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
   tables, columns, sub-pages, table of contents, breadcrumbs, embeds, bookmarks, equations, media, buttons (insert blocks, add a page to a database, edit pages in a database, send a notification, confirm, open a page or link).
 - **Comments**: page discussions, comments on selected text, replies, resolve, edit, delete, comment sidebar, Updates sidebar.
 - **Databases**: table, board, gallery, list, calendar, timeline, chart (vertical or horizontal bars, line, donut; count, sum or average by any groupable property) and form views (forms add rows; share them with members or anyone with the link); filters, sorts, grouping, hidden groups, calculations,
-  column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
+  column resize, row drag, bulk actions, side and center peek, sub-items (rows nested under a parent item) and dependencies (Blocked by / Blocking, drawn as arrows on the timeline); properties incl. status, person, files, relation (two-way),
   rollup, formula (Notion 2.0 style), created/edited time and by, and unique IDs.
 - **People**: workspaces, teamspaces (open, closed or private, with owners and members, in their own sidebar section), owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
   Can comment, Can view), general access, publish to web (with a site address /s/<name>, header links to its top pages, and optional search engine indexing with robots.txt and a sitemap), Inbox notifications with per-person settings.
@@ -81,7 +81,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
 - **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, sub-items/dependencies, map views, web clipper, or mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
+No AI, map views, web clipper, or mobile apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)
 `desktop/` is an Electron app that opens your Bloki server in its own window, like Notion's desktop app:

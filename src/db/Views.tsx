@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import {
   ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, EyeOff, Filter as FilterIcon, GripVertical, Maximize2, MoreHorizontal, Plus, Trash2, X,
   ArrowLeftToLine, ArrowRightToLine, WrapText, ArrowDownUp, Calculator, Snowflake, FileText,
-  Group as GroupIcon,
+  Group as GroupIcon, ListTree,
 } from 'lucide-react'
 import { api, type Page, type Prop, type View } from '../api'
 import { iconOf, label, useStore } from '../store'
@@ -11,7 +11,7 @@ import { coverStyle } from '../Database'
 import { FormView } from './Form'
 import { ChartView } from './Chart'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
-import { aggregate, calcsFor, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
+import { aggregate, calcsFor, nestRows, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
 type Store = ReturnType<typeof useStore>
 export type ViewProps = {
@@ -109,6 +109,21 @@ function CalcCell({ prop, p, rows }: { prop: Prop; p: ViewProps; rows: Page[] })
   )
 }
 
+// Rows whose sub-items are showing, per window (kept across re-renders so a new sub-item can open its parent).
+const openRows = new Set<string>()
+
+/** Adds a sub-item under `row` and keeps both sides of the Parent item / Sub-items relation in step. */
+async function addSubItem(store: ReturnType<typeof useStore>, p: ViewProps, row: Page) {
+  const s = p.db.schema.subItems
+  if (!s) return
+  const child = await p.addRow({ [s.parent]: [row.id] }, false)
+  if (!child) return
+  const cur = Array.isArray(row.props?.[s.children]) ? row.props[s.children] as string[] : []
+  await api.update(row.id, { props: { ...row.props, [s.children]: [...cur, child.id] } })
+  openRows.add(row.id)
+  await store.reload()
+}
+
 function RowMenu({ row, p, close }: { row: Page; p: ViewProps; close: () => void }) {
   const store = useStore()
   return (
@@ -117,6 +132,7 @@ function RowMenu({ row, p, close }: { row: Page; p: ViewProps; close: () => void
       { icon: <ArrowRightToLine size={15} />, label: 'Open as page', onClick: () => store.go(row.id) },
       { divider: true },
       ...(p.perm.rows ? [
+        ...(p.db.schema.subItems ? [{ icon: <ListTree size={15} />, label: 'Add sub-item', onClick: () => addSubItem(store, p, row) }] : []),
         { icon: <Copy size={15} />, label: 'Duplicate', onClick: async () => { await api.duplicate(row.id); await store.reload() } },
         { icon: <Trash2 size={15} />, label: 'Delete', danger: true, onClick: () => store.patch(row.id, { trashed: true }) },
       ] : []),
@@ -157,8 +173,15 @@ function frozen(cols: Prop[], view: View, width: (id: string) => number): (id: s
   return id => (id in left ? { position: 'sticky', left: left[id], zIndex: 2, background: 'var(--bg)' } : undefined)
 }
 
-function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewProps; rows: Page[]; cols: Prop[]; selected: Set<string>; setSelected: (s: Set<string>) => void; fresh?: string | null }) {
+function TableBody({ p, rows: all, cols, selected, setSelected, fresh }: { p: ViewProps; rows: Page[]; cols: Prop[]; selected: Set<string>; setSelected: (s: Set<string>) => void; fresh?: string | null }) {
   const store = useStore()
+  // With sub-items on, rows sit under their parent item, opened and closed with the arrow beside the name.
+  const [, redraw] = useState(0)
+  const sub = p.db.schema.subItems
+  const tree = sub ? nestRows(all, sub.parent, openRows) : null
+  const rows = tree ? tree.map(n => n.row) : all
+  const node = new Map(tree?.map(n => [n.row.id, n]))
+  const toggleRow = (id: string) => { if (openRows.has(id)) openRows.delete(id); else openRows.add(id); redraw(x => x + 1) }
   const [menu, setMenu] = useState<{ el: HTMLElement; row: Page } | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const sorted = !!p.view.sort?.length
@@ -180,7 +203,10 @@ function TableBody({ p, rows, cols, selected, setSelected, fresh }: { p: ViewPro
           {cols.map(c => (
             <div key={c.id} className={'td' + (c.id === 'title' ? ' title-td' : '')} style={{ width: p.view.widths?.[c.id] ?? (c.id === 'title' ? 280 : 180), ...stick(c.id), ...tint(colorsOf(r).cells[c.id]) }}>
               {c.id === 'title'
-                ? <div className="title-cell">
+                ? <div className="title-cell" style={tree ? { paddingLeft: (node.get(r.id)?.depth ?? 0) * 24 } : undefined}>
+                    {tree && (node.get(r.id)?.kids
+                      ? <button className="ghost row-twisty" aria-label={openRows.has(r.id) ? 'Hide sub-items' : 'Show sub-items'} onClick={() => toggleRow(r.id)}>{openRows.has(r.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
+                      : <span className="row-twisty" />)}
                     {!p.view.hideIcon && <span className="row-icon">{iconOf(r, 16)}</span>}
                     <Cell prop={c} row={r} db={p.db} readOnly={!p.perm.rows} wrap={p.view.wrap} className="title-value" autoEdit={r.id === fresh} />
                     <button className="open-btn" onClick={() => p.openRow(r)}><Maximize2 size={12} /> OPEN</button>
@@ -525,6 +551,24 @@ export function TimelineView(p: ViewProps) {
             </div>
             {scale === 'week' && days.map(d => (d.getDay() === 0 || d.getDay() === 6) && <div key={'w' + d.getTime()} className="weekend" style={{ left: x(isoDay(d)), width: dw }} />)}
             <div className="today-line" style={{ left: todayX }} />
+            <div className="timeline-rows">
+            {/* Dependencies: an arrow from the end of each blocking item to the start of the one it blocks. */}
+            {db.schema.deps && (() => {
+              const at = new Map(p.rows.map((r, i) => [r.id, { i, rg: rangeOf(r) }]))
+              const arrows = p.rows.flatMap((r, i) => {
+                const to = rangeOf(r), v = r.props?.[db.schema.deps!.blockedBy]
+                return to && Array.isArray(v) ? v.flatMap(id => { const f = at.get(String(id)); return f?.rg ? [{ key: id + r.id, x1: x(f.rg.end) + dw, y1: f.i * 36 + 18, x2: x(to.start), y2: i * 36 + 18, late: f.rg.end >= to.start }] : [] }) : []
+              })
+              return arrows.length > 0 && (
+                <svg className="tl-deps" width={span * dw} height={p.rows.length * 36}>
+                  <defs><marker id="tl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 8 4 0 8z" /></marker></defs>
+                  {arrows.map(a => {
+                    const mid = Math.max(a.x1 + 8, Math.min(a.x2 - 8, (a.x1 + a.x2) / 2))
+                    return <path key={a.key} className={a.late ? 'late' : ''} markerEnd="url(#tl-arrow)" d={`M${a.x1} ${a.y1} H${mid} V${a.y2} H${a.x2 - 1}`} />
+                  })}
+                </svg>
+              )
+            })()}
             {p.rows.map(r => {
               const rg = rangeOf(r)
               return (
@@ -539,6 +583,7 @@ export function TimelineView(p: ViewProps) {
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
       </div>
