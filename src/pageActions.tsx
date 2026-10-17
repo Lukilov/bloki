@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { ArrowUpRight, Copy, CornerUpRight, Link2, PenLine, Star, StarOff, Trash2 } from 'lucide-react'
-import { api, can, type Page } from './api'
+import { api, can, type Page, type Team } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
 import { copyText, mod, shift, timeAgo, type Item } from './ui'
 import { personName } from './Access'
+import { TeamIcon } from './Teams'
 
 type Store = ReturnType<typeof useStore>
 
@@ -52,12 +53,13 @@ export function MoveTo({ page, close }: { page: Page; close: () => void }) {
   const blocked = (p: Page) => ancestors(store.byId, p.id).some(a => a.id === page.id) || !can(p, p.kind === 'db' ? 'edit_content' : 'edit') || p.trashed
   const targets = store.pages.filter(p => !blocked(p) && label(p).toLowerCase().includes(q.toLowerCase())).slice(0, 40)
   const member = store.me?.role !== 'guest'
-  const move = async (parent_id: string | null, section?: 'workspace' | 'private') => {
+  const move = async (parent_id: string | null, section?: 'workspace' | 'private', team?: Team) => {
     try {
-      await api.update(page.id, { parent_id })
+      // A top-level page belongs to a teamspace, or (team_id null) to the workspace / private pages.
+      await api.update(page.id, parent_id ? { parent_id } : { parent_id, team_id: team?.id ?? null })
       if (section) await api.setShare(page.id, { workspace_access: section === 'private' ? 'none' : 'full' })
       await store.reload()
-      store.toast(`Moved to ${parent_id ? label(store.byId.get(parent_id)) : section === 'private' ? 'Private' : 'Workspace'}`)
+      store.toast(`Moved to ${parent_id ? label(store.byId.get(parent_id)) : team ? team.name : section === 'private' ? 'Private' : 'Workspace'}`)
     } catch (e) { store.setError((e as Error).message) }
     close()
   }
@@ -69,6 +71,9 @@ export function MoveTo({ page, close }: { page: Page; close: () => void }) {
         <button className="menu-item" onClick={() => move(null, 'workspace')}><span className="menu-icon">🏢</span><span className="menu-label">Workspace</span></button>
         <button className="menu-item" onClick={() => move(null, 'private')}><span className="menu-icon">🔒</span><span className="menu-label">Private pages</span></button>
       </>}
+      {can(page, 'full') && store.teams.filter(t => t.role && t.name.toLowerCase().includes(q.toLowerCase())).map(t => (
+        <button key={t.id} className="menu-item" onClick={() => move(null, undefined, t)}><span className="menu-icon"><TeamIcon team={t} size={18} /></span><span className="menu-label">{t.name}<span className="menu-sub">Teamspace</span></span></button>
+      ))}
       {targets.map(p => {
         const path = ancestors(store.byId, p.id).slice(0, -1).map(label).join(' / ')
         return (

@@ -855,7 +855,7 @@ export function updatePage(user, id, body) {
     }
     if ('position' in body) row.position = Number(body.position)
   }
-  if ('team_id' in body && !(row.parent_id ?? prev.parent_id)) {
+  if ('team_id' in body && !('parent_id' in row ? row.parent_id : prev.parent_id)) {
     // Moving a top-level page into a teamspace (or out, to the workspace) changes who sees it.
     if (!atLeast(level, 'full')) deny('You need full access to move this page.')
     if (body.team_id) needTeamMember(user, prev.workspace_id, body.team_id)

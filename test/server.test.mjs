@@ -408,6 +408,11 @@ test('teamspaces: members see and add pages, open ones can be joined, private on
   assert.equal(level(third, hidden), 'full')
   // Moving a page out to the workspace, or deleting a teamspace that still has pages.
   assert.throws(() => s.deleteTeam(member, secret.id), e => e.status === 400)
+  // A sub-page moved straight into a teamspace lands at its top level.
+  const nested = s.createPage(member, { title: 'Draft', parent_id: hidden.id })
+  s.updatePage(member, nested.id, { parent_id: null, team_id: open.id })
+  assert.equal(s.listPages(member).find(x => x.id === nested.id).section, 'team')
+  s.updatePage(member, nested.id, { parent_id: hidden.id })
   s.updatePage(member, hidden.id, { team_id: null })
   assert.equal(level(owner, hidden), 'full')
   s.deleteTeam(member, secret.id)
