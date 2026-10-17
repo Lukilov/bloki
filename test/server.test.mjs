@@ -328,3 +328,14 @@ test('notification preferences are respected; accounts can be deleted safely', (
   assert.ok(exp.pages.length > 5)
   throws403(() => s.exportWorkspace(member, ws))
 })
+
+test('backups are readable copies and only the newest are kept', async () => {
+  const { mkdirSync, readdirSync, writeFileSync } = await import('node:fs')
+  const { DatabaseSync } = await import('node:sqlite')
+  const dir = join(process.env.BLOKI_DATA, 'backups')
+  mkdirSync(dir, { recursive: true })
+  for (const d of ['2020-01-01', '2020-01-02', '2020-01-03']) writeFileSync(join(dir, `bloki-${d}.db`), '')
+  const file = s.backup(dir, 2)
+  assert.deepEqual(readdirSync(dir).sort(), ['bloki-2020-01-03.db', file.split('/').at(-1)])
+  assert.ok(new DatabaseSync(file).prepare('SELECT COUNT(*) AS n FROM users').get().n >= 1)
+})

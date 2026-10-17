@@ -1,7 +1,7 @@
 // Bloki server: one SQLite file, a JSON API, uploaded files and the built app.
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, createReadStream, existsSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, createReadStream, existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname, normalize } from 'node:path'
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto'
 import { WebSocketServer } from 'ws'
@@ -14,6 +14,9 @@ const DIST = join(ROOT, 'dist')
 const PORT = Number(process.env.PORT || 4321)
 const HOST = process.env.HOST || '127.0.0.1'
 const SECURE_COOKIE = process.env.BLOKI_SECURE_COOKIE === '1'
+// Behind a reverse proxy every request comes from the proxy; it appends the real client to X-Forwarded-For.
+const TRUST_PROXY = process.env.BLOKI_TRUST_PROXY === '1'
+const BACKUP_KEEP = Number(process.env.BLOKI_BACKUP_DAYS ?? 7)
 const SESSION_DAYS = 30
 const INVITE_DAYS = 7
 const MAX_JSON = 5 * 1024 * 1024
@@ -1091,7 +1094,7 @@ async function handle(req, res) {
     const user = sessionUser(readCookie(req, 'bloki_session'))
     const headers = {}
     const ctx = {
-      req, url, user, ip: req.socket.remoteAddress ?? '',
+      req, url, user, ip: (TRUST_PROXY && String(req.headers['x-forwarded-for'] ?? '').split(',').at(-1).trim()) || (req.socket.remoteAddress ?? ''),
       body: async () => { try { return JSON.parse((await readBody(req, MAX_JSON)).toString() || '{}') } catch (e) { throw e instanceof HttpError ? e : new HttpError(400, 'Invalid JSON.') } },
       setSession: (t, maxAge = SESSION_DAYS * 86400) => { headers['set-cookie'] = cookie('bloki_session', t, maxAge) },
     }
@@ -1176,9 +1179,20 @@ function liveUpgrade(req, socket, head) {
 }
 server.on('upgrade', (req, socket, head) => (new URL(req.url, 'http://x').pathname === '/live' ? liveUpgrade : collab.upgrade)(req, socket, head))
 
+/** A consistent copy of the database in DATA/backups (VACUUM INTO is safe while the server writes); keeps the newest `keep`. */
+export function backup(dir = join(DATA, 'backups'), keep = BACKUP_KEEP) {
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `bloki-${new Date().toISOString().slice(0, 10)}.db`)
+  rmSync(file, { force: true })
+  db.exec(`VACUUM INTO '${file.replaceAll("'", "''")}'`)
+  readdirSync(dir).filter(f => /^bloki-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().slice(0, -keep).forEach(f => rmSync(join(dir, f)))
+  return file
+}
+
 if (process.argv[1] === import.meta.filename) {
   // Localhost by default. Set HOST=0.0.0.0 (behind HTTPS, with BLOKI_SECURE_COOKIE=1) to let others in.
   purgeTrash()
   setInterval(() => purgeTrash(), 6 * 3600 * 1000).unref()
+  if (BACKUP_KEEP > 0) { backup(); setInterval(() => backup(), 24 * 3600 * 1000).unref() }
   server.listen(PORT, HOST, () => console.log(`Bloki on http://${HOST === '127.0.0.1' ? 'localhost' : HOST}:${PORT}`))
 }

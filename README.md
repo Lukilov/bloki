@@ -12,8 +12,25 @@ npm start          # http://localhost:4321
 The first account you create owns the workspace; everyone after that joins through an invite link.
 Development: `npm run dev` (API on :4321, Vite on :5173). Tests: `npm test`. Back up by copying the `data/` folder.
 
-By default the server only listens on this computer. To let other people in, run it behind HTTPS and start it with
-`HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1 npm start` (the reverse proxy must forward WebSockets on `/collab` and `/live`).
+By default the server only listens on this computer.
+
+## Hosting
+On a server with Docker, point a domain at it, then:
+
+```bash
+echo DOMAIN=bloki.example.com > .env
+docker compose up -d
+```
+
+Caddy gets the HTTPS certificate and passes the live-editing WebSockets through; Bloki keeps its data in the `bloki` volume.
+Every day the server writes a copy of the database to `/data/backups/bloki-YYYY-MM-DD.db` and keeps the last 7
+(`BLOKI_BACKUP_DAYS`, 0 turns it off). For an off-site copy take the newest backup and the uploads:
+`docker compose cp bloki:/data/backups ./backups` and `docker compose cp bloki:/data/files ./files`.
+Update with `git pull && docker compose up -d --build`.
+
+Without Docker, behind your own HTTPS proxy: `HOST=0.0.0.0 BLOKI_SECURE_COOKIE=1 BLOKI_TRUST_PROXY=1 npm start`
+(the proxy must forward WebSockets on `/collab` and `/live`, keep the `Host` header and append the client to `X-Forwarded-For`;
+leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick the address used to throttle logins).
 
 ## What's in it
 - **Sidebar**: workspace switcher, Search, Home, Inbox, Favorites/Workspace/Shared/Private sections, page "⋯" menus
@@ -36,7 +53,7 @@ By default the server only listens on this computer. To let other people in, run
 - **Settings**: My account, My settings (appearance, week start, start page), My notifications, workspace settings, People, Import.
 
 ## Not like Notion
-No AI, teamspaces, synced blocks, database automations/buttons, sub-items/dependencies, web clipper, mobile apps or email sending
+No AI, teamspaces, buttons, sub-items/dependencies, chart/form/map views, web clipper, mobile apps or email sending
 (invites are links you pass on). Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)

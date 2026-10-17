@@ -1,0 +1,22 @@
+# docker compose up -d  — Bloki behind Caddy, which gets the HTTPS certificate for $DOMAIN and passes WebSockets through.
+services:
+  bloki:
+    build: .
+    restart: unless-stopped
+    environment:
+      BLOKI_SECURE_COOKIE: "1"
+      BLOKI_TRUST_PROXY: "1"
+    volumes:
+      - bloki:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. DOMAIN=bloki.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+volumes:
+  bloki:
+  caddy:
