@@ -157,14 +157,8 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
 
   useEffect(() => {
     const on = () => setTemplates(true)
-    const imp = () => importMarkdown(store)
     addEventListener('bloki:templates', on)
-    const csv = () => importCSV(store)
-    const html = () => importHTML(store)
-    addEventListener('bloki:import', imp)
-    addEventListener('bloki:import-csv', csv)
-    addEventListener('bloki:import-html', html)
-    return () => { removeEventListener('bloki:templates', on); removeEventListener('bloki:import', imp); removeEventListener('bloki:import-csv', csv); removeEventListener('bloki:import-html', html) }
+    return () => removeEventListener('bloki:templates', on)
   }, [store])
 
   const favorites = store.pages.filter(p => p.favorite && !p.trashed)
@@ -287,6 +281,63 @@ export function importHTML(store: Store) {
       last = await store.create({ title, content: await htmlToBlocks(doc.body.innerHTML) as never, section: 'private' }, false)
     }
     if (last) store.go(last.id)
+  }
+  input.click()
+}
+
+/** Import a Notion export (Markdown & CSV .zip): the page tree, databases with their rows, images, and links between pages. */
+export function importNotion(store: Store) {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.zip,application/zip' })
+  input.onchange = async () => {
+    const f = input.files?.[0]
+    if (!f) return
+    try {
+      store.toast('Importing from Notion…')
+      const [{ unzip, planNotion, resolve }, { fromMarkdown }] = await Promise.all([import('./notionZip'), import('./Editor')])
+      const files = await unzip(await f.arrayBuffer())
+      const plan = planNotion(files)
+      if (!plan.length) throw new Error('No Notion pages in this file. Export from Notion as "Markdown & CSV".')
+      type N = (typeof plan)[number]
+      // Pass 1: every page and database, so links can point at them. ponytail: one request per page; batch if imports get big.
+      const ids = new Map<string, string>(), made: [N, string][] = []
+      const make = async (n: N, parent_id: string | null, cols?: string[]) => {
+        const base = { title: n.title, ...(parent_id ? { parent_id } : { section: 'private' as const }) }
+        const props = n.head?.slice(1).map(name => ({ id: uid(), name: name || 'Column', type: 'text' as const })) ?? []
+        const page = n.kind === 'db'
+          ? await api.create({ ...base, kind: 'db', schema: { titleName: n.head?.[0] || 'Name', props, views: [{ id: uid(), name: 'Table', type: 'table' }] } })
+          : await api.create({ ...base, ...(cols ? { props: Object.fromEntries(cols.map((c, i) => [c, n.cells?.[i] ?? ''])) } : {}) })
+        ids.set(n.path, page.id)
+        if (n.kind === 'db') ids.set(n.path.replace(/(_all)?\.csv$/, '_all.csv'), page.id).set(n.path.replace(/_all\.csv$/, '.csv'), page.id)
+        made.push([n, page.id])
+        for (const c of n.children) await make(c, page.id, n.kind === 'db' ? props.map(p => p.id) : undefined)
+        return page.id
+      }
+      const first = await make(plan[0], null)
+      for (const n of plan.slice(1)) await make(n, null)
+      // Pass 2: text, with uploaded images and Notion links turned into Bloki page links.
+      const uploaded = new Map<string, string>()
+      type B = { type: string; props?: Record<string, unknown>; content?: unknown; children?: B[] }
+      const local = (u: unknown): u is string => typeof u === 'string' && !!u && !/^[a-z]+:/i.test(u)
+      const fix = async (blocks: B[], from: string): Promise<B[]> => Promise.all(blocks.map(async b => {
+        if (['image', 'file', 'video', 'audio'].includes(b.type) && local(b.props?.url)) {
+          const path = resolve(from, b.props.url as string), data = files.get(path)
+          if (data) {
+            if (!uploaded.has(path)) uploaded.set(path, await api.upload(new File([data.slice()], path.split('/').at(-1)!)))
+            b = { ...b, props: { ...b.props, url: uploaded.get(path) } }
+          }
+        }
+        const items = Array.isArray(b.content) ? b.content as { type: string; href?: string }[] : []
+        const target = (i: { type: string; href?: string }) => i.type === 'link' && local(i.href) ? ids.get(resolve(from, i.href!)) : undefined
+        // A paragraph that is only a link to a page is how Notion writes a sub-page block.
+        if (b.type === 'paragraph' && items.length === 1 && target(items[0])) return { type: 'page', props: { pageId: target(items[0]) } }
+        if (items.some(target)) b = { ...b, content: items.map(i => target(i) ? { type: 'mention', props: { pageId: target(i) } } : i) }
+        return b.children?.length ? { ...b, children: await fix(b.children, from) } : b
+      }))
+      for (const [n, id] of made) if (n.md) await api.update(id, { content: await fix(await fromMarkdown(n.md) as unknown as B[], n.path) })
+      await store.reload()
+      store.toast(`Imported ${made.length} page${made.length === 1 ? '' : 's'} from Notion`)
+      store.go(first)
+    } catch (e) { store.setError((e as Error).message) }
   }
   input.click()
 }

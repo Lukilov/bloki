@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, ChevronDown, Download, FileCode, FileText, Globe, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
+import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
@@ -400,6 +400,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             <p className="settings-sub">Import data from other apps and files into Bloki</p>
             <Section title="File-based imports" desc="Imported files become private pages you can then move anywhere.">
               <div className="import-tiles">
+                <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-notion')) }}><FileArchive size={20} /><span><b>Notion</b><small>Import a Markdown & CSV export (.zip)</small></span></button>
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-csv')) }}><Table2 size={20} /><span><b>CSV</b><small>Import structured data from spreadsheets</small></span></button>
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import')) }}><FileText size={20} /><span><b>Text & Markdown</b><small>Import plain text and formatted notes</small></span></button>
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-html')) }}><FileCode size={20} /><span><b>HTML</b><small>Import web pages and structured content</small></span></button>
