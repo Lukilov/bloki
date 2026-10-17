@@ -589,11 +589,15 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
     <EditorCtx.Provider value={ctx}>
       {/* Highlight text with an open discussion; resolved ones fade back to plain text. Ids are server-checked UUIDs. */}
       <style>{openThreads.map(id => minimalComments
-        ? `.comment-mark[data-thread="${id}"]{cursor:pointer}.comment-mark[data-thread="${id}"]:hover{background:var(--comment-bg)}.bn-block-content:has(.comment-mark[data-thread="${id}"]){position:relative}.bn-block-content:has(.comment-mark[data-thread="${id}"])::after{content:'';position:absolute;right:-30px;top:50%;width:18px;height:18px;margin-top:-9px;opacity:.55;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center/contain no-repeat}`
+        ? `.comment-mark[data-thread="${id}"]{cursor:pointer}.comment-mark[data-thread="${id}"]:hover{background:var(--comment-bg)}.bn-block-content:has(.comment-mark[data-thread="${id}"]){position:relative}.bn-block-content:has(.comment-mark[data-thread="${id}"])::after{content:'';position:absolute;right:-30px;top:50%;width:18px;height:18px;margin-top:-9px;opacity:.55;cursor:pointer;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center/contain no-repeat}`
         : `.comment-mark[data-thread="${id}"]{background:var(--comment-bg);border-bottom:2px solid var(--comment-line);cursor:pointer}`).join('\n')}</style>
       <div className="editor-wrap" onClick={e => {
         const mark = (e.target as HTMLElement).closest('.comment-mark') as HTMLElement | null
-        if (mark && openThreads.includes(mark.dataset.thread ?? '')) openComments?.()
+        if (mark && openThreads.includes(mark.dataset.thread ?? '')) return openComments?.()
+        // Minimal mode: the icon is the block's ::after past its right edge, so a click there lands on the block itself.
+        const content = minimalComments ? (e.target as HTMLElement).closest('.bn-block-content') as HTMLElement | null : null
+        if (content && e.clientX > content.getBoundingClientRect().right
+          && [...content.querySelectorAll<HTMLElement>('.comment-mark')].some(m => openThreads.includes(m.dataset.thread ?? ''))) openComments?.()
       }} onKeyDown={e => {
         const m = e.metaKey || e.ctrlKey
         if (m && e.shiftKey && e.key.toLowerCase() === 'm' && onComment) {
