@@ -10,6 +10,7 @@ import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
 import { FormView } from './Form'
 import { ChartView } from './Chart'
+import { DashboardView, FeedView, WIDGETS } from './Feed'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
 import { aggregate, calcsFor, nestRows, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
@@ -592,5 +593,6 @@ export function TimelineView(p: ViewProps) {
 }
 
 export const VIEW_COMPONENTS: Record<View['type'], (p: ViewProps) => ReactNode> = {
-  table: TableView, board: BoardView, gallery: GalleryView, list: ListView, calendar: CalendarView, timeline: TimelineView, form: FormView, chart: ChartView,
+  table: TableView, board: BoardView, gallery: GalleryView, list: ListView, calendar: CalendarView, timeline: TimelineView, form: FormView, chart: ChartView, feed: FeedView, dashboard: DashboardView,
 }
+Object.assign(WIDGETS, VIEW_COMPONENTS)

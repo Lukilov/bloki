@@ -19,7 +19,7 @@ import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColum
 import {
   AtSign, Bookmark, CalendarDays, RefreshCw, ChevronRightSquare, Columns2, Columns3, Columns4, Copy, CornerUpRight, FileText, Globe, Heading1, Heading2, Heading3, Heading4, Link2,
   ListTree, MessageSquare, Navigation, Sigma, Smile, StickyNote, Table, LayoutGrid, Kanban, List as ListIcon, Calendar, Repeat2, Trash2, Type,
-  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting, ClipboardPen, MousePointerClick, BarChart3,
+  ListTodo, List, ListOrdered, ChevronRight, Code2, Quote, Palette, GanttChart, RemoveFormatting, ClipboardPen, MousePointerClick, BarChart3, Newspaper, LayoutDashboard,
 } from 'lucide-react'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
@@ -395,7 +395,7 @@ const darkTheme = {
     },
   },
 }
-const viewIcon: Record<ViewType, React.JSX.Element> = { table: <Table size={18} />, board: <Kanban size={18} />, gallery: <LayoutGrid size={18} />, list: <ListIcon size={18} />, calendar: <Calendar size={18} />, timeline: <GanttChart size={18} />, form: <ClipboardPen size={18} />, chart: <BarChart3 size={18} /> }
+const viewIcon: Record<ViewType, React.JSX.Element> = { table: <Table size={18} />, board: <Kanban size={18} />, gallery: <LayoutGrid size={18} />, list: <ListIcon size={18} />, calendar: <Calendar size={18} />, timeline: <GanttChart size={18} />, form: <ClipboardPen size={18} />, chart: <BarChart3 size={18} />, feed: <Newspaper size={18} />, dashboard: <LayoutDashboard size={18} /> }
 
 const COLLAB_COLORS = ['#e03e3e', '#d9730d', '#cb912f', '#448361', '#337ea9', '#9065b0', '#c14c8a', '#a27763']
 const colorFor = (s: string) => COLLAB_COLORS[[...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLLAB_COLORS.length]

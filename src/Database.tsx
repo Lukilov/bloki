@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
+  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, LayoutDashboard, Newspaper, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
   Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
@@ -17,9 +17,9 @@ export { RowProperties } from './db/Cells'
 
 type Store = ReturnType<typeof useStore>
 
-export const VIEW_NAMES: Record<ViewType, string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', form: 'Form', chart: 'Chart' }
+export const VIEW_NAMES: Record<ViewType, string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', form: 'Form', chart: 'Chart', feed: 'Feed', dashboard: 'Dashboard' }
 export const VIEW_ICONS: Record<ViewType, React.ReactNode> = {
-  table: <Table size={14} />, board: <Kanban size={14} />, list: <List size={14} />, gallery: <LayoutGrid size={14} />, calendar: <Calendar size={14} />, timeline: <GanttChart size={14} />, form: <ClipboardPen size={14} />, chart: <BarChart3 size={14} />,
+  table: <Table size={14} />, board: <Kanban size={14} />, list: <List size={14} />, gallery: <LayoutGrid size={14} />, calendar: <Calendar size={14} />, timeline: <GanttChart size={14} />, form: <ClipboardPen size={14} />, chart: <BarChart3 size={14} />, feed: <Newspaper size={14} />, dashboard: <LayoutDashboard size={14} />,
 }
 
 const opt = (name: string, i: number, group?: Option['group']): Option => ({ id: uid(), name, color: COLORS[i % COLORS.length], ...(group ? { group } : {}) })
@@ -618,13 +618,13 @@ export function Database({ id, inline }: { id: string; inline?: boolean }) {
 
       <Body db={db} rows={rows} props={props} view={view} setView={setView} addRow={addRow} openRow={openRow} perm={perm} addFilter={addFilter} />
 
-      {!rows.length && !['table', 'calendar', 'timeline', 'form', 'chart'].includes(view.type) && <div className="view-empty muted">{query || filters.length ? 'No results' : 'No pages yet'}</div>}
+      {!rows.length && !['table', 'calendar', 'timeline', 'form', 'chart', 'dashboard'].includes(view.type) && <div className="view-empty muted">{query || filters.length ? 'No results' : 'No pages yet'}</div>}
 
       <Popover anchor={pop?.kind === 'add-view' ? pop.el : null} onClose={closePop} className="add-view-pop" width={390}>
         {/* Notion shows the layouts as a grid of tiles, in this order. */}
         <div className="add-view-head">Add a new view</div>
         <div className="add-view-grid">
-          {(['table', 'board', 'gallery', 'list', 'chart', 'timeline', 'calendar', 'form'] as ViewType[]).map(t => (
+          {(['table', 'board', 'gallery', 'list', 'chart', 'dashboard', 'timeline', 'feed', 'calendar', 'form'] as ViewType[]).map(t => (
             <button key={t} onClick={() => { addView(t); closePop() }}>{VIEW_ICONS[t]}<span>{VIEW_NAMES[t]}</span></button>
           ))}
         </div>

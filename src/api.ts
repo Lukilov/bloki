@@ -11,7 +11,7 @@ export type Prop = {
   prefix?: string
   description?: string
 }
-export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'form' | 'chart'
+export type ViewType = 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'form' | 'chart' | 'feed' | 'dashboard'
 export type Filter = { prop: string; op: string; value?: string }
 /** Conditional color: rows matching a filter get a colour (an option's own, or a fixed one) on the row or one cell. */
 export type ColorRule = Filter & { id: string; color: string; apply: 'row' | 'prop' }
@@ -29,6 +29,7 @@ export type View = {
   hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'cover' | 'none'
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
+  widgets?: string[]
   chart?: { type: 'bar' | 'hbar' | 'line' | 'donut'; x?: string; y?: string; fn?: 'sum' | 'average'; sort?: 'x' | 'desc' | 'asc' }
   form?: { title?: string; description?: string; anyone?: boolean; questions?: { prop: string; name?: string; required?: boolean }[] }
 }
