@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileText, Table2 } from 'lucide-react'
-import { api, publicRoot, type Me, type Page, type Person } from './api'
+import { api, publicRoot, type Me, type Page, type Person, type Team } from './api'
 import { Icon } from './IconPicker'
 
 type Store = {
@@ -11,6 +11,8 @@ type Store = {
   reload: () => Promise<void>
   patch: (id: string, p: Partial<Page>) => Promise<void>
   create: (p: Partial<Page> & { section?: 'workspace' | 'private' }, open?: boolean) => Promise<Page>
+  /** Teamspaces this person belongs to or can see (open and closed ones). */
+  teams: Team[]
   current: string | null
   go: (id: string | null) => void
   me: Me | null
@@ -45,7 +47,8 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
   const [error, setError] = useState<string | null>(null)
   const [toastText, setToast] = useState<string | null>(null)
 
-  const reload = useCallback(async () => setPages(await api.list()), [])
+  const [teams, setTeams] = useState<Team[]>([])
+  const reload = useCallback(async () => { const [p, t] = await Promise.all([api.list(), api.teams()]); setPages(p); setTeams(t) }, [])
   /** Put one page's latest fields into the list, keeping where it sits in the sidebar. */
   const merge = useCallback((page: Page) => {
     const { content: _c, ydoc: _y, ...fields } = page as Page & { content?: unknown; ydoc?: unknown }
@@ -99,6 +102,7 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
     const fail = (e: unknown) => { setError(e instanceof Error ? e.message : String(e)); reload() }
     return {
       pages,
+      teams,
       byId,
       children: parent => pages.filter(p => !p.trashed && (parent === null ? !p.parent_id || !byId.has(p.parent_id) : p.parent_id === parent)),
       reload,
@@ -118,7 +122,7 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
           const page = await api.update(id, p)
           // Trash and moves change what's visible around the page, so those pull the list back;
           // any other edit only touches this page.
-          if ('trashed' in p || 'parent_id' in p || 'workspace_access' in p) await reload()
+          if ('trashed' in p || 'parent_id' in p || 'workspace_access' in p || 'team_id' in p) await reload()
           else merge(page)
         } catch (e) { fail(e) }
       },
@@ -131,7 +135,7 @@ export function StoreProvider({ me: initialMe, children }: { me: Me | null; chil
         } catch (e) { fail(e); throw e }
       },
     }
-  }, [pages, current, reload, merge, me, reloadMe, people, error, toastText])
+  }, [pages, teams, current, reload, merge, me, reloadMe, people, error, toastText])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

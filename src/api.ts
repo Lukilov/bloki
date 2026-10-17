@@ -74,9 +74,13 @@ export type Page = {
   workspace_access?: Level | null
   public?: boolean
   access: Level
-  section?: 'workspace' | 'shared' | 'private'
+  section?: 'workspace' | 'shared' | 'private' | 'team'
+  team_id?: string | null
   content?: unknown[]
 }
+export type TeamAccess = 'open' | 'closed' | 'private'
+export type Team = { id: string; name: string; icon: string; description: string; access: TeamAccess; role: 'owner' | 'member' | null; members: number; created: number }
+export type TeamMember = { id: string; name: string; email: string; role: 'owner' | 'member' }
 
 export type Share = {
   access: Level
@@ -120,6 +124,13 @@ export const api = {
   /** A page without its blocks: what the sidebar and databases need. */
   meta: (id: string) => call<Page>('GET', `pages/${id}?meta=1`),
   create: (p: Partial<Page> & { section?: 'workspace' | 'private' }) => call<Page>('POST', 'pages', p),
+  teams: () => (publicRoot ? Promise.resolve([]) : call<Team[]>('GET', 'teams')),
+  createTeam: (t: Partial<Team>) => call<Team>('POST', 'teams', t),
+  updateTeam: (id: string, t: Partial<Team>) => call<Team | null>('PATCH', `teams/${id}`, t),
+  deleteTeam: (id: string) => call('DELETE', `teams/${id}`),
+  teamMembers: (id: string) => call<TeamMember[]>('GET', `teams/${id}/members`),
+  joinTeam: (id: string) => call('POST', `teams/${id}/join`, {}),
+  setTeamMember: (id: string, user_id: string, role: 'owner' | 'member' | null) => call<TeamMember[] | { ok: true }>('PUT', `teams/${id}/members`, { user_id, role }),
   update: (id: string, p: Partial<Page>) => call<Page>('PATCH', `pages/${id}`, p),
   remove: (id: string) => call('DELETE', `pages/${id}`),
   duplicate: (id: string) => call<Page>('POST', `pages/${id}/duplicate`),

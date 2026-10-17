@@ -1340,3 +1340,26 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .form-modal-card { position: relative; width: min(960px, calc(100vw - 32px)); height: 86vh; overflow: auto; background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 0 24px; box-sizing: border-box; }
 .form-modal-close { position: absolute; top: 12px; right: 12px; }
 .form-page { min-height: 100vh; background: var(--bg); padding: 0 16px; }
+
+/* Teamspaces: sidebar rows and the settings / browse dialogs. */
+.team-icon { display: inline-grid; place-items: center; flex: none; border-radius: 4px; line-height: 1; }
+.team-icon.letter { background: var(--hover-2, var(--hover)); color: var(--text-2); font-weight: 600; }
+.team-item .item-label { font-weight: 500; }
+.team-dialog { width: min(560px, 94vw); display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; }
+.team-dialog header, .team-dialog footer { display: flex; align-items: center; gap: 8px; }
+.team-dialog header h2 { flex: 1; margin: 0; font-size: 18px; font-weight: 600; }
+.team-dialog footer .spacer { flex: 1; }
+.team-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.team-field input, .team-field textarea, .team-field select { font-size: 14px; color: var(--text); }
+.team-name-row { display: flex; gap: 8px; }
+.team-name-row input:last-child { flex: 1; }
+.team-emoji { width: 40px; text-align: center; padding: 0; }
+.team-access { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; border: none; background: none; text-align: left; color: var(--text); box-shadow: var(--line) 0 0 0 1px inset; }
+.team-access.on { box-shadow: var(--accent) 0 0 0 2px inset; }
+.team-access svg { margin-top: 2px; flex: none; }
+.team-access b, .team-member-name { display: block; font-size: 14px; font-weight: 500; color: var(--text); }
+.team-access small, .team-member-name small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.team-member, .team-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.team-member-name { flex: 1; min-width: 0; }
+.team-member select { width: auto; }
+.team-add { align-self: flex-start; width: auto; }

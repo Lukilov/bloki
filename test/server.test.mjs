@@ -359,3 +359,38 @@ test('forms: members answer, the link opens it to anyone, answers are checked ag
   const anon = s.submitForm(d.id, 'f', null, { title: 'From outside' }, '203.0.113.9')
   assert.equal(s.getPage(owner, anon.id).created_by, null)
 })
+
+test('teamspaces: members see and add pages, open ones can be joined, private ones stay hidden', () => {
+  const open = s.createTeam(member, { name: 'Design', icon: '🎨' })
+  assert.equal(open.role, 'owner')
+  const p = s.createPage(member, { title: 'Brand', team_id: open.id })
+  const sub = s.createPage(member, { title: 'Logo', parent_id: p.id })
+  assert.equal(s.listPages(member).find(x => x.id === p.id).section, 'team')
+  assert.equal(level(owner, sub), 'full') // workspace owners keep access to open teamspaces
+  assert.equal(level(guest, p), 'none')
+  const third = join_('third@x.si', 'member')
+  assert.equal(level(third, p), 'none')
+  throws403(() => s.createPage(third, { title: 'Nope', team_id: open.id }))
+  s.joinTeam(third, open.id)
+  assert.equal(level(third, sub), 'full')
+  throws403(() => s.updateTeam(third, open.id, { name: 'Mine' }))
+  throws403(() => s.joinTeam(guest, open.id))
+  // The last owner can't leave or be demoted; leaving drops access.
+  assert.throws(() => s.setTeamMember(member, open.id, { user_id: member.id, role: null }), e => e.status === 400)
+  s.setTeamMember(third, open.id, { user_id: third.id, role: null })
+  assert.equal(level(third, p), 'none')
+
+  const secret = s.createTeam(member, { name: 'Board', access: 'private' })
+  const hidden = s.createPage(member, { title: 'Salaries', team_id: secret.id })
+  assert.ok(!s.listTeams(owner).some(t => t.id === secret.id))
+  assert.equal(level(owner, hidden), 'none') // not even workspace owners see private teamspaces
+  throws403(() => s.joinTeam(third, secret.id))
+  s.setTeamMember(member, secret.id, { user_id: third.id, role: 'member' })
+  assert.equal(level(third, hidden), 'full')
+  // Moving a page out to the workspace, or deleting a teamspace that still has pages.
+  assert.throws(() => s.deleteTeam(member, secret.id), e => e.status === 400)
+  s.updatePage(member, hidden.id, { team_id: null })
+  assert.equal(level(owner, hidden), 'full')
+  s.deleteTeam(member, secret.id)
+  assert.ok(!s.listTeams(member).some(t => t.id === secret.id))
+})

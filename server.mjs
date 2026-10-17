@@ -123,6 +123,12 @@ db.exec(`
     archived INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, workspace_id, created);
+  -- Teamspaces: groups of members with their own pages. access: open (anyone may join), closed (listed, owners add), private (hidden).
+  CREATE TABLE IF NOT EXISTS teams (
+    id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+    access TEXT NOT NULL DEFAULT 'open', created INTEGER NOT NULL, created_by TEXT
+  );
+  CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
 `)
 // Columns added after the first release.
 const addColumns = (table, cols) => {
@@ -130,7 +136,7 @@ const addColumns = (table, cols) => {
     if (!db.prepare('SELECT 1 FROM pragma_table_info(?) WHERE name = ?').get(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`)
 }
 addColumns('pages', [['workspace_id', 'TEXT'], ['workspace_access', 'TEXT'], ['public', 'INTEGER NOT NULL DEFAULT 0'], ['created_by', 'TEXT'], ['updated_by', 'TEXT'],
-  ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50']])
+  ['trashed_at', 'INTEGER'], ['font', "TEXT NOT NULL DEFAULT 'default'"], ['small_text', 'INTEGER NOT NULL DEFAULT 0'], ['cover_y', 'REAL NOT NULL DEFAULT 50'], ['team_id', 'TEXT']])
 addColumns('comments', [['thread_id', 'TEXT'], ['block_id', 'TEXT'], ['quote', 'TEXT'], ['reactions', 'TEXT']])
 addColumns('history', [['user_id', 'TEXT']])
 addColumns('users', [['prefs', "TEXT NOT NULL DEFAULT '{}'"]])
@@ -177,27 +183,33 @@ export const roleOf = (wsId, userId) => db.prepare('SELECT role FROM members WHE
  *   Members get it; owners get full wherever it isn't "none"; guests never get it.
  * - Personal grants: the nearest grant for this user up the tree.
  * - Effective = the higher of the two. "Can edit content" applies to databases; inside one it means edit.
+ * - Pages in a teamspace (a top-level page's team_id) give that "everyone" level to the team's members instead;
+ *   workspace owners keep it for open and closed teamspaces, team owners get full.
  */
 // ponytail: recomputes the whole workspace per request, cache per request if workspaces reach ~50k pages
 export function accessMap(userId, wsId) {
   const role = roleOf(wsId, userId)
   const out = new Map()
   if (!role) return out
-  const pages = db.prepare('SELECT id, parent_id, kind, workspace_access FROM pages WHERE workspace_id = ?').all(wsId)
+  const pages = db.prepare('SELECT id, parent_id, kind, workspace_access, team_id FROM pages WHERE workspace_id = ?').all(wsId)
+  const teams = new Map(db.prepare('SELECT id, access FROM teams WHERE workspace_id = ?').all(wsId).map(t => [t.id, t.access]))
+  const mine = new Map(db.prepare('SELECT m.team_id, m.role FROM team_members m JOIN teams t ON t.id = m.team_id WHERE m.user_id = ? AND t.workspace_id = ?').all(userId, wsId).map(m => [m.team_id, m.role]))
   const grants = new Map(db.prepare('SELECT g.page_id, g.level FROM grants g JOIN pages p ON p.id = g.page_id WHERE g.user_id = ? AND p.workspace_id = ?').all(userId, wsId).map(g => [g.page_id, g.level]))
   const byId = new Map(pages.map(p => [p.id, p]))
   const memo = new Map()
   const resolve = id => {
     if (memo.has(id)) return memo.get(id)
     const p = byId.get(id)
-    const up = p.parent_id && byId.has(p.parent_id) ? resolve(p.parent_id) : { ws: 'full', grant: 'none', inDb: false }
-    const r = { ws: p.workspace_access ?? up.ws, grant: grants.get(id) ?? up.grant, inDb: up.inDb || byId.get(p.parent_id)?.kind === 'db' }
+    const up = p.parent_id && byId.has(p.parent_id) ? resolve(p.parent_id) : { ws: 'full', grant: 'none', inDb: false, team: null }
+    const team = p.parent_id ? up.team : teams.has(p.team_id) ? p.team_id : null
+    const r = { ws: p.workspace_access ?? up.ws, grant: grants.get(id) ?? up.grant, inDb: up.inDb || byId.get(p.parent_id)?.kind === 'db', team }
     memo.set(id, r)
     return r
   }
   for (const p of pages) {
     const r = resolve(p.id)
-    const ws = role === 'guest' ? 'none' : role === 'owner' && r.ws !== 'none' ? 'full' : r.ws
+    const boss = role === 'owner' && (!r.team || teams.get(r.team) !== 'private') || mine.get(r.team) === 'owner'
+    const ws = role === 'guest' || (r.team && !mine.has(r.team) && !boss) ? 'none' : boss && r.ws !== 'none' ? 'full' : r.ws
     let level = maxLevel(ws, r.grant)
     if (level === 'edit_content' && r.inDb) level = 'edit'
     out.set(p.id, level)
@@ -408,7 +420,7 @@ export function exportWorkspace(user, wsId) {
 
 /* ---------- Pages ---------- */
 
-const META = 'id, parent_id, kind, title, icon, cover, cover_y, schema, props, trashed, trashed_at, full_width, locked, font, small_text, position, created, updated, workspace_access, public, created_by, updated_by'
+const META = 'id, parent_id, kind, title, icon, cover, cover_y, schema, props, trashed, trashed_at, full_width, locked, font, small_text, position, created, updated, workspace_access, public, created_by, updated_by, team_id'
 const CONTENT_FIELDS = ['title', 'icon', 'cover', 'cover_y', 'content', 'props', 'full_width', 'locked', 'font', 'small_text']
 const JSON_COLS = ['content', 'schema', 'props']
 const SNAPSHOT_EVERY = 10 * 60 * 1000
@@ -457,7 +469,9 @@ export function createPage(user, body, { viaForm = false } = {}) {
   const now = Date.now()
   const id = randomUUID()
   const pos = db.prepare('SELECT COALESCE(MAX(position), 0) + 1 AS p FROM pages WHERE parent_id IS ? AND workspace_id = ?').get(body.parent_id ?? null, wsId).p
-  const priv = !body.parent_id && body.section === 'private'
+  const team = !body.parent_id && body.team_id ? body.team_id : null
+  if (team) needTeamMember(user, wsId, team)
+  const priv = !team && !body.parent_id && body.section === 'private'
   // Database rows get the next number for every ID property, as Notion's unique IDs.
   if (parent?.kind === 'db') {
     const schema = JSON.parse(db.prepare('SELECT schema FROM pages WHERE id = ?').get(body.parent_id).schema)
@@ -471,7 +485,7 @@ export function createPage(user, body, { viaForm = false } = {}) {
   }
   const row = {
     position: pos, ...encode(body, fields), id, parent_id: body.parent_id ?? null, workspace_id: wsId,
-    workspace_access: body.parent_id ? null : priv ? 'none' : 'full', created_by: user.id, updated_by: user.id, created: now, updated: now,
+    workspace_access: body.parent_id ? null : priv ? 'none' : 'full', team_id: team, created_by: user.id, updated_by: user.id, created: now, updated: now,
   }
   if (row.kind && !['page', 'db'].includes(row.kind)) throw new HttpError(400, 'Unknown page kind.')
   const cols = Object.keys(row)
@@ -498,14 +512,109 @@ export function listPages(user) {
   const visible = new Set(rows.map(r => r.id))
   // Who besides me has personal access to each top-level page decides Private vs Shared.
   const others = new Set(db.prepare('SELECT DISTINCT page_id FROM grants WHERE user_id != ?').all(user.id).map(g => g.page_id))
+  const teamIds = new Set(db.prepare('SELECT id FROM teams WHERE workspace_id = ?').all(user.workspaceId).map(t => t.id))
   return rows.map(p => {
     const top = !p.parent_id || !visible.has(p.parent_id)
     const section = !top ? undefined
       : p.parent_id ? 'shared'
+      : p.team_id && teamIds.has(p.team_id) ? 'team'
       : p.workspace_access !== 'none' && role !== 'guest' ? 'workspace'
       : others.has(p.id) || !atLeast(access.get(p.id), 'full') ? 'shared' : 'private'
     return { ...decode(p), access: access.get(p.id), favorite: favs.has(p.id), section }
   })
+}
+
+/* ---------- Teamspaces ---------- */
+
+const TEAM_ACCESS = ['open', 'closed', 'private']
+const teamRole = (teamId, userId) => db.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?').get(teamId, userId)?.role
+function teamIn(wsId, teamId) {
+  const t = db.prepare('SELECT * FROM teams WHERE id = ? AND workspace_id = ?').get(teamId, wsId)
+  if (!t) throw new HttpError(404, 'Teamspace not found.')
+  return t
+}
+function needTeamMember(user, wsId, teamId) {
+  const t = teamIn(wsId, teamId)
+  if (!teamRole(t.id, user.id) && !(roleOf(wsId, user.id) === 'owner' && t.access !== 'private')) deny('Join this teamspace to add pages to it.')
+  return t
+}
+// Team owners and (outside private teamspaces) workspace owners manage a teamspace.
+function needTeamOwner(user, teamId) {
+  const t = teamIn(user.workspaceId, teamId)
+  if (teamRole(t.id, user.id) !== 'owner' && !(roleOf(t.workspace_id, user.id) === 'owner' && t.access !== 'private')) deny('Only teamspace owners can do that.')
+  return t
+}
+const teamOwners = teamId => db.prepare("SELECT COUNT(*) AS n FROM team_members WHERE team_id = ? AND role = 'owner'").get(teamId).n
+
+export function listTeams(user) {
+  if (!user.workspaceId) return []
+  return db.prepare(`SELECT t.id, t.name, t.icon, t.description, t.access, t.created, m.role,
+      (SELECT COUNT(*) FROM team_members x WHERE x.team_id = t.id) AS members
+    FROM teams t LEFT JOIN team_members m ON m.team_id = t.id AND m.user_id = ?
+    WHERE t.workspace_id = ? AND (t.access != 'private' OR m.role IS NOT NULL) ORDER BY t.created`).all(user.id, user.workspaceId)
+    .map(t => ({ ...t, role: t.role ?? null }))
+}
+
+export function createTeam(user, { name, icon = '', description = '', access = 'open' } = {}) {
+  if (!['owner', 'member'].includes(roleOf(user.workspaceId, user.id))) deny('Guests can’t create teamspaces.')
+  if (!String(name ?? '').trim()) throw new HttpError(400, 'Give the teamspace a name.')
+  if (!TEAM_ACCESS.includes(access)) throw new HttpError(400, 'Unknown teamspace access.')
+  const id = randomUUID()
+  db.prepare('INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, user.workspaceId, String(name).trim().slice(0, 100), String(icon).slice(0, 200), String(description).slice(0, 500), access, Date.now(), user.id)
+  db.prepare("INSERT INTO team_members VALUES (?, ?, 'owner')").run(id, user.id)
+  liveReload(user.workspaceId)
+  return listTeams(user).find(t => t.id === id)
+}
+
+export function updateTeam(user, id, body) {
+  needTeamOwner(user, id)
+  const row = {}
+  if ('name' in body) { if (!String(body.name).trim()) throw new HttpError(400, 'Give the teamspace a name.'); row.name = String(body.name).trim().slice(0, 100) }
+  if ('icon' in body) row.icon = String(body.icon).slice(0, 200)
+  if ('description' in body) row.description = String(body.description).slice(0, 500)
+  if ('access' in body) { if (!TEAM_ACCESS.includes(body.access)) throw new HttpError(400, 'Unknown teamspace access.'); row.access = body.access }
+  if (Object.keys(row).length) db.prepare(`UPDATE teams SET ${Object.keys(row).map(c => `${c} = ?`).join(',')} WHERE id = ?`).run(...Object.values(row), id)
+  liveReload(user.workspaceId)
+  return listTeams(user).find(t => t.id === id) ?? null
+}
+
+export function deleteTeam(user, id) {
+  needTeamOwner(user, id)
+  if (db.prepare('SELECT 1 FROM pages WHERE team_id = ? AND parent_id IS NULL AND trashed = 0').get(id)) throw new HttpError(400, 'Move or delete the teamspace’s pages first.')
+  db.prepare('UPDATE pages SET team_id = NULL WHERE team_id = ?').run(id) // trashed pages fall back to the workspace if restored
+  db.prepare('DELETE FROM team_members WHERE team_id = ?').run(id)
+  db.prepare('DELETE FROM teams WHERE id = ?').run(id)
+  liveReload(user.workspaceId)
+  return { ok: true }
+}
+
+export function teamMembers(user, id) {
+  const t = teamIn(user.workspaceId, id)
+  if (t.access === 'private' && !teamRole(id, user.id)) throw new HttpError(404, 'Teamspace not found.')
+  return db.prepare('SELECT u.id, u.name, u.email, m.role FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? ORDER BY m.role DESC, u.name').all(id)
+}
+
+export function joinTeam(user, id) {
+  const t = teamIn(user.workspaceId, id)
+  if (t.access !== 'open') deny('Ask a teamspace owner to add you.')
+  if (!['owner', 'member'].includes(roleOf(t.workspace_id, user.id))) deny('Guests can’t join teamspaces.')
+  db.prepare("INSERT OR IGNORE INTO team_members VALUES (?, ?, 'member')").run(id, user.id)
+  liveReload(t.workspace_id)
+  return { ok: true }
+}
+
+export function setTeamMember(user, id, { user_id, role }) {
+  const t = user_id === user.id && role == null ? teamIn(user.workspaceId, id) : needTeamOwner(user, id)
+  const prev = teamRole(id, user_id)
+  if (role != null) {
+    if (!['owner', 'member'].includes(role)) throw new HttpError(400, 'Unknown role.')
+    if (!['owner', 'member'].includes(roleOf(t.workspace_id, user_id))) throw new HttpError(400, 'Only workspace members can be in a teamspace.')
+  }
+  if (prev === 'owner' && role !== 'owner' && teamOwners(id) === 1) throw new HttpError(400, 'A teamspace needs at least one owner.')
+  if (role == null) db.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').run(id, user_id)
+  else db.prepare('INSERT INTO team_members VALUES (?, ?, ?) ON CONFLICT (team_id, user_id) DO UPDATE SET role = excluded.role').run(id, user_id, role)
+  liveReload(t.workspace_id)
+  return user_id === user.id && role == null ? { ok: true } : teamMembers(user, id)
 }
 
 /* ---------- Automations ---------- */
@@ -577,10 +686,19 @@ export function updatePage(user, id, body) {
       if (body.parent_id && descendants(id).includes(body.parent_id)) throw new HttpError(400, 'A page cannot move inside itself.')
       canCreateIn(user, prev.workspace_id, body.parent_id)
       row.parent_id = body.parent_id ?? null
-      // Moving to the top level keeps the page's current audience explicit.
+      // Moving to the top level keeps the page's current audience explicit; inside another page it follows that page.
       if (!body.parent_id && prev.workspace_access == null) row.workspace_access = 'full'
+      if (body.parent_id) row.team_id = null
     }
     if ('position' in body) row.position = Number(body.position)
+  }
+  if ('team_id' in body && !(row.parent_id ?? prev.parent_id)) {
+    // Moving a top-level page into a teamspace (or out, to the workspace) changes who sees it.
+    if (!atLeast(level, 'full')) deny('You need full access to move this page.')
+    if (body.team_id) needTeamMember(user, prev.workspace_id, body.team_id)
+    else if (!['owner', 'member'].includes(roleOf(prev.workspace_id, user.id))) deny()
+    row.team_id = body.team_id || null
+    if (row.team_id && prev.workspace_access === 'none') row.workspace_access = 'full'
   }
   if (!Object.keys(row).length) return getPage(user, id)
 
@@ -601,7 +719,7 @@ export function updatePage(user, id, body) {
   const cols = Object.keys(row)
   db.prepare(`UPDATE pages SET ${cols.map(c => `${c} = ?`).join(',')} WHERE id = ?`).run(...Object.values(row), id)
   // Trash and moves reshape the tree; anything else changes just this page.
-  if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row) liveReload(prev.workspace_id)
+  if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row || 'team_id' in row) liveReload(prev.workspace_id)
   else livePages(prev.workspace_id, [id])
   if ('props' in row && row.props !== prev.props) runAutomations(user, id, 'edited', JSON.parse(prev.props || '{}'))
   return getPage(user, id)
@@ -1055,6 +1173,13 @@ const routes = [
     db.prepare('UPDATE sessions SET workspace_id = ? WHERE token_hash = ?').run(inv.workspace_id, c.user.tokenHash)
     return { workspace_id: inv.workspace_id, page_id: inv.page_id }
   }],
+  ['GET', /^\/api\/teams$/, c => listTeams(c.user)],
+  ['POST', /^\/api\/teams$/, async c => createTeam(c.user, await c.body())],
+  ['PATCH', /^\/api\/teams\/([\w-]+)$/, async (c, id) => updateTeam(c.user, id, await c.body())],
+  ['DELETE', /^\/api\/teams\/([\w-]+)$/, (c, id) => deleteTeam(c.user, id)],
+  ['GET', /^\/api\/teams\/([\w-]+)\/members$/, (c, id) => teamMembers(c.user, id)],
+  ['POST', /^\/api\/teams\/([\w-]+)\/join$/, (c, id) => joinTeam(c.user, id)],
+  ['PUT', /^\/api\/teams\/([\w-]+)\/members$/, async (c, id) => setTeamMember(c.user, id, await c.body())],
   ['GET', /^\/api\/forms\/([\w-]+)\/([\w-]+)$/, (c, dbId, viewId) => formDef(dbId, viewId, c.user), true],
   ['POST', /^\/api\/forms\/([\w-]+)\/([\w-]+)$/, async (c, dbId, viewId) => submitForm(dbId, viewId, c.user, (await c.body()).answers, c.ip), true],
   ['GET', /^\/api\/public\/([\w-]+)\/pages$/, (c, root) => publicPages(root), true],

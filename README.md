@@ -44,7 +44,7 @@ leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick t
 - **Databases**: table, board, gallery, list, calendar, timeline and form views (forms add rows; share them with members or anyone with the link); filters, sorts, grouping, hidden groups, calculations,
   column resize, row drag, bulk actions, side and center peek; properties incl. status, person, files, relation (two-way),
   rollup, formula (Notion 2.0 style), created/edited time and by, and unique IDs.
-- **People**: workspaces, owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
+- **People**: workspaces, teamspaces (open, closed or private, with owners and members, in their own sidebar section), owners/members/guests, invite links, per-page access levels (Full access, Can edit, Can edit content,
   Can comment, Can view), general access, publish to web, Inbox notifications with per-person settings.
 - **Live co-editing**: several people on one page at once, with named cursors. View-only people can't change the shared doc.
 - **Live sidebar and databases**: edits by others appear without reloading; only the changed page is fetched, and only by people who can see it.
@@ -53,7 +53,7 @@ leave `BLOKI_TRUST_PROXY` off when nothing sits in front, or anyone could pick t
 - **Settings**: My account, My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
 
 ## Not like Notion
-No AI, teamspaces, buttons, sub-items/dependencies, chart/map views, web clipper, mobile apps or email sending
+No AI, buttons, sub-items/dependencies, chart/map views, web clipper, mobile apps or email sending
 (invites are links you pass on). Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.
 
 ## Desktop app (macOS, Windows, Linux)

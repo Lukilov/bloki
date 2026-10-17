@@ -16,6 +16,7 @@ import { CoverPicker, GRADIENTS, IconPicker, randomEmoji } from './IconPicker'
 import { copyText, Menu, mod, Popover, shift, timeAgo, type Item } from './ui'
 import { duplicate, MoveTo, pageUrl, trash } from './pageActions'
 import { importMarkdown } from './Sidebar'
+import { TeamIcon } from './Teams'
 
 export function download(name: string, text: string, type = 'text/markdown') {
   const a = document.createElement('a')
@@ -245,6 +246,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
       <div className={`page font-${meta.font ?? 'default'}${meta.full_width || meta.kind === 'db' || row?.schema.layout?.fullWidth ? ' full' : ''}${meta.kind === 'db' ? ' db-page' : ''}${meta.small_text ? ' small-text' : ''}`}>
         <header className={'topbar' + (sidebarCollapsed ? ' collapsed' : '') + (peek ? ' in-peek' : '')}>
           <nav className="crumbs">{!peek && <>
+            {/* Pages in a teamspace start their path with it, as in Notion. */}
+            {(() => { const t = crumbs[0]?.section === 'team' && store.teams.find(x => x.id === crumbs[0]?.team_id); return t && <span className="crumb-wrap"><span className="crumb"><TeamIcon team={t} size={16} /><span className="crumb-label">{t.name}</span></span><span className="sep">/</span></span> })()}
             {shownCrumbs.map((c, i) => (
               <span key={c?.id ?? 'more'} className="crumb-wrap">
                 {i > 0 && <span className="sep">/</span>}

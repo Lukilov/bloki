@@ -3,7 +3,8 @@ import {
   Library as LibraryIcon, Archive, CheckCheck, ChevronDown, ChevronRight, ChevronsLeft, CircleHelp, FileText, Home, Inbox as InboxIcon, Keyboard, LayoutTemplate,
   MessageSquare, MoreHorizontal, Plus, RotateCcw, Search, Settings, SquarePen, Trash2, Upload, UserPlus, Users,
 } from 'lucide-react'
-import { api, can, uid, type Notice, type Page } from './api'
+import { api, can, uid, type Notice, type Page, type Team } from './api'
+import { TeamBrowser, TeamDialog, TeamIcon } from './Teams'
 import { parseCSV } from './db/model'
 import { ancestors, iconOf, label, useStore } from './store'
 import { WorkspaceMenu } from './Access'
@@ -117,6 +118,70 @@ function Section({ id, title, pages, drop, add, expanded, toggle, collapsed, tog
   )
 }
 
+/** Teamspaces the person belongs to, each with its own pages, as in Notion's sidebar. */
+function TeamsSection({ roots, expanded, toggle, collapsed, toggleCollapsed }: {
+  roots: Page[]; expanded: Set<string>; toggle: (id: string, on?: boolean) => void; collapsed: Set<string>; toggleCollapsed: (id: string) => void
+}) {
+  const store = useStore()
+  const [dialog, setDialog] = useState<{ kind: 'new' | 'browse' } | { kind: 'edit'; team: Team } | null>(null)
+  const [menu, setMenu] = useState<{ el: HTMLElement; team: Team } | null>(null)
+  const [over, setOver] = useState<string | null>(null)
+  const joined = store.teams.filter(t => t.role)
+  const member = store.me?.role === 'owner' || store.me?.role === 'member'
+  if (!member && !joined.length) return null
+  const hidden = collapsed.has('teams')
+  // Dropping a page on a teamspace moves it to the teamspace's top level.
+  const drop = async (team: string, pid: string) => {
+    const p = store.byId.get(pid)
+    if (!p || !can(p, 'full')) return
+    await api.update(pid, { parent_id: null, team_id: team })
+    await store.reload()
+  }
+  return (
+    <div className="side-section">
+      <div className="section">
+        <button className="section-title" onClick={() => toggleCollapsed('teams')}>Teamspaces</button>
+        <span className="section-actions">
+          <button title="Browse teamspaces" onClick={() => setDialog({ kind: 'browse' })}><MoreHorizontal size={14} /></button>
+          {member && <button title="Create a teamspace" onClick={() => setDialog({ kind: 'new' })}><Plus size={14} /></button>}
+        </span>
+      </div>
+      {!hidden && joined.map(t => {
+        const pages = roots.filter(p => p.section === 'team' && p.team_id === t.id)
+        const open = !expanded.has('team-closed:' + t.id)
+        return (
+          <div key={t.id}>
+            <div className={'item team-item' + (over === t.id ? ' over' : '')} style={{ paddingLeft: 8 }} onClick={() => toggle('team-closed:' + t.id, open)}
+              onDragOver={e => { if (!e.dataTransfer.types.includes('text/page')) return; e.preventDefault(); setOver(t.id) }} onDragLeave={() => setOver(null)}
+              onDrop={e => { e.preventDefault(); setOver(null); drop(t.id, e.dataTransfer.getData('text/page')).catch(err => store.setError(err.message)) }}>
+              <span className="item-icon"><TeamIcon team={t} size={20} /></span>
+              <span className="item-label">{t.name}</span>
+              <span className="item-actions">
+                <button title="Teamspace settings and more" onClick={e => { e.stopPropagation(); setMenu({ el: e.currentTarget, team: t }) }}><MoreHorizontal size={16} /></button>
+                <button title="Add a page" onClick={e => { e.stopPropagation(); store.create({ team_id: t.id }) }}><Plus size={16} /></button>
+              </span>
+            </div>
+            {open && pages.map(p => <PageItem key={p.id} page={p} depth={1} expanded={expanded} toggle={toggle} />)}
+            {open && !pages.length && <button className="item empty-item add-first" style={{ paddingLeft: 20 }} onClick={() => store.create({ team_id: t.id })}><Plus size={14} /> Add a page</button>}
+          </div>
+        )
+      })}
+      {!hidden && member && !joined.length && <button className="item empty-item add-first" onClick={() => setDialog({ kind: store.teams.length ? 'browse' : 'new' })}><Plus size={14} /> {store.teams.length ? 'Browse teamspaces' : 'Create a teamspace'}</button>}
+      <Popover anchor={menu?.el ?? null} onClose={() => setMenu(null)} className="menu-pop" width={240}>
+        {menu && <Menu onClose={() => setMenu(null)} items={[
+          { label: 'Teamspace settings', onClick: () => setDialog({ kind: 'edit', team: menu.team }) },
+          { label: 'Add a page', onClick: () => store.create({ team_id: menu.team.id }) },
+          { label: 'Browse teamspaces', onClick: () => setDialog({ kind: 'browse' }) },
+          { label: 'Leave teamspace', danger: true, onClick: () => api.setTeamMember(menu.team.id, store.me!.user.id, null).then(() => store.reload()).catch(e => store.setError(e.message)) },
+        ]} />}
+      </Popover>
+      {dialog?.kind === 'new' && <TeamDialog close={() => setDialog(null)} />}
+      {dialog?.kind === 'edit' && <TeamDialog team={dialog.team} close={() => setDialog(null)} />}
+      {dialog?.kind === 'browse' && <TeamBrowser close={() => setDialog(null)} open={team => setDialog({ kind: 'edit', team })} />}
+    </div>
+  )
+}
+
 function NavRow({ icon, label: text, onClick, hint, badge, active }: { icon: ReactNode; label: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; hint?: string; badge?: number; active?: boolean }) {
   return (
     <button className={'nav' + (active ? ' active' : '')} onClick={onClick}>
@@ -194,6 +259,7 @@ export function Sidebar({ width, setWidth, collapse, openSearch, openSettings }:
 
       {tab === 'inbox' ? <div className="side-inbox"><InboxPanel setUnread={setUnread} close={() => setTab('home')} /></div> : <div className="tree">
         {favorites.length > 0 && <Section id="favorites" title="Favorites" pages={favorites} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />}
+        <TeamsSection roots={roots} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
         <Section id="workspace" title="Workspace" pages={roots.filter(p => p.section === 'workspace')} drop={member ? 'workspace' : undefined}
           add={member ? () => store.create({ section: 'workspace' }) : undefined} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
         <Section id="shared" title="Shared" pages={roots.filter(p => p.section === 'shared')} expanded={expanded} toggle={toggle} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
