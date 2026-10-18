@@ -793,7 +793,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .filler { flex: 1; min-width: 0; box-shadow: var(--line) 1px 0 0 inset; }
 .tr { box-shadow: var(--line) 0 -1px 0 inset; position: relative; }
 .tr.selected { background: var(--accent-soft); }
-.tr.drop-above { box-shadow: var(--accent) 0 2px 0 inset; }
+.tr.drop-above, .list-row.drop-above { box-shadow: var(--accent) 0 2px 0 inset; }
 .td { flex-shrink: 0; box-shadow: var(--line) 1px 0 0 inset; display: flex; min-height: 36px; }
 .tr .row-gutter + .td { box-shadow: none; }
 .row-gutter { position: absolute; left: -32px; width: 32px; height: 36px; display: flex; align-items: center; justify-content: flex-end; gap: 2px; opacity: 0; }
@@ -1457,7 +1457,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .tl-deps path.late { stroke: rgb(235, 87, 87); }
 
 /* Feed: pages as posts. Dashboard: other views as widgets in a grid. */
-.feed { display: flex; flex-direction: column; gap: 12px; max-width: 720px; padding: 12px 0 24px; }
+.feed { display: flex; flex-direction: column; gap: 12px; max-width: 720px; margin: 0 auto; padding: 12px 0 24px; }
+.feed-by { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; color: var(--muted); }
+.feed-by b { font-weight: 500; color: var(--text-2); }
 .feed-post { padding: 16px 20px; border-radius: 10px; box-shadow: var(--line) 0 0 0 1px inset; cursor: pointer; }
 .feed-post:hover { background: var(--hover); }
 .feed-post h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 20px; font-weight: 700; }

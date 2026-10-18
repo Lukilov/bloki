@@ -433,10 +433,15 @@ export function GalleryView(p: ViewProps) {
 
 export function ListView(p: ViewProps) {
   const store = useStore()
+  const [over, setOver] = useState<string | null>(null)
+  const sorted = !!p.view.sort?.length
   return (
     <div className="list-view">
       {p.rows.map(r => (
-        <div key={r.id} className="list-row" style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} onClick={() => p.openRow(r)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)}>
+        <div key={r.id} className={'list-row' + (over === r.id ? ' drop-above' : '')} style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} onClick={() => p.openRow(r)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)}
+          onDragOver={e => { if (!sorted && p.perm.rows && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
+          onDragLeave={() => setOver(null)}
+          onDrop={e => { setOver(null); const id = e.dataTransfer.getData('text/row'); if (id && id !== r.id) reorder(store, p.rows, id, r.id) }}>
           <span className="list-title">{iconOf(r, 16)}<span>{label(r)}</span></span>
           <span className="list-props"><CardProps row={r} props={p.props} db={p.db} /></span>
         </div>

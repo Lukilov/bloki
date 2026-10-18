@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api, type View } from '../api'
 import { iconOf, label, useStore } from '../store'
+import { timeAgo } from '../ui'
+import { Avatar } from '../Comments'
 import { CellView, ctxOf } from './Cells'
 import { applyView, isTemplate, value } from './model'
 import type { ViewProps } from './Views'
@@ -12,20 +14,23 @@ export const blockText = (b: Block): string => (Array.isArray(b.content) ? (b.co
 export function FeedView({ db, rows, props, openRow }: ViewProps) {
   const store = useStore()
   const [shown, setShown] = useState(10)
-  const [bodies, setBodies] = useState<Record<string, Block[]>>({})
+  const [bodies, setBodies] = useState<Record<string, { at: number; blocks: Block[] }>>({})
   const visible = rows.slice(0, shown)
-  // Pages in the list don't carry their blocks; fetch the ones on screen.
+  // Pages in the list don't carry their blocks; fetch the ones on screen, again whenever a page changes.
   useEffect(() => {
-    for (const r of visible) if (!bodies[r.id]) api.get(r.id).then(p => setBodies(b => ({ ...b, [r.id]: (p.content ?? []) as Block[] }))).catch(() => {})
-  }, [visible.map(r => r.id).join()]) // eslint-disable-line react-hooks/exhaustive-deps
+    for (const r of visible) if (bodies[r.id]?.at !== r.updated) api.get(r.id).then(p => setBodies(b => ({ ...b, [r.id]: { at: r.updated, blocks: (p.content ?? []) as Block[] } }))).catch(() => {})
+  }, [visible.map(r => r.id + r.updated).join()]) // eslint-disable-line react-hooks/exhaustive-deps
   const ctx = ctxOf(store)
   return (
     <div className="feed">
       {visible.map(r => {
-        const blocks = (bodies[r.id] ?? []).filter(b => blockText(b).trim()).slice(0, 6)
+        const blocks = (bodies[r.id]?.blocks ?? []).filter(b => blockText(b).trim()).slice(0, 6)
+        const author = r.created_by ? store.people.get(r.created_by)?.name : undefined
         const meta = props.filter(p => { const v = value(r, p, db.schema, ctx); return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length) })
         return (
           <article key={r.id} className="feed-post" onClick={() => openRow(r)}>
+            {/* As Notion's feed: who posted it and when, above the title. */}
+            <div className="feed-by"><Avatar name={author ?? '?'} size={20} /><b>{author ?? 'Someone'}</b><span>{timeAgo(r.created)}</span></div>
             <h3>{r.icon && <span className="feed-icon">{iconOf(r, 20)}</span>}{label(r)}</h3>
             {meta.length > 0 && <div className="feed-meta">{meta.map(p => <span key={p.id}><CellView prop={p} row={r} schema={db.schema} /></span>)}</div>}
             <div className="feed-body">
