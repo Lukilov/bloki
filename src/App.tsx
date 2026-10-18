@@ -315,7 +315,7 @@ export default function App() {
   setPublicRoot(null)
   if (me === undefined) return null
   if (route.form) return me === null && formLogin
-    ? <AuthScreen onDone={() => { setFormLogin(false); refresh() }} />
+    ? <AuthScreen stay onDone={() => { setFormLogin(false); refresh() }} />
     : <Suspense fallback={null}><FormPage dbId={route.form.db} viewId={route.form.view} who={me?.user.name} login={() => setFormLogin(true)} key={me?.user.id ?? 'anon'} /></Suspense>
   if (route.reset) return <ResetScreen token={route.reset} onDone={refresh} />
   if (me === null) return <AuthScreen invite={route.invite} onDone={refresh} />

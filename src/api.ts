@@ -119,8 +119,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    // A session that expired mid-use: start over at the login screen.
-    if (res.status === 401 && path !== 'me' && !path.startsWith('auth/')) location.reload()
+    // A session that expired mid-use: start over at the login screen. Shared forms answer 401 to people who
+    // aren't signed in on purpose (the form page then offers to log in), so they don't count.
+    if (res.status === 401 && path !== 'me' && !path.startsWith('auth/') && !path.startsWith('forms/')) location.reload()
     throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`, data)
   }
   return data

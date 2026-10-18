@@ -60,7 +60,8 @@ export function ResetScreen({ token, onDone }: { token: string; onDone: () => vo
   )
 }
 
-export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => void }) {
+/** `stay`: logging in from a shared form returns to that form instead of the start page. */
+export function AuthScreen({ invite, onDone, stay }: { invite?: string; onDone: () => void; stay?: boolean }) {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
   const [hasUsers, setHasUsers] = useState(true)
   const [info, setInfo] = useState<Awaited<ReturnType<typeof api.inviteInfo>> | null>(null)
@@ -88,7 +89,7 @@ export function AuthScreen({ invite, onDone }: { invite?: string; onDone: () => 
         page = (await api.register({ ...form, invite })).page_id
       }
       // Land on the page that was shared, like following a Notion invite.
-      location.hash = page ? '/' + page : ''
+      if (!stay) location.hash = page ? '/' + page : ''
       onDone()
     })
   }
