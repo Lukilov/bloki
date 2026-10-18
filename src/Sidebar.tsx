@@ -420,7 +420,7 @@ function InboxPanel({ setUnread, close }: { setUnread: (n: number) => void; clos
   useEffect(() => { api.inbox().then(apply) }, [apply])
 
   const shown = (items ?? []).filter(n => (tab === 'archived' ? n.archived : !n.archived) && (!unreadOnly || !n.read))
-  const verb = (n: Notice) => n.kind === 'mention' ? 'mentioned you in' : n.kind === 'comment' ? 'commented in' : n.kind === 'automation' ? `triggered “${n.text}” in` : `invited you to`
+  const verb = (n: Notice) => n.kind === 'mention' ? 'mentioned you in' : n.kind === 'comment' ? 'commented in' : n.kind === 'automation' ? `triggered “${n.text}” in` : n.kind === 'reminder' ? `Reminder (${n.text}):` : `invited you to`
 
   return (
     <div className="inbox">

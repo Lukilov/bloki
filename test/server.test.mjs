@@ -529,3 +529,17 @@ test('button notifications reach people who can open the page', () => {
   assert.throws(() => s.notifyFromButton(owner, p.id, { user_id: guest.id, text: 'x' }), e => e.status === 400) // guest can't open it
   throws403(() => s.notifyFromButton(guest, p.id, { user_id: member.id, text: 'x' }))
 })
+
+test('reminders on date mentions fire once, to the person who set them, while they can open the page', () => {
+  const p = s.createPage(member, { title: 'Dentist', section: 'workspace' })
+  const mention = (at, extra = {}) => ({ type: 'date', props: { date: '2026-10-20T15:00', remind: 'at', at: String(at), by: member.id, ...extra } })
+  const now = Date.now()
+  s.updatePage(member, p.id, { content: [{ type: 'paragraph', content: [mention(now - 1000), { type: 'text', text: ' and ' }, mention(now + 3600e3, { date: '2026-10-21' }), mention(now - 3 * 864e5, { date: '2026-10-10' })] }] })
+  const before = s.inbox(member).items.length
+  assert.equal(s.sendReminders(now), 1) // the future one waits, the stale one is skipped
+  assert.equal(s.sendReminders(now), 0) // and nothing fires twice
+  const n = s.inbox(member).items
+  assert.equal(n.length, before + 1)
+  assert.equal(n[0].kind, 'reminder')
+  assert.equal(s.sendReminders(now + 3601e3), 1)
+})

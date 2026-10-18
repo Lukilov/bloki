@@ -48,7 +48,7 @@ export const can = (p: { access?: Level } | undefined, need: Level) => LEVELS.in
 
 export type Role = 'owner' | 'member' | 'guest'
 export type Person = { id: string; name: string; email?: string; role: Role }
-export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso'; email?: boolean }
+export type Prefs = { notify?: Partial<Record<'mention' | 'comment' | 'share' | 'automation' | 'reminder', boolean>>; startPage?: 'last' | 'home'; weekStart?: 'monday' | 'sunday'; enterNewline?: boolean; dateFormat?: 'relative' | 'full' | 'iso'; email?: boolean }
 export type Me = { user: { id: string; email: string; name: string; twoFactor?: boolean }; prefs: Prefs; workspaceId: string | null; role: Role | null; workspaces: { id: string; name: string; icon: string; role: Role }[] }
 
 export type Page = {
@@ -99,7 +99,7 @@ export type Share = {
 }
 export type Synced = { id: string; page_id: string; content: unknown[]; updated: number; canEdit: boolean; copies: number }
 export type Comment = { id: string; body: string; resolved: boolean; created: number; user_id: string; name: string; thread_id: string | null; block_id: string | null; quote: string | null; reactions?: Record<string, string[]> }
-export type Notice = { id: string; kind: 'mention' | 'comment' | 'share' | 'automation'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
+export type Notice = { id: string; kind: 'mention' | 'comment' | 'share' | 'automation' | 'reminder'; page_id: string | null; text: string; created: number; read: boolean; archived: boolean; actor: string | null; page_title: string | null; page_icon: string | null; page_kind: 'page' | 'db' | null }
 
 export class ApiError extends Error {
   status: number

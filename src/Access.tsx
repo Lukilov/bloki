@@ -512,7 +512,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             <h3>Notifications</h3>
             <p className="settings-sub">Decide when and how you want to be notified</p>
             <Section title="Inbox" desc="Choose what shows up in your Inbox.">
-              {([['mention', 'Mentions', 'When someone @mentions you in a page'], ['comment', 'Comments', 'Replies and comments on pages you created or discussed'], ['share', 'Invites', 'When a page is shared with you'], ['automation', 'Automations', 'When a database automation notifies you']] as const).map(([k, l, d]) => (
+              {([['mention', 'Mentions', 'When someone @mentions you in a page'], ['comment', 'Comments', 'Replies and comments on pages you created or discussed'], ['share', 'Invites', 'When a page is shared with you'], ['automation', 'Automations', 'When a database automation notifies you'], ['reminder', 'Reminders', 'When a reminder you set on a date is due']] as const).map(([k, l, d]) => (
                 <Row key={k} label={l} desc={d}><input type="checkbox" checked={prefs.notify?.[k] !== false} onChange={e => savePrefs({ notify: { ...prefs.notify, [k]: e.target.checked } })} /></Row>
               ))}
             </Section>

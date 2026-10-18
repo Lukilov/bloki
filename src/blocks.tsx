@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { defaultProps } from '@blocknote/core'
 import { createReactBlockSpec, createReactInlineContentSpec, createReactStyleSpec, useEditorChange } from '@blocknote/react'
-import { Bookmark, ChevronRight, Globe, Sigma } from 'lucide-react'
+import { AlarmClock, Bookmark, ChevronRight, Globe, Sigma } from 'lucide-react'
+import { DatePicker } from './db/Cells'
 import { ancestors, iconOf, label, useStore } from './store'
 import { Database } from './Database'
 import { Icon, IconPicker } from './IconPicker'
@@ -35,16 +36,46 @@ export const PersonMention = createReactInlineContentSpec(
 /** Settings → Preferences → Date format for @date mentions (set from the signed-in person's preferences). */
 let mentionFormat: 'relative' | 'full' | 'iso' = 'relative'
 export const setMentionDateFormat = (f?: 'relative' | 'full' | 'iso') => { mentionFormat = f ?? 'relative' }
-export function formatMentionDate(iso: string) {
+export function formatMentionDate(iso: string): string {
+  // A mention with a time shows it after the day: "Tomorrow 15:00".
+  if (iso.length > 10) return `${formatMentionDate(iso.slice(0, 10))} ${iso.slice(11, 16)}`
   const d = new Date(iso + 'T00:00')
   if (mentionFormat === 'iso') return iso.replace(/-/g, '/')
   const days = Math.round((d.getTime() - new Date(new Date().toDateString()).getTime()) / 864e5)
   const rel = mentionFormat === 'relative' ? (days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days === -1 ? 'Yesterday' : null) : null
   return rel ?? d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
 }
+// Notion's "Remind" choices; a date without a time reminds at 9:00 on the day.
+const REMIND: [string, string, number][] = [['', 'None', 0], ['at', 'At time of event', 0], ['1d', '1 day before', 1], ['2d', '2 days before', 2], ['1w', '1 week before', 7]]
+/** When a reminder fires, in this browser's time zone (stored as a timestamp so the server needs no zone). */
+const remindAt = (date: string, remind: string) => {
+  const r = REMIND.find(x => x[0] === remind)
+  if (!r || !remind || !date) return ''
+  const t = new Date(date.length > 10 ? date : date + 'T09:00')
+  t.setDate(t.getDate() - r[2])
+  return String(t.getTime())
+}
+
+function DateMentionView({ props, update, editable }: { props: { date: string; remind: string }; update: (p: Record<string, string>) => void; editable: boolean }) {
+  const store = useStore()
+  const [anchor, open, close] = usePopover()
+  const set = (date: string, remind: string) => update({ date, remind, at: remindAt(date, remind), by: remind ? store.me?.user.id ?? '' : '' })
+  return (
+    <span className={'mention date-mention' + (props.remind ? ' has-reminder' : '')} contentEditable={false} onClick={e => editable && open(e.currentTarget)}>
+      @{formatMentionDate(props.date)}{props.remind && <AlarmClock size={13} className="mention-alarm" aria-label="Reminder set" />}
+      <Popover anchor={anchor} onClose={close} className="menu-pop" width={260}>
+        <DatePicker value={props.date} onChange={v => v && set(v.start, props.remind)} />
+        <label className="remind-row">Remind
+          <select value={props.remind} onChange={e => set(props.date, e.target.value)}>{REMIND.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        </label>
+      </Popover>
+    </span>
+  )
+}
+
 export const DateMention = createReactInlineContentSpec(
-  { type: 'date', propSchema: { date: { default: '' } }, content: 'none' },
-  { render: ({ inlineContent }) => <span className="mention date-mention" contentEditable={false}>@{formatMentionDate(inlineContent.props.date)}</span> },
+  { type: 'date', propSchema: { date: { default: '' }, remind: { default: '' }, at: { default: '' }, by: { default: '' } }, content: 'none' },
+  { render: ({ inlineContent, updateInlineContent, editor }) => <DateMentionView props={inlineContent.props} editable={editor.isEditable} update={p => updateInlineContent({ type: 'date', props: { ...inlineContent.props, ...p } } as never)} /> },
 )
 
 /* ---------- Styles ---------- */

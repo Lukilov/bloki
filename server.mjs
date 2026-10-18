@@ -143,6 +143,7 @@ db.exec(`
   -- Personal API tokens (stored hashed) act as their owner in one workspace; webhooks post workspace events to a URL.
   CREATE TABLE IF NOT EXISTS api_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, last_used INTEGER);
   CREATE TABLE IF NOT EXISTS webhooks (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL, secret TEXT NOT NULL, created INTEGER NOT NULL, created_by TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS reminders_sent (key TEXT PRIMARY KEY, at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS resets (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
 `)
@@ -1052,7 +1053,7 @@ export function notify(userId, wsId, kind, pageId, actorId, text = '') {
   const to = db.prepare('SELECT email FROM users WHERE id = ?').get(userId)?.email
   const actor = (actorId && db.prepare('SELECT name FROM users WHERE id = ?').get(actorId)?.name) || 'Someone'
   const page = (pageId && db.prepare('SELECT title FROM pages WHERE id = ?').get(pageId)?.title) || 'Untitled'
-  const what = { mention: `${actor} mentioned you in ${page}`, comment: `${actor} commented in ${page}`, share: `${actor} shared ${page} with you`, automation: `${text || 'An automation'} updated ${page}` }[kind] ?? `${actor} updated ${page}`
+  const what = { reminder: `Reminder: ${page} (${text})`, mention: `${actor} mentioned you in ${page}`, comment: `${actor} commented in ${page}`, share: `${actor} shared ${page} with you`, automation: `${text || 'An automation'} updated ${page}` }[kind] ?? `${actor} updated ${page}`
   if (to) mail(to, what, `${what}${kind === 'comment' || kind === 'mention' ? `:\n\n${text}` : '.'}\n\nOpen it: ${APP_URL}/#/${pageId}\n\nTurn these emails off in Bloki under Settings > Notifications.`)
 }
 
@@ -1301,6 +1302,30 @@ export function publicPage(rootId, id) {
   const p = decode(db.prepare('SELECT * FROM pages WHERE id = ? AND trashed = 0').get(id))
   if (!p) throw new HttpError(404, 'Page not found.')
   return { ...p, access: 'view', favorite: false, parent_id: id === rootId ? null : p.parent_id }
+}
+
+/* ---------- Reminders ---------- */
+
+/** Date mentions with "Remind" carry the moment to fire (`at`, set in the reminder's own time zone) and who set it (`by`).
+ *  Each fires once, into that person's Inbox (and email), if they can still open the page; ones over a day late are skipped. */
+export function sendReminders(now = Date.now()) {
+  let sent = 0
+  for (const p of db.prepare(`SELECT id, title, content, workspace_id FROM pages WHERE trashed = 0 AND content LIKE '%"remind":"%'`).all()) {
+    const found = []
+    const walk = v => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') { if (v.type === 'date' && v.props?.remind && v.props.at && v.props.by) found.push(v.props); Object.values(v).forEach(walk) } }
+    try { walk(JSON.parse(p.content || '[]')) } catch { continue }
+    for (const m of found) {
+      const at = Number(m.at)
+      if (!(at <= now) || now - at > 864e5) continue
+      const key = sha(`${p.id}|${m.by}|${at}|${m.date}`)
+      if (db.prepare('SELECT 1 FROM reminders_sent WHERE key = ?').get(key)) continue
+      db.prepare('INSERT INTO reminders_sent VALUES (?, ?)').run(key, now)
+      try { if (!atLeast(pageAccess(m.by, p.id), 'view')) continue } catch { continue }
+      notify(m.by, p.workspace_id, 'reminder', p.id, null, String(m.date).replace('T', ' '))
+      sent++
+    }
+  }
+  return sent
 }
 
 /** /s/<slug>[/<page>]: the app's page with the published page's title and description in its <head>, so links preview
@@ -1627,5 +1652,6 @@ if (process.argv[1] === import.meta.filename) {
   purgeTrash()
   setInterval(() => purgeTrash(), 6 * 3600 * 1000).unref()
   if (BACKUP_KEEP > 0) { backup(); setInterval(() => backup(), 24 * 3600 * 1000).unref() }
+  setInterval(() => sendReminders(), 60 * 1000).unref()
   server.listen(PORT, HOST, () => console.log(`Bloki on http://${HOST === '127.0.0.1' ? 'localhost' : HOST}:${PORT}`))
 }
