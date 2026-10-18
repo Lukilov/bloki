@@ -82,6 +82,8 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [version, setVersion] = useState(0)
   const [missing, setMissing] = useState(false)
   const [backlinks, setBacklinks] = useState<Pick<Page, 'id' | 'title' | 'icon'>[]>([])
+  // Opening a page counts as a view for its analytics (the server keeps one per person per half hour).
+  useEffect(() => { if (!store.published) api.pageView(id).catch(() => {}) }, [id, store.published])
   const [comments, setComments] = useState<Comment[]>([])
   const [panel, setPanel] = useState<'comments' | 'updates' | null>(null)
   useEffect(() => { if (panel) dispatchEvent(new CustomEvent('bloki:narrow', { detail: 380 })) }, [panel])
@@ -442,16 +444,31 @@ function UpdatesPanel({ page, comments, close, openHistory }: { page: Page; comm
     ...comments.map(c => ({ at: c.created, who: c.name, what: c.thread_id ? 'replied to a comment' : 'commented', quote: c.body })),
     { at: page.created, who: personName(store.people, page.created_by), what: 'created this page' },
   ].sort((a, b) => b.at - a.at)
+  const [tab, setTab] = useState<'updates' | 'analytics'>('updates')
+  const [stats, setStats] = useState<Awaited<ReturnType<typeof api.pageAnalytics>> | null>(null)
+  useEffect(() => { if (tab === 'analytics') api.pageAnalytics(page.id).then(setStats).catch(() => {}) }, [tab, page.id])
+  const max = Math.max(1, ...(stats?.days.map(d => d.views) ?? []))
   return (
     <aside className="right-panel">
-      <div className="panel-head"><b>Updates</b><span className="panel-tools"><button className="ghost" onClick={close}><X size={16} /></button></span></div>
-      {events.map((e, i) => (
+      <div className="panel-head">
+        <span className="panel-tabs">{(['updates', 'analytics'] as const).map(t => <button key={t} className={'ghost' + (tab === t ? ' on' : '')} onClick={() => setTab(t)}>{t === 'updates' ? 'Updates' : 'Analytics'}</button>)}</span>
+        <span className="panel-tools"><button className="ghost" onClick={close}><X size={16} /></button></span>
+      </div>
+      {tab === 'analytics' && (stats ? <div className="analytics">
+        <div className="analytics-totals"><div><b>{stats.total}</b><span>Total views</span></div><div><b>{stats.unique}</b><span>Unique viewers</span></div></div>
+        <div className="analytics-chart" title="Views in the last 28 days">{stats.days.map(d => <i key={d.day} title={`${d.day}: ${d.views}`} style={{ height: `${(d.views / max) * 100}%` }} />)}</div>
+        <div className="analytics-axis"><span>28 days ago</span><span>Today</span></div>
+        <div className="menu-heading">Viewers</div>
+        {stats.viewers.map(v => <div key={v.id} className="update"><span className="avatar">{v.name[0]}</span><div><b>{v.name}</b><div className="muted small">{v.views} view{v.views === 1 ? '' : 's'} · {timeAgo(v.last)}</div></div></div>)}
+        {!stats.viewers.length && <p className="muted small">No views yet.</p>}
+      </div> : <p className="muted small pad">Loading…</p>)}
+      {tab === 'updates' && events.map((e, i) => (
         <div key={i} className="update">
           <span className="avatar">{(e.who || '?')[0]}</span>
           <div><b>{e.who || 'Someone'}</b> {e.what}<div className="muted small">{timeAgo(e.at)}</div>{e.quote && <div className="notice-quote">{e.quote}</div>}</div>
         </div>
       ))}
-      <button className="ghost wide" onClick={openHistory}><HistoryIcon size={14} /> Version history</button>
+      {tab === 'updates' && <button className="ghost wide" onClick={openHistory}><HistoryIcon size={14} /> Version history</button>}
     </aside>
   )
 }

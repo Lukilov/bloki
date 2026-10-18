@@ -1510,3 +1510,15 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 /* Wiki verification under the title. */
 .verified { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px; padding: 2px 8px; border-radius: 4px; font-size: 13px; color: var(--t-blue); background: var(--c-blue); }
 .verified.expired { color: var(--t-red); background: var(--c-red); }
+/* Updates & analytics panel: tabs, totals, 28-day bars, viewers. */
+.panel-tabs { display: flex; gap: 2px; }
+.panel-tabs button { height: 28px; padding: 0 8px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.panel-tabs button.on { color: var(--text); background: var(--hover); }
+.analytics { padding: 4px 12px 12px; }
+.analytics-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.analytics-totals div { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 8px; box-shadow: var(--line) 0 0 0 1px inset; }
+.analytics-totals b { font-size: 24px; font-weight: 600; }
+.analytics-totals span { font-size: 12px; color: var(--muted); }
+.analytics-chart { display: flex; align-items: flex-end; gap: 2px; height: 80px; border-bottom: 1px solid var(--line); }
+.analytics-chart i { flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; background: var(--t-blue); }
+.analytics-axis { display: flex; justify-content: space-between; margin: 4px 0 12px; font-size: 11px; color: var(--muted); }

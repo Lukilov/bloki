@@ -147,6 +147,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, created INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (group_id, user_id));
   CREATE TABLE IF NOT EXISTS group_grants (page_id TEXT NOT NULL, group_id TEXT NOT NULL, level TEXT NOT NULL, PRIMARY KEY (page_id, group_id));
+  CREATE TABLE IF NOT EXISTS page_views (page_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL);
+  CREATE INDEX IF NOT EXISTS page_views_page ON page_views(page_id, at);
   CREATE TABLE IF NOT EXISTS reminders_sent (key TEXT PRIMARY KEY, at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS resets (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
@@ -1374,6 +1376,30 @@ export function sendReminders(now = Date.now()) {
   return sent
 }
 
+/* ---------- Page analytics ---------- */
+
+/** Opening a page counts as a view, at most once per person per half hour. */
+export function recordView(user, id, now = Date.now()) {
+  need(user.id, id, 'view')
+  const last = db.prepare('SELECT MAX(at) AS at FROM page_views WHERE page_id = ? AND user_id = ?').get(id, user.id).at ?? 0
+  if (now - last >= 30 * 60 * 1000) db.prepare('INSERT INTO page_views VALUES (?, ?, ?)').run(id, user.id, now)
+  return { ok: true }
+}
+/** Notion's page analytics: all-time views and viewers, views per day for the last 28 days, and who viewed it last. */
+export function pageAnalytics(user, id, now = Date.now()) {
+  need(user.id, id, 'view')
+  const { total, viewers: unique } = db.prepare('SELECT COUNT(*) AS total, COUNT(DISTINCT user_id) AS viewers FROM page_views WHERE page_id = ?').get(id)
+  const since = now - 28 * 864e5
+  const counts = new Map()
+  for (const v of db.prepare('SELECT at FROM page_views WHERE page_id = ? AND at >= ?').all(id, since)) {
+    const day = new Date(v.at).toISOString().slice(0, 10)
+    counts.set(day, (counts.get(day) ?? 0) + 1)
+  }
+  const days = Array.from({ length: 28 }, (_, i) => { const day = new Date(since + (i + 1) * 864e5).toISOString().slice(0, 10); return { day, views: counts.get(day) ?? 0 } })
+  const viewers = db.prepare('SELECT u.id, u.name, MAX(v.at) AS last, COUNT(*) AS views FROM page_views v JOIN users u ON u.id = v.user_id WHERE v.page_id = ? GROUP BY u.id ORDER BY last DESC LIMIT 20').all(id)
+  return { total, unique, days, viewers }
+}
+
 /* ---------- Repeating templates ---------- */
 
 const nextRepeat = (at, every) => { const d = new Date(at); if (every === 'month') d.setMonth(d.getMonth() + 1); else d.setDate(d.getDate() + (every === 'week' ? 7 : 1)); return d.getTime() }
@@ -1490,6 +1516,8 @@ const routes = [
     return { workspace_id: inv.workspace_id, page_id: inv.page_id }
   }],
   ['POST', /^\/api\/pages\/([\w-]+)\/notify$/, async (c, id) => notifyFromButton(c.user, id, await c.body())],
+  ['POST', /^\/api\/pages\/([\w-]+)\/view$/, (c, id) => recordView(c.user, id)],
+  ['GET', /^\/api\/pages\/([\w-]+)\/analytics$/, (c, id) => pageAnalytics(c.user, id)],
   ['GET', /^\/api\/groups$/, c => listGroups(c.user)],
   ['POST', /^\/api\/groups$/, async c => saveGroup(c.user, null, await c.body())],
   ['PATCH', /^\/api\/groups\/([\w-]+)$/, async (c, id) => saveGroup(c.user, id, await c.body())],

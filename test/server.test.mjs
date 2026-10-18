@@ -577,3 +577,18 @@ test('permission groups: sharing a page with a group gives its members that acce
   s.deleteGroup(owner, g.id)
   assert.equal(level(a, p), 'none')
 })
+
+test('page analytics count a view per person per half hour, by day, with the latest viewers', () => {
+  const p = s.createPage(owner, { title: 'Handbook', section: 'workspace' })
+  const now = Date.now()
+  s.recordView(owner, p.id, now); s.recordView(owner, p.id, now + 60e3) // same half hour
+  s.recordView(member, p.id, now + 120e3)
+  s.recordView(owner, p.id, now + 31 * 60e3)
+  throws403(() => s.recordView(guest, p.id))
+  const a = s.pageAnalytics(owner, p.id, now + 32 * 60e3)
+  assert.deepEqual([a.total, a.unique], [3, 2])
+  assert.equal(a.days.length, 28)
+  assert.equal(a.days.reduce((n, d) => n + d.views, 0), 3)
+  assert.equal(a.viewers[0].id, owner.id)
+  assert.equal(a.viewers.find(v => v.id === owner.id).views, 2)
+})
