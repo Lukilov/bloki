@@ -374,7 +374,7 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId, n
     ...(view.type === 'calendar' || view.type === 'timeline' ? [{ icon: <Calendar size={15} />, label: view.type === 'calendar' ? 'Show calendar by' : 'Show timeline by', hint: (propOf(db.schema, view.dateProp ?? '')?.name ?? 'None') + ' ›', onClick: () => setPage('date') }] : []),
     ...(view.type === 'timeline' ? [{ icon: <Calendar size={15} />, label: 'End date', hint: (propOf(db.schema, view.endProp ?? '')?.name ?? 'None') + ' ›', onClick: () => setPage('end') }] : []),
     ...(view.type === 'gallery' ? [
-      { icon: <LayoutGrid size={15} />, label: 'Card preview', hint: (view.cardPreview ?? 'cover') === 'cover' ? 'Page cover' : 'None', onClick: () => setView({ cardPreview: (view.cardPreview ?? 'cover') === 'cover' ? 'none' : 'cover' }) },
+      { icon: <LayoutGrid size={15} />, label: 'Card preview', hint: { content: 'Page content', cover: 'Page cover', none: 'None' }[view.cardPreview ?? 'content'] + ' ›', submenu: () => <Menu onClose={() => {}} items={(['none', 'cover', 'content'] as const).map(k => ({ label: { content: 'Page content', cover: 'Page cover', none: 'None' }[k], checked: (view.cardPreview ?? 'content') === k, onClick: () => setView({ cardPreview: k }) }))} /> },
       { icon: <LayoutGrid size={15} />, label: 'Card size', hint: { s: 'Small', m: 'Medium', l: 'Large' }[view.cardSize ?? 'm'], onClick: () => setView({ cardSize: view.cardSize === 's' ? 'm' : view.cardSize === 'l' ? 's' : 'l' }) },
     ] as Item[] : []),
     ...(view.type === 'table' ? [{ icon: <Settings2 size={15} />, label: 'Wrap all columns', checked: !!view.wrap, onClick: () => setView({ wrap: !view.wrap }) }] : []),

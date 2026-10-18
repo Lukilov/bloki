@@ -10,7 +10,7 @@ import { Menu, Popover, usePopover } from '../ui'
 import { coverStyle } from '../Database'
 import { FormView } from './Form'
 import { ChartView } from './Chart'
-import { DashboardView, FeedView, WIDGETS } from './Feed'
+import { blockText, DashboardView, FeedView, WIDGETS } from './Feed'
 import { Cell, CellView, Chip, ctxOf, newProp, PropertyEditor, propertyActions, StatusChip, typeIcon, TypePicker, monthGrid } from './Cells'
 import { aggregate, calcsFor, nestRows, weekLanes, rowColors, dateValue, groupable, groupRows, isoDay, propOf, ROLLUP_FNS, toDate, value, visibleRange, type Group } from './model'
 
@@ -319,7 +319,9 @@ function Card({ row, p, cover }: { row: Page; p: ViewProps; cover?: boolean }) {
   const [menu, open, close] = usePopover()
   return (
     <div className="card" style={tint(rowColors(row, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', row.id)} onClick={() => p.openRow(row)}>
-      {cover && (p.view.cardPreview ?? 'cover') === 'cover' && <div className="card-cover" style={coverStyle(row.cover, row.cover_y)}>{!row.cover && <span className="card-cover-icon">{iconOf(row, 32)}</span>}</div>}
+      {/* Gallery cards preview the page's cover or (Notion's default) the start of its content. */}
+      {cover && (p.view.cardPreview ?? 'content') === 'cover' && <div className="card-cover" style={coverStyle(row.cover, row.cover_y)}>{!row.cover && <span className="card-cover-icon">{iconOf(row, 32)}</span>}</div>}
+      {cover && (p.view.cardPreview ?? 'content') === 'content' && <CardContent row={row} />}
       <div className="card-body">
         <div className="card-title">{row.icon && <span className="card-icon">{iconOf(row, 16)}</span>}{label(row)}</div>
         <CardProps row={row} props={p.props} db={p.db} />
@@ -392,10 +394,38 @@ export function BoardView(p: ViewProps) {
 
 /* ---------- Gallery & List ---------- */
 
+// Page text for gallery previews, fetched once per page version.
+const previews = new Map<string, { updated: number; lines: string[] }>()
+function CardContent({ row }: { row: Page }) {
+  const [lines, setLines] = useState(() => previews.get(row.id)?.updated === row.updated ? previews.get(row.id)!.lines : null)
+  useEffect(() => {
+    if (previews.get(row.id)?.updated === row.updated) return setLines(previews.get(row.id)!.lines)
+    let live = true
+    api.get(row.id).then(p => {
+      const l = ((p.content ?? []) as Parameters<typeof blockText>[0][]).map(blockText).filter(t => t.trim()).slice(0, 8)
+      previews.set(row.id, { updated: row.updated, lines: l })
+      if (live) setLines(l)
+    }).catch(() => {})
+    return () => { live = false }
+  }, [row.id, row.updated])
+  return <div className="card-cover card-content">{lines?.map((t, i) => <p key={i}>{t}</p>)}</div>
+}
+
 export function GalleryView(p: ViewProps) {
+  const store = useStore()
+  const [over, setOver] = useState<string | null>(null)
+  // Cards reorder by dragging, unless the view is sorted (then the sort decides the order, as in Notion).
+  const sorted = !!p.view.sort?.length
   return (
     <div className={'gallery size-' + (p.view.cardSize ?? 'm')}>
-      {p.rows.map(r => <Card key={r.id} row={r} p={p} cover />)}
+      {p.rows.map(r => (
+        <div key={r.id} className={'gallery-slot' + (over === r.id ? ' drop-before' : '')}
+          onDragOver={e => { if (!sorted && p.perm.rows && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
+          onDragLeave={() => setOver(null)}
+          onDrop={e => { setOver(null); const id = e.dataTransfer.getData('text/row'); if (id && id !== r.id) reorder(store, p.rows, id, r.id) }}>
+          <Card row={r} p={p} cover />
+        </div>
+      ))}
       {p.perm.rows && <button className="card new-card" onClick={() => p.addRow()}><Plus size={16} /> New page</button>}
     </div>
   )

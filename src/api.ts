@@ -26,7 +26,7 @@ export type View = {
   groupBy?: string; dateProp?: string; endProp?: string
   sort?: { prop: string; dir: 'asc' | 'desc' }[]; filters?: Filter[]; hidden?: string[]
   order?: string[]; widths?: Record<string, number>; calcs?: Record<string, string>; wrap?: boolean
-  hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'cover' | 'none'
+  hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'content' | 'cover' | 'none'
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
   widgets?: string[]

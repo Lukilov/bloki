@@ -1480,3 +1480,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .clip-bookmarklet { cursor: grab; }
 .timeline-row.undated { cursor: pointer; }
 .bar.ghost { opacity: 0.45; pointer-events: none; box-shadow: var(--accent) 0 0 0 1px inset; background: var(--accent-soft); }
+/* Gallery "Page content" preview: the page's first lines, small, fading out at the bottom. */
+.card-content { display: block; padding: 12px 14px 0; overflow: hidden; font-size: 10px; line-height: 1.5; color: var(--text-2); -webkit-mask: linear-gradient(#000 60%, transparent); mask: linear-gradient(#000 60%, transparent); }
+.card-content p { margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery-slot { display: grid; position: relative; }
+.gallery-slot.drop-before::before { content: ''; position: absolute; left: -7px; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--accent); }

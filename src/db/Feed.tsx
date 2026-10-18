@@ -6,7 +6,7 @@ import { applyView, isTemplate, value } from './model'
 import type { ViewProps } from './Views'
 
 type Block = { type: string; props?: { level?: number }; content?: unknown; children?: Block[] }
-const text = (b: Block) => (Array.isArray(b.content) ? (b.content as { text?: string; content?: { text?: string }[] }[]).map(c => c.text ?? c.content?.map(x => x.text ?? '').join('') ?? '').join('') : '')
+export const blockText = (b: Block): string => (Array.isArray(b.content) ? (b.content as { text?: string; content?: { text?: string }[] }[]).map(c => c.text ?? c.content?.map(x => x.text ?? '').join('') ?? '').join('') : '')
 
 /** Feed view: each page as a post with its properties and the start of its content, newest layout first as sorted. */
 export function FeedView({ db, rows, props, openRow }: ViewProps) {
@@ -22,7 +22,7 @@ export function FeedView({ db, rows, props, openRow }: ViewProps) {
   return (
     <div className="feed">
       {visible.map(r => {
-        const blocks = (bodies[r.id] ?? []).filter(b => text(b).trim()).slice(0, 6)
+        const blocks = (bodies[r.id] ?? []).filter(b => blockText(b).trim()).slice(0, 6)
         const meta = props.filter(p => { const v = value(r, p, db.schema, ctx); return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length) })
         return (
           <article key={r.id} className="feed-post" onClick={() => openRow(r)}>
@@ -30,7 +30,7 @@ export function FeedView({ db, rows, props, openRow }: ViewProps) {
             {meta.length > 0 && <div className="feed-meta">{meta.map(p => <span key={p.id}><CellView prop={p} row={r} schema={db.schema} /></span>)}</div>}
             <div className="feed-body">
               {!bodies[r.id] ? <p className="muted">…</p> : !blocks.length ? <p className="muted">Empty page</p> : blocks.map((b, i) => {
-                const t = text(b)
+                const t = blockText(b)
                 return b.type === 'heading' ? <h4 key={i}>{t}</h4> : b.type === 'bulletListItem' || b.type === 'checkListItem' ? <p key={i}>• {t}</p> : b.type === 'numberedListItem' ? <p key={i}>{t}</p> : <p key={i}>{t}</p>
               })}
             </div>
