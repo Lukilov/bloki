@@ -27,7 +27,7 @@ import '@blocknote/mantine/style.css'
 import { api, can, type Comment, type Page, type Synced, type ViewType } from './api'
 import { ancestors, iconText, label, useStore } from './store'
 import { newDatabase } from './Database'
-import { Breadcrumb, Callout, CommentMark, DateMention, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate, setMentionDateFormat } from './blocks'
+import { Breadcrumb, Callout, CommentMark, DateMention, InlineEquation, Embed, Equation, InlineDatabase, Mention, PageLink, PersonMention, TableOfContents, formatMentionDate, setMentionDateFormat } from './blocks'
 import { copyText, isMac, mod, Popover, shift } from './ui'
 import { pageUrl } from './pageActions'
 import { ButtonBlock } from './ButtonBlock'
@@ -38,7 +38,7 @@ const innerSpecs = {
   ...defaultBlockSpecs, heading: createHeadingBlockSpec({ levels: [1, 2, 3, 4] }), codeBlock: createCodeBlockSpec(codeBlockOptions), callout: Callout(), page: PageLink(),
   embed: Embed(), equation: Equation(), button: ButtonBlock(),
 }
-const inlineSpecs = { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention }
+const inlineSpecs = { ...defaultInlineContentSpecs, mention: Mention, person: PersonMention, date: DateMention, inlineEquation: InlineEquation }
 const innerSchema = BlockNoteSchema.create({ blockSpecs: innerSpecs, inlineContentSpecs: inlineSpecs, styleSpecs: defaultStyleSpecs })
 
 /** One editor's worth of content, stored once on the server and shown live on every page that pastes it. */
@@ -566,6 +566,8 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       ...getMultiColumnSlashMenuItems(e as never).map((i, n) => ({ ...i, group: 'Advanced blocks', icon: [<Columns2 size={18} />, <Columns3 size={18} />, <Columns4 size={18} />][n] ?? <Columns4 size={18} /> })),
       { title: 'Mention a person', subtext: 'Ping someone so they get a notification.', group: 'Inline', aliases: ['@', 'person', 'user'], icon: <AtSign size={18} />, onItemClick: () => e.insertInlineContent(['@'] as never) },
       { title: 'Mention a page', subtext: 'Link to a page inline.', group: 'Inline', aliases: ['@', 'page'], icon: <FileText size={18} />, onItemClick: () => e.insertInlineContent(['[['] as never) },
+      { title: 'Inline equation', subtext: 'Insert mathematical symbols in text.', group: 'Inline', aliases: ['math', 'tex', 'latex', 'formula'], icon: <Sigma size={18} />,
+        onItemClick: () => e.insertInlineContent([{ type: 'inlineEquation', props: { latex: '' } }, ' '] as never) },
       { title: 'Date or reminder', subtext: 'Insert a date mention.', group: 'Inline', aliases: ['date', 'today', 'reminder'], icon: <CalendarDays size={18} />,
         onItemClick: () => e.insertInlineContent([{ type: 'date', props: { date: new Date().toISOString().slice(0, 10) } }, ' '] as never) },
     ]
@@ -623,6 +625,11 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
           const quote = editor.getSelectedText()
           if (quote) { const id = crypto.randomUUID(); editor.addStyles({ comment: id } as never); onComment(block.id, quote.slice(0, 300), id) }
           else commentOnBlock(editor, block, ctx)
+        }
+        // ⌘⇧E: the selected text becomes an inline equation (or an empty one opens), as in Notion.
+        if (m && e.shiftKey && e.key.toLowerCase() === 'e' && editable) {
+          e.preventDefault(); e.stopPropagation()
+          editor.insertInlineContent([{ type: 'inlineEquation', props: { latex: editor.getSelectedText() } }] as never)
         }
         if (m && !e.shiftKey && e.key.toLowerCase() === 'd' && editable) {
           e.preventDefault()

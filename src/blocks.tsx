@@ -78,6 +78,33 @@ export const DateMention = createReactInlineContentSpec(
   { render: ({ inlineContent, updateInlineContent, editor }) => <DateMentionView props={inlineContent.props} editable={editor.isEditable} update={p => updateInlineContent({ type: 'date', props: { ...inlineContent.props, ...p } } as never)} /> },
 )
 
+function InlineEquationView({ latex, update, editable }: { latex: string; update: (latex: string) => void; editable: boolean }) {
+  const [anchor, open, close] = usePopover()
+  const [draft, setDraft] = useState(latex)
+  const ref = useRef<HTMLSpanElement>(null)
+  // A new, empty equation opens its editor straight away, as in Notion.
+  useEffect(() => { if (!latex && editable && ref.current) open(ref.current) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const done = () => { if (draft !== latex) update(draft); close() }
+  return (
+    <span ref={ref} className="inline-equation" contentEditable={false} onClick={e => { if (editable) { setDraft(latex); open(e.currentTarget) } }}>
+      {latex ? <Tex latex={latex} display={false} /> : <span className="muted">New equation</span>}
+      <Popover anchor={anchor} onClose={done} className="menu-pop equation-pop" width={320}>
+        <div className="equation-editor inline">
+          <textarea autoFocus value={draft} placeholder="E = mc^2" onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); done() } if (e.key === 'Escape') close() }} />
+          <button className="primary" onClick={done}>Done ↵</button>
+        </div>
+      </Popover>
+    </span>
+  )
+}
+
+/** Notion's inline equation: TeX inside a line of text. */
+export const InlineEquation = createReactInlineContentSpec(
+  { type: 'inlineEquation', propSchema: { latex: { default: '' } }, content: 'none' },
+  { render: ({ inlineContent, updateInlineContent, editor }) => <InlineEquationView latex={inlineContent.props.latex} editable={editor.isEditable} update={latex => updateInlineContent({ type: 'inlineEquation', props: { latex } } as never)} /> },
+)
+
 /* ---------- Styles ---------- */
 
 /** Text under discussion. Styles render outside React context, so highlighting is driven by CSS from the page. */
