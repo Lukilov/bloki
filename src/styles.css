@@ -1478,3 +1478,5 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .clip-url { word-break: break-all; margin: 0; }
 .clip-quote { margin: 0; padding: 4px 12px; border-left: 3px solid var(--text); font-size: 14px; color: var(--text-2); max-height: 120px; overflow: auto; }
 .clip-bookmarklet { cursor: grab; }
+.timeline-row.undated { cursor: pointer; }
+.bar.ghost { opacity: 0.45; pointer-events: none; box-shadow: var(--accent) 0 0 0 1px inset; background: var(--accent-soft); }

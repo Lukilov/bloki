@@ -511,6 +511,9 @@ export function TimelineView(p: ViewProps) {
   const dw = DAY_WIDTH[scale]
   const scroller = useRef<HTMLDivElement>(null)
   const [scrollX, setScrollX] = useState(0)
+  // While a bar is dragged it follows the mouse (live), and an undated row shows where a click would put it (ghost).
+  const [live, setLive] = useState<{ id: string; start: string; end: string } | null>(null)
+  const [ghost, setGhost] = useState<{ id: string; day: string } | null>(null)
   const origin = useMemo(() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setHours(0, 0, 0, 0); return d }, [])
   const span = scale === 'quarter' ? 365 : scale === 'month' ? 150 : 60
   // Start scrolled to today.
@@ -537,14 +540,19 @@ export function TimelineView(p: ViewProps) {
     const rg = rangeOf(r)!
     const x0 = e.clientX
     const shiftDay = (d: string, n: number) => isoDay(new Date(toDate(d).getTime() + n * 864e5))
+    const next = (n: number) => mode === 'move' ? { start: shiftDay(rg.start, n), end: shiftDay(rg.end, n) }
+      : mode === 'start' ? { start: shiftDay(rg.start, n) > rg.end ? rg.end : shiftDay(rg.start, n), end: rg.end }
+      : { start: rg.start, end: shiftDay(rg.end, n) < rg.start ? rg.start : shiftDay(rg.end, n) }
+    const move = (m: MouseEvent) => setLive({ id: r.id, ...next(Math.round((m.clientX - x0) / dw)) })
     const up = (m: MouseEvent) => {
-      removeEventListener('mouseup', up)
+      removeEventListener('mousemove', move); removeEventListener('mouseup', up)
       const n = Math.round((m.clientX - x0) / dw)
-      if (!n) { if (mode === 'move') p.openRow(r); return }
-      if (mode === 'move') setRange(r, shiftDay(rg.start, n), shiftDay(rg.end, n))
-      if (mode === 'start') setRange(r, shiftDay(rg.start, n) > rg.end ? rg.end : shiftDay(rg.start, n), rg.end)
-      if (mode === 'end') setRange(r, rg.start, shiftDay(rg.end, n) < rg.start ? rg.start : shiftDay(rg.end, n))
+      if (!n) { setLive(null); if (mode === 'move') p.openRow(r); return }
+      const to = next(n)
+      setRange(r, to.start, to.end)
+      setLive(null)
     }
+    addEventListener('mousemove', move)
     addEventListener('mouseup', up)
   }
   return (
@@ -563,12 +571,18 @@ export function TimelineView(p: ViewProps) {
           <div className="timeline-canvas" style={{ width: span * dw }}>
             <div className={'timeline-scale' + (scale === 'week' ? ' days' : '')}>
               {/* The month in view stays pinned at the left, like Notion's "October 2026". */}
-              {scale === 'week' && <span className="timeline-month">{new Date(origin.getTime() + Math.floor(scrollX / dw) * 864e5).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>}
-              {scale !== 'week' && days.map(d => d.getDate() === 1 && (
-                <span key={'m' + d.getTime()} className="tick month" style={{ left: x(isoDay(d)) }}>
-                  {d.toLocaleDateString(undefined, { month: 'short', year: d.getMonth() === 0 ? 'numeric' : undefined })}
-                </span>
-              ))}
+              {(() => {
+                // The month at the left edge stays pinned there in every zoom; later months start at their 1st.
+                const left = new Date(origin.getTime() + Math.floor(scrollX / dw) * 864e5)
+                return <>
+                  <span className="timeline-month">{left.toLocaleDateString('en-US', { month: scale === 'week' ? 'long' : 'short', year: 'numeric' })}</span>
+                  {scale !== 'week' && days.map(d => d.getDate() === 1 && x(isoDay(d)) > scrollX + 90 && (
+                    <span key={'m' + d.getTime()} className="tick month" style={{ left: x(isoDay(d)) }}>
+                      {d.toLocaleDateString('en-US', { month: 'short', year: d.getMonth() === 0 ? 'numeric' : undefined })}
+                    </span>
+                  ))}
+                </>
+              })()}
               {scale === 'week' && days.map(d => (
                 <span key={d.getTime()} className={'tick day' + (isoDay(d) === isoDay(new Date()) ? ' today' : '')} style={{ left: x(isoDay(d)), width: dw }}>{d.getDate()}</span>
               ))}
@@ -594,9 +608,14 @@ export function TimelineView(p: ViewProps) {
               )
             })()}
             {p.rows.map(r => {
-              const rg = rangeOf(r)
+              const rg = live?.id === r.id ? live : rangeOf(r)
+              const dayAt = (e: React.MouseEvent<HTMLDivElement>) => isoDay(new Date(origin.getTime() + Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left) / dw) * 864e5))
+              const undated = !rg && p.perm.rows
               return (
-                <div key={r.id} className="timeline-row">
+                <div key={r.id} className={'timeline-row' + (undated ? ' undated' : '')}
+                  onMouseMove={undated ? e => setGhost({ id: r.id, day: dayAt(e) }) : undefined} onMouseLeave={undated ? () => setGhost(null) : undefined}
+                  onClick={undated ? e => { setRange(r, dayAt(e), dayAt(e)); setGhost(null) } : undefined}>
+                  {undated && ghost?.id === r.id && <div className="bar ghost" style={{ left: x(ghost.day), width: dw }} />}
                   {rg && (
                     <div className={'bar' + (Math.max(dw, x(rg.end) - x(rg.start) + dw) < 120 ? ' narrow' : '')} style={{ left: x(rg.start), width: Math.max(dw, x(rg.end) - x(rg.start) + dw) }} onMouseDown={drag(r, 'move')}>
                       <span className="bar-handle left" onMouseDown={drag(r, 'start')} />
