@@ -17,6 +17,7 @@ import { copyText, Menu, mod, Popover, shift, timeAgo, type Item } from './ui'
 import { duplicate, MoveTo, pageUrl, trash } from './pageActions'
 import { importMarkdown } from './Sidebar'
 import { TeamIcon } from './Teams'
+import { Avatar } from './Comments'
 
 export function download(name: string, text: string, type = 'text/markdown') {
   const a = document.createElement('a')
@@ -123,6 +124,13 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
   const [pickIcon, setPickIcon] = useState(false)
   const [reposition, setReposition] = useState(false)
   const [showBacklinks, setShowBacklinks] = useState(false)
+  // Others on this page right now (from the live editing session), shown before Share as in Notion.
+  const [presence, setPresence] = useState<{ name: string; color: string }[]>([])
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<{ page: string; people: { name: string; color: string }[] }>).detail; if (d.page === id) setPresence(d.people) }
+    addEventListener('bloki:presence', on)
+    return () => { removeEventListener('bloki:presence', on); setPresence([]) }
+  }, [id])
   const closePop = useCallback(() => setPop(null), [])
   // The shared doc was replaced (restore, move, import): reload the page's content.
   const resetEditor = useCallback(() => setVersion(v => v + 1), [])
@@ -262,6 +270,12 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           <div className="actions">
             {!store.published && <>
               {!edit && <span className="badge">{LEVEL_NAMES[meta.access]}</span>}
+              {presence.length > 0 && (
+                <span className="presence" title={presence.map(p => p.name).join(', ') + ' viewing'}>
+                  {presence.slice(0, 3).map(p => <span key={p.name} className="presence-avatar" style={{ boxShadow: `${p.color} 0 0 0 2px` }}><Avatar name={p.name} size={24} /></span>)}
+                  {presence.length > 3 && <span className="presence-more">+{presence.length - 3}</span>}
+                </span>
+              )}
               <button className="top-btn share-btn" onClick={openPop('share')}>{isPrivate && <Lock size={14} />}Share</button>
               <button className="icon-btn" title="Copy link" onClick={() => { copyText(pageUrl(id)); store.toast('Copied link to clipboard') }}><Link2 size={18} /></button>
               <button className={'icon-btn' + (panel === 'comments' ? ' on' : '')} title="View all comments" onClick={openPop('discussions')}>

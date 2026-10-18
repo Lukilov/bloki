@@ -14,6 +14,7 @@ import { BlockNoteView } from '@blocknote/mantine'
 import { withCollaboration } from '@blocknote/core/yjs'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
+import { removeAwarenessStates } from 'y-protocols/awareness'
 import { codeBlockOptions, syntaxHighlighter } from '@blocknote/code-block'
 import { getMultiColumnSlashMenuItems, locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column'
 import {
@@ -416,8 +417,22 @@ function useCollab(pageId: string, enabled: boolean, onReset?: () => void) {
     if (!session) return
     const onClose = (e: CloseEvent | null) => { if (e?.code === 4000) onReset?.() }
     session.provider.on('connection-close', onClose)
-    return () => { session.provider.off('connection-close', onClose); session.provider.destroy(); session.doc.destroy() }
-  }, [session, onReset])
+    // Who else has this page open (the editor shares each person's name and colour): the page header shows them.
+    const aw = session.provider.awareness
+    const presence = () => {
+      const people = new Map<string, { name: string; color: string }>()
+      aw.getStates().forEach((st, id) => { const u = (st as { user?: { name: string; color: string } }).user; if (id !== aw.clientID && u?.name) people.set(u.name, u) })
+      dispatchEvent(new CustomEvent('bloki:presence', { detail: { page: pageId, people: [...people.values()] } }))
+    }
+    aw.on('change', presence)
+    return () => {
+      aw.off('change', presence)
+      // Say goodbye before the socket closes, so others drop this person at once.
+      removeAwarenessStates(aw, [aw.clientID], 'leave')
+      dispatchEvent(new CustomEvent('bloki:presence', { detail: { page: pageId, people: [] } }))
+      session.provider.off('connection-close', onClose); session.provider.destroy(); session.doc.destroy()
+    }
+  }, [session, onReset, pageId])
   return session
 }
 
