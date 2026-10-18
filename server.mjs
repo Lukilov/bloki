@@ -147,6 +147,9 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, created INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (group_id, user_id));
   CREATE TABLE IF NOT EXISTS group_grants (page_id TEXT NOT NULL, group_id TEXT NOT NULL, level TEXT NOT NULL, PRIMARY KEY (page_id, group_id));
+  -- Audit log: who did what in a workspace (owners read it in Settings).
+  CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT, user_id TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, ip TEXT, at INTEGER NOT NULL);
+  CREATE INDEX IF NOT EXISTS audit_ws ON audit(workspace_id, at);
   CREATE TABLE IF NOT EXISTS page_views (page_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS page_views_page ON page_views(page_id, at);
   CREATE TABLE IF NOT EXISTS reminders_sent (key TEXT PRIMARY KEY, at INTEGER NOT NULL);
@@ -260,6 +263,9 @@ function need(userId, pageId, level) {
 /* ---------- Users, sessions, workspaces ---------- */
 
 const sha = s => createHash('sha256').update(s).digest('hex')
+// ponytail: kept forever; prune by age if the table grows large.
+export const audit = (wsId, userId, action, target = null, detail = null, ip = null) =>
+  db.prepare('INSERT INTO audit (workspace_id, user_id, action, target, detail, ip, at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(wsId ?? null, userId ?? null, action, target, detail == null ? null : String(detail).slice(0, 500), ip, Date.now())
 const token = () => randomBytes(32).toString('base64url')
 
 export function hashPassword(password) {
@@ -364,9 +370,10 @@ export function createToken(user, name) {
   if (!String(name ?? '').trim()) throw new HttpError(400, 'Name the token.')
   const raw = 'bloki_' + token()
   db.prepare('INSERT INTO api_tokens VALUES (?, ?, ?, ?, ?, ?, NULL)').run(randomUUID(), user.id, user.workspaceId, String(name).trim().slice(0, 100), sha(raw), Date.now())
+  audit(user.workspaceId, user.id, 'token.created', null, String(name).trim())
   return { token: raw } // shown once
 }
-export const deleteToken = (user, id) => (db.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, user.id), { ok: true })
+export const deleteToken = (user, id) => (db.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, user.id), audit(user.workspaceId, user.id, 'token.revoked', id), { ok: true })
 
 export const WEBHOOK_EVENTS = ['page.created', 'page.updated', 'page.deleted', 'comment.created']
 export function listWebhooks(user) { needOwner(user, user.workspaceId); return db.prepare('SELECT id, url, events, created FROM webhooks WHERE workspace_id = ? ORDER BY created').all(user.workspaceId).map(w => ({ ...w, events: JSON.parse(w.events) })) }
@@ -380,9 +387,10 @@ export function createWebhook(user, { url, events }) {
   const secret = 'whsec_' + token()
   const id = randomUUID()
   db.prepare('INSERT INTO webhooks VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, user.workspaceId, u.href, JSON.stringify(ev), secret, Date.now(), user.id)
+  audit(user.workspaceId, user.id, 'webhook.created', id, u.href)
   return { id, secret } // the signing secret is shown once
 }
-export function deleteWebhook(user, id) { needOwner(user, user.workspaceId); db.prepare('DELETE FROM webhooks WHERE id = ? AND workspace_id = ?').run(id, user.workspaceId); return { ok: true } }
+export function deleteWebhook(user, id) { needOwner(user, user.workspaceId); db.prepare('DELETE FROM webhooks WHERE id = ? AND workspace_id = ?').run(id, user.workspaceId); audit(user.workspaceId, user.id, 'webhook.deleted', id); return { ok: true } }
 
 /** Posts an event to the workspace's webhooks, signed with each one's secret (X-Bloki-Signature: sha256=<hex HMAC of the body>).
  *  A webhook only hears about pages its creator can see, so private pages don't leak through it. */
@@ -419,6 +427,7 @@ export function resetPassword(t, password) {
   db.prepare('UPDATE users SET pass = ? WHERE id = ?').run(hashPassword(password), r.user_id)
   db.prepare('DELETE FROM resets WHERE user_id = ?').run(r.user_id)
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(r.user_id) // every device signs in again
+  for (const m of db.prepare('SELECT workspace_id FROM members WHERE user_id = ?').all(r.user_id)) audit(m.workspace_id, r.user_id, 'user.password_reset')
   return { ok: true }
 }
 
@@ -464,6 +473,7 @@ export function enableTwoFactor(user, code) {
   // Recovery codes: shown once, stored hashed; each signs in once if the phone is lost.
   const codes = Array.from({ length: 8 }, () => randomBytes(5).toString('hex').replace(/^(.{5})/, '$1-'))
   db.prepare('UPDATE users SET totp = totp_pending, totp_pending = NULL, totp_recovery = ? WHERE id = ?').run(JSON.stringify(codes.map(c => sha(c.replace('-', '')))), user.id)
+  audit(user.workspaceId, user.id, 'user.2fa_on')
   return { codes }
 }
 
@@ -472,6 +482,7 @@ export function disableTwoFactor(user, { password, code }) {
   if (typeof password !== 'string' || !checkPassword(password, u.pass)) throw new HttpError(400, 'Current password is wrong.')
   if (u.totp && !checkSecondFactor(u, code)) throw new HttpError(400, 'That code didn’t work.')
   db.prepare('UPDATE users SET totp = NULL, totp_pending = NULL, totp_recovery = NULL WHERE id = ?').run(user.id)
+  audit(user.workspaceId, user.id, 'user.2fa_off')
   return { ok: true }
 }
 
@@ -520,6 +531,7 @@ export function setRole(user, wsId, targetId, role) {
   if (!roleOf(wsId, targetId)) throw new HttpError(404, 'Not a member.')
   if (role !== 'owner' && roleOf(wsId, targetId) === 'owner' && ownerCount(wsId) === 1) throw new HttpError(400, 'A workspace needs at least one owner.')
   db.prepare('UPDATE members SET role = ? WHERE workspace_id = ? AND user_id = ?').run(role, wsId, targetId)
+  audit(wsId, user.id, 'member.role', targetId, role)
 }
 
 const ownerCount = wsId => db.prepare("SELECT COUNT(*) AS n FROM members WHERE workspace_id = ? AND role = 'owner'").get(wsId).n
@@ -530,6 +542,7 @@ export function removeMember(user, wsId, targetId) {
   if (roleOf(wsId, targetId) === 'owner' && ownerCount(wsId) === 1) throw new HttpError(400, 'A workspace needs at least one owner.')
   db.prepare('DELETE FROM members WHERE workspace_id = ? AND user_id = ?').run(wsId, targetId)
   db.prepare('DELETE FROM grants WHERE user_id = ? AND page_id IN (SELECT id FROM pages WHERE workspace_id = ?)').run(targetId, wsId)
+  audit(wsId, user.id, targetId === user.id ? 'member.left' : 'member.removed', targetId)
 }
 
 export function createInvite(user, wsId, { role = 'member', page_id = null, level = null } = {}) {
@@ -542,6 +555,7 @@ export function createInvite(user, wsId, { role = 'member', page_id = null, leve
   } else needOwner(user, wsId)
   const t = token()
   db.prepare('INSERT INTO invites VALUES (?, ?, ?, ?, ?, ?, ?)').run(sha(t), wsId, role, page_id, level, user.id, Date.now() + INVITE_DAYS * 864e5)
+  audit(wsId, user.id, 'invite.created', page_id, page_id ? `${role} · ${level}` : role)
   return t
 }
 
@@ -575,6 +589,7 @@ export function deleteAccount(user, password) {
 /** Everything in a workspace the owner can see, as one JSON backup. */
 export function exportWorkspace(user, wsId) {
   needOwner(user, wsId)
+  audit(wsId, user.id, 'workspace.exported')
   const access = accessMap(user.id, wsId)
   const pages = db.prepare('SELECT * FROM pages WHERE workspace_id = ? AND trashed = 0').all(wsId).filter(p => atLeast(access.get(p.id), 'view')).map(decode)
   const comments = db.prepare(`SELECT * FROM comments WHERE page_id IN (${pages.map(() => '?').join(',') || "''"})`).all(...pages.map(p => p.id))
@@ -657,6 +672,7 @@ export function createPage(user, body, { viaForm = false } = {}) {
   liveReload(wsId)
   if (parent?.kind === 'db') runAutomations(user, id, 'added')
   emit(wsId, 'page.created', id, pageEvent({ ...row, kind: row.kind ?? 'page' }))
+  if (!viaForm) audit(wsId, user.id, 'page.created', id)
   return viaForm ? { id } : getPage(user, id)
 }
 
@@ -708,6 +724,7 @@ export function saveGroup(user, id, { name, members }) {
     for (const m of new Set(ok)) db.prepare('INSERT INTO group_members VALUES (?, ?)').run(id, m)
   }
   liveReload(user.workspaceId)
+  audit(user.workspaceId, user.id, 'group.saved', id, name ?? null)
   return listGroups(user).find(g => g.id === id)
 }
 export function deleteGroup(user, id) {
@@ -715,6 +732,7 @@ export function deleteGroup(user, id) {
   if (!db.prepare('SELECT 1 FROM groups WHERE id = ? AND workspace_id = ?').get(id, user.workspaceId)) throw new HttpError(404, 'Group not found.')
   for (const t of ['group_grants', 'group_members']) db.prepare(`DELETE FROM ${t} WHERE group_id = ?`).run(id)
   db.prepare('DELETE FROM groups WHERE id = ?').run(id)
+  audit(user.workspaceId, user.id, 'group.deleted', id)
   liveReload(user.workspaceId)
   return { ok: true }
 }
@@ -757,6 +775,7 @@ export function createTeam(user, { name, icon = '', description = '', access = '
   const id = randomUUID()
   db.prepare('INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, user.workspaceId, String(name).trim().slice(0, 100), String(icon).slice(0, 200), String(description).slice(0, 500), access, Date.now(), user.id)
   db.prepare("INSERT INTO team_members VALUES (?, ?, 'owner')").run(id, user.id)
+  audit(user.workspaceId, user.id, 'teamspace.created', id, String(name).trim())
   liveReload(user.workspaceId)
   return listTeams(user).find(t => t.id === id)
 }
@@ -779,6 +798,7 @@ export function deleteTeam(user, id) {
   db.prepare('UPDATE pages SET team_id = NULL WHERE team_id = ?').run(id) // trashed pages fall back to the workspace if restored
   db.prepare('DELETE FROM team_members WHERE team_id = ?').run(id)
   db.prepare('DELETE FROM teams WHERE id = ?').run(id)
+  audit(user.workspaceId, user.id, 'teamspace.deleted', id)
   liveReload(user.workspaceId)
   return { ok: true }
 }
@@ -926,6 +946,8 @@ export function updatePage(user, id, body) {
   if ('trashed' in row || 'parent_id' in row || 'workspace_access' in row || 'team_id' in row) liveReload(prev.workspace_id)
   else livePages(prev.workspace_id, [id])
   if ('props' in row && row.props !== prev.props) runAutomations(user, id, 'edited', JSON.parse(prev.props || '{}'))
+  if ('trashed' in row) audit(prev.workspace_id, user.id, row.trashed ? 'page.trashed' : 'page.restored', id)
+  if ('parent_id' in row || 'team_id' in row) audit(prev.workspace_id, user.id, 'page.moved', id, row.parent_id ?? row.team_id ?? 'top level')
   if (row.trashed) emit(prev.workspace_id, 'page.deleted', id, pageEvent(prev))
   else if (['title', 'content', 'props', 'parent_id'].some(k => k in row)) emit(prev.workspace_id, 'page.updated', id, { ...pageEvent({ ...prev, ...row }), changed: Object.keys(row).filter(k => !['updated', 'updated_by'].includes(k)) })
   return getPage(user, id)
@@ -935,6 +957,7 @@ export function deletePage(user, id) {
   need(user.id, id, 'full')
   const wsId = db.prepare('SELECT workspace_id FROM pages WHERE id = ?').get(id)?.workspace_id
   const ids = descendants(id)
+  audit(wsId, user.id, 'page.deleted_forever', id, `${ids.length} page${ids.length === 1 ? '' : 's'}`)
   for (const pid of ids) collab.reset(pid)
   const marks = ids.map(() => '?').join(',')
   for (const t of ['history', 'grants', 'favorites', 'comments', 'notifications', 'watches', 'synced']) db.prepare(`DELETE FROM ${t} WHERE page_id IN (${marks})`).run(...ids)
@@ -1028,6 +1051,7 @@ export function getShare(user, id) {
 export function setShare(user, id, body) {
   need(user.id, id, 'full')
   const p = db.prepare('SELECT workspace_id, parent_id FROM pages WHERE id = ?').get(id)
+  audit(p.workspace_id, user.id, 'page.shared', id, JSON.stringify(body).slice(0, 300))
   if ('workspace_access' in body) {
     const v = body.workspace_access
     if (v !== null && !LEVELS.includes(v)) throw new HttpError(400, 'Unknown access level.')
@@ -1376,6 +1400,17 @@ export function sendReminders(now = Date.now()) {
   return sent
 }
 
+/* ---------- Audit log ---------- */
+
+/** The workspace's audit log for its owners, newest first; `before` pages back, `action` filters by prefix (page., member.…). */
+export function auditLog(user, { before, action, limit = 100 } = {}) {
+  needOwner(user, user.workspaceId)
+  return db.prepare(`SELECT a.id, a.action, a.target, a.detail, a.ip, a.at, a.user_id, u.name, p.title AS page_title FROM audit a
+      LEFT JOIN users u ON u.id = a.user_id LEFT JOIN pages p ON p.id = a.target
+      WHERE a.workspace_id = ? AND (? IS NULL OR a.id < ?) AND (? IS NULL OR a.action LIKE ? || '%') ORDER BY a.id DESC LIMIT ?`)
+    .all(user.workspaceId, before ?? null, before ?? null, action || null, action || null, Math.min(500, Number(limit) || 100))
+}
+
 /* ---------- Page analytics ---------- */
 
 /** Opening a page counts as a view, at most once per person per half hour. */
@@ -1493,12 +1528,15 @@ const routes = [
   ['POST', /^\/api\/auth\/register$/, async c => {
     const { userId, workspaceId, pageId } = register(await c.body())
     c.setSession(startSession(userId, workspaceId))
+    audit(workspaceId, userId, 'member.joined', null, null, c.ip)
     return { page_id: pageId }
   }, true],
   ['POST', /^\/api\/auth\/login$/, async c => {
     const b = await c.body()
     const userId = login(b, c.ip)
-    c.setSession(startSession(userId))
+    const t = startSession(userId)
+    c.setSession(t)
+    audit(db.prepare('SELECT workspace_id FROM sessions WHERE token_hash = ?').get(sha(t))?.workspace_id, userId, 'user.login', null, null, c.ip)
     return { ok: true }
   }, true],
   ['POST', /^\/api\/auth\/logout$/, c => {
@@ -1518,6 +1556,7 @@ const routes = [
   ['POST', /^\/api\/pages\/([\w-]+)\/notify$/, async (c, id) => notifyFromButton(c.user, id, await c.body())],
   ['POST', /^\/api\/pages\/([\w-]+)\/view$/, (c, id) => recordView(c.user, id)],
   ['GET', /^\/api\/pages\/([\w-]+)\/analytics$/, (c, id) => pageAnalytics(c.user, id)],
+  ['GET', /^\/api\/audit$/, c => auditLog(c.user, { before: c.url.searchParams.get('before'), action: c.url.searchParams.get('action') })],
   ['GET', /^\/api\/groups$/, c => listGroups(c.user)],
   ['POST', /^\/api\/groups$/, async c => saveGroup(c.user, null, await c.body())],
   ['PATCH', /^\/api\/groups\/([\w-]+)$/, async (c, id) => saveGroup(c.user, id, await c.body())],

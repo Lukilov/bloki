@@ -80,6 +80,7 @@ export type Page = {
   team_id?: string | null
   content?: unknown[]
 }
+export type AuditEntry = { id: number; action: string; target: string | null; detail: string | null; ip: string | null; at: number; user_id: string | null; name: string | null; page_title: string | null }
 export type Group = { id: string; name: string; created: number; members: { id: string; name: string; email: string }[] }
 export type ApiToken = { id: string; name: string; created: number; last_used: number | null }
 export type Webhook = { id: string; url: string; events: string[]; created: number }
@@ -179,6 +180,7 @@ export const api = {
   login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
   pageView: (id: string) => call('POST', `pages/${id}/view`, {}),
   pageAnalytics: (id: string) => call<{ total: number; unique: number; days: { day: string; views: number }[]; viewers: { id: string; name: string; last: number; views: number }[] }>('GET', `pages/${id}/analytics`),
+  audit: (action = '', before?: number) => call<AuditEntry[]>('GET', `audit?action=${encodeURIComponent(action)}${before ? '&before=' + before : ''}`),
   groups: () => call<Group[]>('GET', 'groups'),
   createGroup: (b: { name?: string; members?: string[] }) => call<Group>('POST', 'groups', b),
   saveGroup: (id: string, b: { name?: string; members?: string[] }) => call<Group>('PATCH', `groups/${id}`, b),

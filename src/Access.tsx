@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plug, Plus, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
+import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Link2, LogOut, Plug, Plus, ScrollText, Server, Settings, SlidersHorizontal, Table2, UserPlus, Users, WifiOff, X } from 'lucide-react'
 
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
 import { Menu, Popover, usePopover } from './ui'
-import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share, type ApiToken, type Webhook, type Group } from './api'
+import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share, type ApiToken, type Webhook, type Group, type AuditEntry } from './api'
 import { iconOf, label, useStore } from './store'
 
 const ROLE_NAMES: Record<Role, string> = { owner: 'Workspace owner', member: 'Member', guest: 'Guest' }
@@ -250,7 +250,7 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 
 /* ---------- Settings & members ---------- */
 
-type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'public' | 'offline'
+type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'audit' | 'public' | 'offline'
 
 /** The web clipper's landing page: what the bookmarklet sent, saved as a private page only when you say so. */
 export function ClipScreen({ clip }: { clip: { u?: string; t?: string; s?: string } }) {
@@ -291,6 +291,56 @@ function Clipper() {
     ref.current?.setAttribute('href', `javascript:(()=>{window.open(${JSON.stringify(target)}+new URLSearchParams({u:location.href,t:document.title,s:String(getSelection()||'').slice(0,2000)}),'_blank')})()`)
   }, [])
   return <a ref={ref} className="button clip-bookmarklet" onClick={e => e.preventDefault()}>Save to Bloki</a>
+}
+
+const AUDIT_LABELS: Record<string, string> = {
+  'user.login': 'Logged in', 'member.joined': 'Joined the workspace', 'member.role': 'Changed a role', 'member.removed': 'Removed a member', 'member.left': 'Left the workspace',
+  'invite.created': 'Created an invite', 'page.created': 'Created a page', 'page.trashed': 'Moved a page to Trash', 'page.restored': 'Restored a page',
+  'page.deleted_forever': 'Deleted a page forever', 'page.moved': 'Moved a page', 'page.shared': 'Changed sharing', 'token.created': 'Created an API token',
+  'token.revoked': 'Revoked an API token', 'webhook.created': 'Added a webhook', 'webhook.deleted': 'Deleted a webhook', 'user.2fa_on': 'Turned on 2-step verification',
+  'user.2fa_off': 'Turned off 2-step verification', 'user.password_reset': 'Reset their password', 'group.saved': 'Changed a group', 'group.deleted': 'Deleted a group',
+  'teamspace.created': 'Created a teamspace', 'teamspace.deleted': 'Deleted a teamspace', 'workspace.exported': 'Exported the workspace',
+}
+
+/** Settings → Audit log (owners): who did what in this workspace, newest first, filterable and exportable as CSV. */
+function AuditLog() {
+  const [items, setItems] = useState<AuditEntry[]>([])
+  const [action, setAction] = useState('')
+  const [more, setMore] = useState(true)
+  const load = useCallback(async (reset: boolean, before?: number) => {
+    const page = await api.audit(action, before)
+    setItems(x => (reset ? page : [...x, ...page]))
+    setMore(page.length === 100)
+  }, [action])
+  useEffect(() => { load(true) }, [load])
+  const csv = () => {
+    const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [['Time', 'Person', 'Action', 'Target', 'Details', 'IP'], ...items.map(e => [new Date(e.at).toISOString(), e.name ?? '', AUDIT_LABELS[e.action] ?? e.action, e.page_title ?? e.target ?? '', e.detail ?? '', e.ip ?? ''])]
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(',')).join('\n')], { type: 'text/csv' })), download: 'bloki-audit-log.csv' })
+    a.click()
+  }
+  return <>
+    <h3>Audit log</h3>
+    <p className="settings-sub">Who did what in this workspace</p>
+    <div className="row audit-tools">
+      <select value={action} onChange={e => setAction(e.target.value)}>
+        <option value="">All events</option><option value="page.">Pages</option><option value="member.">Members</option><option value="user.">Accounts</option>
+        <option value="invite.">Invites</option><option value="token.">API tokens</option><option value="webhook.">Webhooks</option><option value="group.">Groups</option><option value="teamspace.">Teamspaces</option>
+      </select>
+      <button onClick={csv} disabled={!items.length}><Download size={14} /> Export CSV</button>
+    </div>
+    <table className="audit-table">
+      <thead><tr><th>Time</th><th>Person</th><th>Event</th><th>Target</th></tr></thead>
+      <tbody>{items.map(e => (
+        <tr key={e.id} title={[e.detail, e.ip].filter(Boolean).join(' · ')}>
+          <td className="muted">{new Date(e.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+          <td>{e.name ?? '—'}</td><td>{AUDIT_LABELS[e.action] ?? e.action}</td><td className="muted">{e.page_title ?? (e.target ? e.target.slice(0, 8) : '')}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+    {!items.length && <p className="muted small">Nothing yet.</p>}
+    {more && items.length > 0 && <button className="ghost" onClick={() => load(false, items.at(-1)!.id)}>Load more</button>}
+  </>
 }
 
 /** Settings → People → Groups: named sets of members, to share pages with all of them at once. */
@@ -478,6 +528,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             {nav('people', 'People', <Users size={16} />)}
             {nav('import', 'Import', <Download size={16} />)}
             {nav('connections', 'Connections', <Plug size={16} />)}
+            {me.role === 'owner' && nav('audit', 'Audit log', <ScrollText size={16} />)}
             <div className="menu-heading">Features</div>
             {nav('public', 'Public pages', <Globe size={16} />)}
             {desktopApp && 'offline' in desktopApp && nav('offline', 'Offline', <WifiOff size={16} />)}
@@ -631,6 +682,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
           </>}
           {tab === 'public' && <PublicPages />}
           {tab === 'connections' && <Connections owner={me.role === 'owner'} />}
+          {tab === 'audit' && <AuditLog />}
           {tab === 'offline' && <OfflinePages />}
           {error && <p className="danger">{error}</p>}
           {msg && <p className="ok">{msg}</p>}

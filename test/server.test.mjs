@@ -592,3 +592,16 @@ test('page analytics count a view per person per half hour, by day, with the lat
   assert.equal(a.viewers[0].id, owner.id)
   assert.equal(a.viewers.find(v => v.id === owner.id).views, 2)
 })
+
+test('audit log records who did what, for owners only', () => {
+  const p = s.createPage(member, { title: 'Audited', section: 'workspace' })
+  s.updatePage(member, p.id, { trashed: true })
+  s.updatePage(member, p.id, { trashed: false })
+  s.setShare(member, p.id, { public: true })
+  const log = s.auditLog(owner, {})
+  const mine = log.filter(e => e.target === p.id).map(e => e.action)
+  assert.deepEqual(mine.slice(0, 4), ['page.shared', 'page.restored', 'page.trashed', 'page.created'])
+  assert.equal(log.find(e => e.target === p.id).name, 'member@x.si')
+  assert.ok(s.auditLog(owner, { action: 'page.' }).every(e => e.action.startsWith('page.')))
+  throws403(() => s.auditLog(member, {}))
+})
