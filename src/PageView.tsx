@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeftRight, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
+  ArrowLeftRight, BadgeCheck, Copy, CornerUpRight, Download, History as HistoryIcon, Image as ImageIcon, Link2, Lock, LockOpen, MessageSquare, MoreHorizontal,
   Bell, PanelsTopLeft, ChevronDown, Redo2, Smile, Star, Trash2, Undo2, Upload, X, ClipboardCopy, Activity, Palette, MoreHorizontal as More, ListTree, Type, Link as LinkIcon,
 } from 'lucide-react'
 import { api, can, LEVEL_NAMES, type Comment, type Page } from './api'
@@ -162,6 +162,7 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
 
   if (missing || (store.pages.length && !meta)) return <NoAccess />
   if (!meta || !page) return <div className="empty" />
+  const verify = (meta.props as { _verify?: { by: string; at: number; until: number | null } } | undefined)?._verify
 
   const edit = can(meta, 'edit') && !store.published
   const full = can(meta, 'full') && !store.published
@@ -217,6 +218,11 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
     } }] : []),
     ...(!store.published && watch ? [{ icon: <Bell size={16} />, label: 'Notify me', hint: watch === 'all' ? 'Comments' : 'Replies', submenu: () => <Menu onClose={() => setPop(null)} items={(['all', 'replies'] as const).map(m => ({ label: watchLabel[m], checked: watch === m, onClick: () => { setWatch(m); api.setWatch(id, m).catch(e => store.setError(e.message)) } }))} /> }] : []),
     ...(edit ? [
+      // Wiki verification: someone vouches the page is current, for a while or for good.
+      ...(edit ? [{ icon: <BadgeCheck size={16} />, label: verify ? 'Verification' : 'Verify page', submenu: () => <Menu onClose={() => {}} items={[
+        ...([['1 week', 7], ['1 month', 30], ['90 days', 90], ['Indefinitely', 0]] as const).map(([l, d]) => ({ label: d ? `Verify for ${l}` : 'Verify indefinitely', onClick: () => set({ props: { ...meta.props, _verify: { by: store.me!.user.id, at: Date.now(), until: d ? Date.now() + d * 864e5 : null } } }) })),
+        ...(verify ? [{ divider: true } as const, { label: 'Remove verification', danger: true, onClick: () => { const { _verify, ...rest } = (meta.props ?? {}) as Record<string, unknown>; void _verify; set({ props: rest }) } }] : []),
+      ]} /> }] : []),
       { icon: meta.locked ? <LockOpen size={16} /> : <Lock size={16} />, label: sw(meta.locked, 'Lock page'), onClick: () => { set({ locked: !meta.locked }); setVersion(v => v + 1) } },
       { icon: <Trash2 size={16} />, label: 'Move to Trash', onClick: () => trash(store, meta) },
       { divider: true },
@@ -378,6 +384,13 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
             )
           })()}
 
+          {verify && (() => {
+            const expired = !!verify.until && verify.until < Date.now()
+            const who = store.people.get(verify.by)?.name ?? 'someone'
+            return <div className={'verified' + (expired ? ' expired' : '')} title={new Date(verify.at).toLocaleDateString('en-US', { dateStyle: 'medium' })}>
+              <BadgeCheck size={14} />{expired ? `Verification expired · was verified by ${who}` : `Verified by ${who}${verify.until ? ' until ' + new Date(verify.until).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`}
+            </div>
+          })()}
           {(layout.backlinks ?? 'popover') !== 'off' && backlinks.length > 0 && (
             (layout.backlinks ?? 'popover') === 'expanded' || showBacklinks
               ? <div className="backlinks open">{backlinks.map(b => <button key={b.id} className="backlink" onClick={() => store.go(b.id)}>↗ {iconOf(b as Page, 14)} {label(b)}</button>)}</div>
