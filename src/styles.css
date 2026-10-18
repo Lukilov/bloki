@@ -1501,3 +1501,8 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .equation-editor.inline { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
 .equation-editor.inline textarea { min-height: 60px; font-family: var(--mono); font-size: 13px; }
 .equation-editor.inline button { align-self: flex-end; }
+/* Mermaid code blocks: the diagram under the code. */
+.editor-wrap { position: relative; }
+.mermaid-layer { position: absolute; inset: 0 auto auto 0; width: 0; height: 0; }
+.mermaid-preview { position: absolute; display: flex; justify-content: center; padding: 12px; box-sizing: border-box; border-radius: 4px; background: var(--bg); overflow-x: auto; user-select: none; }
+.mermaid-preview svg { max-width: 100%; height: auto; }

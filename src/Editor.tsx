@@ -402,6 +402,59 @@ const COLLAB_COLORS = ['#e03e3e', '#d9730d', '#cb912f', '#448361', '#337ea9', '#
 const colorFor = (s: string) => COLLAB_COLORS[[...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLLAB_COLORS.length]
 
 /** One shared Yjs document per open page, synced through the server. */
+/** Code blocks in Mermaid draw their diagram underneath, as Notion's preview does. Mermaid loads only when a page has one,
+ *  and runs in its strict mode (no HTML or links from the diagram text). The diagrams live in a layer over the editor,
+ *  outside ProseMirror's DOM (which would drop foreign nodes), with room kept for them under each code block. */
+function useMermaid(el: HTMLDivElement | null, dark: boolean) {
+  useEffect(() => {
+    if (!el) return
+    let mermaid: typeof import('mermaid').default | undefined
+    let n = 0, timer = 0, live = true
+    const layer = Object.assign(document.createElement('div'), { className: 'mermaid-layer' })
+    const room = document.createElement('style')
+    layer.appendChild(room)
+    el.appendChild(layer)
+    const boxes = new Map<string, HTMLDivElement>()
+    const contentOf = (id: string) => el.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(id)}"] > .bn-block > .bn-block-content`)
+    const place = () => {
+      const base = el.getBoundingClientRect()
+      for (const [id, box] of boxes) {
+        const r = contentOf(id)?.getBoundingClientRect()
+        if (!r) continue
+        Object.assign(box.style, { top: `${r.bottom - base.top + 4}px`, left: `${r.left - base.left}px`, width: `${r.width}px` })
+      }
+    }
+    const render = async () => {
+      const blocks = [...el.querySelectorAll<HTMLElement>('[data-content-type="codeBlock"][data-language="mermaid"]')]
+      const ids = new Set<string>()
+      if (blocks.length && !mermaid) { mermaid = (await import('mermaid')).default; mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' }) }
+      for (const b of blocks) {
+        const id = b.closest<HTMLElement>('.bn-block-outer[data-id]')?.dataset.id
+        if (!id || !mermaid) continue
+        ids.add(id)
+        let box = boxes.get(id)
+        if (!box) { box = Object.assign(document.createElement('div'), { className: 'mermaid-preview' }); layer.appendChild(box); boxes.set(id, box) }
+        const code = b.querySelector('code')?.textContent ?? ''
+        if (box.dataset.code === code) continue
+        box.dataset.code = code
+        try { const { svg } = await mermaid.render(`mermaid-${Date.now()}-${n++}`, code); if (live) box.innerHTML = svg }
+        catch (e) { if (live) box.textContent = 'Diagram error: ' + String((e as Error).message ?? e).split('\n')[0] }
+      }
+      for (const [id, box] of boxes) if (!ids.has(id)) { box.remove(); boxes.delete(id) }
+      room.textContent = [...boxes].map(([id, box]) => `.bn-block-outer[data-id="${CSS.escape(id)}"] > .bn-block > .bn-block-content { margin-bottom: ${box.offsetHeight + 12}px }`).join('\n')
+      requestAnimationFrame(place)
+    }
+    const later = () => { clearTimeout(timer); timer = window.setTimeout(() => { render().catch(() => {}) }, 300) }
+    // Our own layer changes don't count; edits in the editor (and its size) do.
+    const mo = new MutationObserver(list => { if (list.some(m => !layer.contains(m.target))) later() })
+    mo.observe(el, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-language'] })
+    const ro = new ResizeObserver(() => requestAnimationFrame(place))
+    ro.observe(el)
+    later()
+    return () => { live = false; mo.disconnect(); ro.disconnect(); clearTimeout(timer); layer.remove() }
+  }, [el, dark])
+}
+
 function useCollab(pageId: string, enabled: boolean, onReset?: () => void) {
   const session = useMemo(() => {
     if (!enabled) return null
@@ -449,6 +502,9 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
   storeRef.current = store
   setMentionDateFormat(store.me?.prefs?.dateFormat)
   const timer = useRef<number | undefined>(undefined)
+  // A state ref, so the hook runs once the editor's wrapper exists (the editor may first render nothing).
+  const [wrap, setWrap] = useState<HTMLDivElement | null>(null)
+  useMermaid(wrap, dark)
   const [moving, setMoving] = useState<{ block: AnyBlock; anchor: HTMLElement; mode?: 'move' | 'pagein' } | null>(null)
   const live = useCollab(page.id, collab, onReset)
   const [synced, setSynced] = useState(!live)
@@ -610,7 +666,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
       <style>{openThreads.map(id => minimalComments
         ? `.comment-mark[data-thread="${id}"]{cursor:pointer}.comment-mark[data-thread="${id}"]:hover{background:var(--comment-bg)}.bn-block-content:has(.comment-mark[data-thread="${id}"]){position:relative}.bn-block-content:has(.comment-mark[data-thread="${id}"])::after{content:'';position:absolute;right:-30px;top:50%;width:18px;height:18px;margin-top:-9px;opacity:.55;cursor:pointer;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center/contain no-repeat}`
         : `.comment-mark[data-thread="${id}"]{background:var(--comment-bg);border-bottom:2px solid var(--comment-line);cursor:pointer}`).join('\n')}</style>
-      <div className="editor-wrap" onClick={e => {
+      <div className="editor-wrap" ref={setWrap} onClick={e => {
         const mark = (e.target as HTMLElement).closest('.comment-mark') as HTMLElement | null
         if (mark && openThreads.includes(mark.dataset.thread ?? '')) return openComments?.()
         // Minimal mode: the icon is the block's ::after past its right edge, so a click there lands on the block itself.
