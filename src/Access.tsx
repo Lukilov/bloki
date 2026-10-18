@@ -4,7 +4,7 @@ import { Bell, ChevronDown, Download, FileArchive, FileCode, FileText, Globe, Li
 /** Present when running inside the Bloki desktop app. */
 const desktopApp = (window as { blokiDesktop?: { platform: string; changeServer: () => void; offline?: { mine: () => Promise<{ id: string; title: string; icon: string; saved: number }[]>; set: (id: string, on: boolean) => Promise<boolean> } } }).blokiDesktop
 import { Menu, Popover, usePopover } from './ui'
-import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share, type ApiToken, type Webhook } from './api'
+import { api, ApiError, can, inviteLink, LEVEL_NAMES, publicLink, type Level, type Page, type Person, type Role, type Share, type ApiToken, type Webhook, type Group } from './api'
 import { iconOf, label, useStore } from './store'
 
 const ROLE_NAMES: Record<Role, string> = { owner: 'Workspace owner', member: 'Member', guest: 'Guest' }
@@ -293,6 +293,39 @@ function Clipper() {
   return <a ref={ref} className="button clip-bookmarklet" onClick={e => e.preventDefault()}>Save to Bloki</a>
 }
 
+/** Settings → People → Groups: named sets of members, to share pages with all of them at once. */
+function Groups({ people }: { people: Person[] }) {
+  const [groups, setGroups] = useState<Group[]>([])
+  const [name, setName] = useState('')
+  const { error, busy, run } = useAction()
+  const load = useCallback(() => { api.groups().then(setGroups) }, [])
+  useEffect(load, [load])
+  const save = (id: string | null, body: { name?: string; members?: string[] }) => run(async () => { await (id ? api.saveGroup(id, body) : api.createGroup(body)); load() })
+  return (
+    <Section title="Groups" desc="Share pages with a group instead of person by person. Type the group’s name in Share.">
+      {groups.map(g => (
+        <Row key={g.id} label={g.name} desc={g.members.map(m => m.name).join(', ') || 'No members yet'}>
+          <span className="row">
+            <select value="" onChange={e => e.target.value && save(g.id, { members: [...g.members.map(m => m.id), e.target.value] })}>
+              <option value="">Add member…</option>
+              {people.filter(p => p.role !== 'guest' && !g.members.some(m => m.id === p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            {g.members.length > 0 && <select value="" onChange={e => e.target.value && save(g.id, { members: g.members.map(m => m.id).filter(id => id !== e.target.value) })}>
+              <option value="">Remove…</option>{g.members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>}
+            <button className="danger" onClick={() => confirm(`Delete the group ${g.name}?`) && run(async () => { await api.deleteGroup(g.id); load() })}>Delete</button>
+          </span>
+        </Row>
+      ))}
+      <Row label="New group" desc="For example Marketing or Engineering.">
+        <span className="row"><input value={name} placeholder="Group name" onChange={e => setName(e.target.value)} />
+          <button disabled={busy || !name.trim()} onClick={() => { save(null, { name, members: [] }); setName('') }}>Create</button></span>
+      </Row>
+      {error && <p className="danger small">{error}</p>}
+    </Section>
+  )
+}
+
 /** Publish → site settings: a short address (/s/<slug>) and whether search engines may index the site. */
 function SiteSettings({ slug, indexed, update }: { slug: string; indexed: boolean; update: (b: object) => void }) {
   const [draft, setDraft] = useState(slug)
@@ -546,6 +579,7 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
           {tab === 'people' && ws && <>
             <h3>People</h3>
             <p className="settings-sub">Manage people in your workspace and their roles</p>
+            {owner && <Groups people={people} />}
             {owner && (
               <Section title="Invite link" desc="Single-use links, valid for 7 days. Send one to each person you invite.">
                 <div className="row">
@@ -622,6 +656,8 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
   const [email, setEmail] = useState('')
   const [level, setLevel] = useState<Level>('edit')
   const [invite, setInvite] = useState('')
+  const [groups, setGroups] = useState<Group[]>([])
+  useEffect(() => { api.groups().then(setGroups).catch(() => {}) }, [])
   const { error, busy, run } = useAction()
   const full = can(page, 'full')
   const ws = store.me?.workspaces.find(w => w.id === store.me?.workspaceId)
@@ -652,17 +688,31 @@ export function ShareMenu({ page }: { page: Page; close: () => void }) {
           <form className="row invite-row" onSubmit={async e => {
             e.preventDefault()
             // As in Notion, several addresses can go in at once, separated by commas.
-            for (const one of email.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean)) await update({ invite_email: one, level })
+            // Each entry is an email or the name of a group (shared with all its members at once).
+            const group = groups.find(g => g.name.toLowerCase() === email.trim().toLowerCase())
+            if (group) await update({ group_grant: { group_id: group.id, level } })
+            else for (const one of email.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean)) await update({ invite_email: one, level })
             setEmail('')
           }}>
             <input list="share-people" placeholder="Email or group, separated by commas" value={email} onChange={e => setEmail(e.target.value)} />
-            <datalist id="share-people">{members.filter(p => p.email).map(p => <option key={p.id} value={p.email}>{p.name}</option>)}</datalist>
+            <datalist id="share-people">{groups.filter(g => !share.groups?.some(x => x.group_id === g.id)).map(g => <option key={g.id} value={g.name}>Group · {g.members.length} members</option>)}{members.filter(p => p.email).map(p => <option key={p.id} value={p.email}>{p.name}</option>)}</datalist>
             {email.trim() && <select value={level} onChange={e => setLevel(e.target.value as Level)}>{levels.map(l => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}</select>}
             <button className="primary" disabled={busy}>Invite</button>
           </form>
         )}
         {invite && <div className="invite-box"><div className="muted small">{share.emailed ? 'No account uses that email yet, so we emailed them this invite link. They join as a guest with access to this page.' : 'No account uses that email yet. Send them this link; they join as a guest with access to this page.'}</div><Copy text={invite} /></div>}
 
+        {share.groups?.map(g => (
+          <div className="share-row" key={g.group_id}>
+            <span className="share-person"><span className="avatar big group-avatar"><Users size={16} /></span><span>{g.name}<div className="muted small">Group · {g.members} member{g.members === 1 ? '' : 's'}</div></span></span>
+            {full ? (
+              <select value={g.level} onChange={e => update({ group_grant: { group_id: g.group_id, level: e.target.value === 'remove' ? null : e.target.value } })}>
+                {levels.map(l => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}
+                <option value="remove">Remove</option>
+              </select>
+            ) : <span className="muted">{LEVEL_NAMES[g.level]}</span>}
+          </div>
+        ))}
         {share.grants.map(g => (
           <div className="share-row" key={g.user_id}>
             <span className="share-person"><span className="avatar big">{g.name[0]}</span><span>{g.name}{g.user_id === store.me?.user.id && <span className="muted"> (You)</span>} {g.role === 'guest' && <span className="badge">Guest</span>}<div className="muted small">{g.email}</div></span></span>

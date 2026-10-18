@@ -143,6 +143,10 @@ db.exec(`
   -- Personal API tokens (stored hashed) act as their owner in one workspace; webhooks post workspace events to a URL.
   CREATE TABLE IF NOT EXISTS api_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, last_used INTEGER);
   CREATE TABLE IF NOT EXISTS webhooks (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL, secret TEXT NOT NULL, created INTEGER NOT NULL, created_by TEXT NOT NULL);
+  -- Permission groups: a named set of workspace members a page can be shared with in one go.
+  CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, created INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (group_id, user_id));
+  CREATE TABLE IF NOT EXISTS group_grants (page_id TEXT NOT NULL, group_id TEXT NOT NULL, level TEXT NOT NULL, PRIMARY KEY (page_id, group_id));
   CREATE TABLE IF NOT EXISTS reminders_sent (key TEXT PRIMARY KEY, at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS resets (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY (team_id, user_id));
@@ -214,6 +218,9 @@ export function accessMap(userId, wsId) {
   const teams = new Map(db.prepare('SELECT id, access FROM teams WHERE workspace_id = ?').all(wsId).map(t => [t.id, t.access]))
   const mine = new Map(db.prepare('SELECT m.team_id, m.role FROM team_members m JOIN teams t ON t.id = m.team_id WHERE m.user_id = ? AND t.workspace_id = ?').all(userId, wsId).map(m => [m.team_id, m.role]))
   const grants = new Map(db.prepare('SELECT g.page_id, g.level FROM grants g JOIN pages p ON p.id = g.page_id WHERE g.user_id = ? AND p.workspace_id = ?').all(userId, wsId).map(g => [g.page_id, g.level]))
+  // Pages shared with a group this person is in count like a personal grant (the higher of the two).
+  for (const g of db.prepare('SELECT gg.page_id, gg.level FROM group_grants gg JOIN group_members m ON m.group_id = gg.group_id JOIN groups gr ON gr.id = gg.group_id WHERE m.user_id = ? AND gr.workspace_id = ?').all(userId, wsId))
+    grants.set(g.page_id, maxLevel(grants.get(g.page_id) ?? 'none', g.level))
   const byId = new Map(pages.map(p => [p.id, p]))
   const memo = new Map()
   const resolve = id => {
@@ -679,6 +686,37 @@ export function listPages(user) {
   })
 }
 
+/* ---------- Permission groups ---------- */
+
+export function listGroups(user) {
+  if (!roleOf(user.workspaceId, user.id) || roleOf(user.workspaceId, user.id) === 'guest') return []
+  return db.prepare('SELECT g.id, g.name, g.created FROM groups g WHERE g.workspace_id = ? ORDER BY g.name').all(user.workspaceId)
+    .map(g => ({ ...g, members: db.prepare('SELECT u.id, u.name, u.email FROM group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.name').all(g.id) }))
+}
+export function saveGroup(user, id, { name, members }) {
+  needOwner(user, user.workspaceId)
+  if (id && !db.prepare('SELECT 1 FROM groups WHERE id = ? AND workspace_id = ?').get(id, user.workspaceId)) throw new HttpError(404, 'Group not found.')
+  if (name !== undefined && !String(name).trim()) throw new HttpError(400, 'Name the group.')
+  if (!id) { id = randomUUID(); db.prepare('INSERT INTO groups VALUES (?, ?, ?, ?)').run(id, user.workspaceId, String(name ?? '').trim().slice(0, 100), Date.now()) }
+  else if (name !== undefined) db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(String(name).trim().slice(0, 100), id)
+  if (Array.isArray(members)) {
+    // Only people in this workspace can be in its groups.
+    const ok = members.filter(m => roleOf(user.workspaceId, m))
+    db.prepare('DELETE FROM group_members WHERE group_id = ?').run(id)
+    for (const m of new Set(ok)) db.prepare('INSERT INTO group_members VALUES (?, ?)').run(id, m)
+  }
+  liveReload(user.workspaceId)
+  return listGroups(user).find(g => g.id === id)
+}
+export function deleteGroup(user, id) {
+  needOwner(user, user.workspaceId)
+  if (!db.prepare('SELECT 1 FROM groups WHERE id = ? AND workspace_id = ?').get(id, user.workspaceId)) throw new HttpError(404, 'Group not found.')
+  for (const t of ['group_grants', 'group_members']) db.prepare(`DELETE FROM ${t} WHERE group_id = ?`).run(id)
+  db.prepare('DELETE FROM groups WHERE id = ?').run(id)
+  liveReload(user.workspaceId)
+  return { ok: true }
+}
+
 /* ---------- Teamspaces ---------- */
 
 const TEAM_ACCESS = ['open', 'closed', 'private']
@@ -981,6 +1019,7 @@ export function getShare(user, id) {
     site_slug: p.site_slug,
     site_index: !!p.site_index,
     grants: grants.map(g => (guestView && g.user_id !== user.id ? { ...g, email: undefined } : g)),
+    groups: db.prepare('SELECT gg.group_id, gg.level, gr.name, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = gr.id) AS members FROM group_grants gg JOIN groups gr ON gr.id = gg.group_id WHERE gg.page_id = ? ORDER BY gr.name').all(id),
   }
 }
 
@@ -1013,6 +1052,13 @@ export function setShare(user, id, body) {
       db.prepare('INSERT OR REPLACE INTO grants VALUES (?, ?, ?)').run(id, user_id, level)
       if (!had) notify(user_id, p.workspace_id, 'share', id, user.id, LEVEL_LABELS[level])
     }
+  }
+  if ('group_grant' in body) {
+    const { group_id, level } = body.group_grant ?? {}
+    if (!db.prepare('SELECT 1 FROM groups WHERE id = ? AND workspace_id = ?').get(group_id, p.workspace_id)) throw new HttpError(400, 'Unknown group.')
+    if (level === null) db.prepare('DELETE FROM group_grants WHERE page_id = ? AND group_id = ?').run(id, group_id)
+    else if (!LEVELS.includes(level) || level === 'none') throw new HttpError(400, 'Unknown access level.')
+    else db.prepare('INSERT OR REPLACE INTO group_grants VALUES (?, ?, ?)').run(id, group_id, level)
   }
   if ('invite_email' in body) {
     // Existing accounts join as guests straight away; anyone else gets an invite link to pass on.
@@ -1444,6 +1490,10 @@ const routes = [
     return { workspace_id: inv.workspace_id, page_id: inv.page_id }
   }],
   ['POST', /^\/api\/pages\/([\w-]+)\/notify$/, async (c, id) => notifyFromButton(c.user, id, await c.body())],
+  ['GET', /^\/api\/groups$/, c => listGroups(c.user)],
+  ['POST', /^\/api\/groups$/, async c => saveGroup(c.user, null, await c.body())],
+  ['PATCH', /^\/api\/groups\/([\w-]+)$/, async (c, id) => saveGroup(c.user, id, await c.body())],
+  ['DELETE', /^\/api\/groups\/([\w-]+)$/, (c, id) => deleteGroup(c.user, id)],
   ['GET', /^\/api\/teams$/, c => listTeams(c.user)],
   ['POST', /^\/api\/teams$/, async c => createTeam(c.user, await c.body())],
   ['PATCH', /^\/api\/teams\/([\w-]+)$/, async (c, id) => updateTeam(c.user, id, await c.body())],

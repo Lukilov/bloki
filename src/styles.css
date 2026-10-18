@@ -1506,3 +1506,4 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .mermaid-layer { position: absolute; inset: 0 auto auto 0; width: 0; height: 0; }
 .mermaid-preview { position: absolute; display: flex; justify-content: center; padding: 12px; box-sizing: border-box; border-radius: 4px; background: var(--bg); overflow-x: auto; user-select: none; }
 .mermaid-preview svg { max-width: 100%; height: auto; }
+.group-avatar { display: inline-grid; place-items: center; background: var(--hover-2, var(--hover)); color: var(--text-2); }

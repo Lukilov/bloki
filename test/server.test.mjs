@@ -558,3 +558,22 @@ test('repeating templates add a page when due, then wait for the next time', () 
   assert.equal(s.runRepeats(now), 0) // next is a week on
   assert.ok(s.getPage(member, t.id).props._repeat.next > now + 6 * 864e5)
 })
+
+test('permission groups: sharing a page with a group gives its members that access', () => {
+  const p = s.createPage(owner, { title: 'Payroll', section: 'private' })
+  const a = join_('groupa@x.si', 'member'), b = join_('groupb@x.si', 'member')
+  throws403(() => s.saveGroup(member, null, { name: 'Finance' }))
+  const g = s.saveGroup(owner, null, { name: 'Finance', members: [a.id, 'not-in-workspace'] })
+  assert.deepEqual(g.members.map(m => m.id), [a.id])
+  assert.equal(level(a, p), 'none')
+  s.setShare(owner, p.id, { group_grant: { group_id: g.id, level: 'edit' } })
+  assert.equal(level(a, p), 'edit')
+  assert.equal(level(b, p), 'none')
+  assert.equal(s.getShare(owner, p.id).groups[0].name, 'Finance')
+  s.saveGroup(owner, g.id, { members: [a.id, b.id] })
+  assert.equal(level(b, p), 'edit')
+  s.setShare(owner, p.id, { grant: { user_id: b.id, level: 'full' } }) // the higher of personal and group access wins
+  assert.equal(level(b, p), 'full')
+  s.deleteGroup(owner, g.id)
+  assert.equal(level(a, p), 'none')
+})

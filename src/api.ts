@@ -80,6 +80,7 @@ export type Page = {
   team_id?: string | null
   content?: unknown[]
 }
+export type Group = { id: string; name: string; created: number; members: { id: string; name: string; email: string }[] }
 export type ApiToken = { id: string; name: string; created: number; last_used: number | null }
 export type Webhook = { id: string; url: string; events: string[]; created: number }
 export type TeamAccess = 'open' | 'closed' | 'private'
@@ -94,6 +95,7 @@ export type Share = {
   site_slug?: string | null
   site_index?: boolean
   emailed?: boolean
+  groups?: { group_id: string; level: Level; name: string; members: number }[]
   grants: { user_id: string; level: Level; name: string; email?: string; role: Role | null }[]
   invite?: string
 }
@@ -175,6 +177,10 @@ export const api = {
   forgotPassword: (email: string) => call('POST', 'auth/forgot', { email }),
   resetPassword: (token: string, password: string) => call('POST', 'auth/reset', { token, password }),
   login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
+  groups: () => call<Group[]>('GET', 'groups'),
+  createGroup: (b: { name?: string; members?: string[] }) => call<Group>('POST', 'groups', b),
+  saveGroup: (id: string, b: { name?: string; members?: string[] }) => call<Group>('PATCH', `groups/${id}`, b),
+  deleteGroup: (id: string) => call('DELETE', `groups/${id}`),
   tokens: () => call<ApiToken[]>('GET', 'tokens'),
   createToken: (name: string) => call<{ token: string }>('POST', 'tokens', { name }),
   deleteToken: (id: string) => call('DELETE', `tokens/${id}`),
