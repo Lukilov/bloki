@@ -30,7 +30,7 @@ export type View = {
   open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
   widgets?: string[]
-  chart?: { type: 'bar' | 'hbar' | 'line' | 'donut'; x?: string; y?: string; fn?: 'sum' | 'average'; sort?: 'x' | 'desc' | 'asc' }
+  chart?: { type: 'bar' | 'hbar' | 'line' | 'donut'; x?: string; y?: string; fn?: 'sum' | 'average'; sort?: 'x' | 'desc' | 'asc'; dateBy?: 'day' | 'week' | 'month' | 'year' }
   form?: { title?: string; description?: string; anyone?: boolean; questions?: { prop: string; name?: string; required?: boolean }[] }
 }
 export type FormQuestion = { prop: string; name: string; type: PropType; required: boolean; options?: Option[] }
