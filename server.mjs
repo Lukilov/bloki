@@ -1328,6 +1328,30 @@ export function sendReminders(now = Date.now()) {
   return sent
 }
 
+/* ---------- Repeating templates ---------- */
+
+const nextRepeat = (at, every) => { const d = new Date(at); if (every === 'month') d.setMonth(d.getMonth() + 1); else d.setDate(d.getDate() + (every === 'week' ? 7 : 1)); return d.getTime() }
+/** Database templates set to repeat (props._repeat = { every: day | week | month, next }) add a page from themselves when due,
+ *  as the template's creator, then move `next` on past now (missed runs aren't made up, as in Notion). */
+export function runRepeats(now = Date.now()) {
+  let made = 0
+  for (const t of db.prepare(`SELECT * FROM pages WHERE trashed = 0 AND props LIKE '%"_repeat"%'`).all()) {
+    const props = JSON.parse(t.props || '{}')
+    const rep = props._repeat
+    if (!props._template || !rep?.next || !['day', 'week', 'month'].includes(rep.every) || rep.next > now) continue
+    let next = rep.next
+    while (next <= now) next = nextRepeat(next, rep.every)
+    db.prepare('UPDATE pages SET props = ? WHERE id = ?').run(JSON.stringify({ ...props, _repeat: { ...rep, next } }), t.id)
+    try { if (!atLeast(pageAccess(t.created_by, t.parent_id), 'edit_content')) continue } catch { continue }
+    const { _template, _repeat, ...rowProps } = props
+    void _template; void _repeat
+    const day = new Date(rep.next).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    createPage({ id: t.created_by }, { parent_id: t.parent_id, title: `${t.title || 'Untitled'} ${day}`.trim(), icon: t.icon, content: JSON.parse(t.content || '[]'), props: rowProps }, { viaForm: true })
+    made++
+  }
+  return made
+}
+
 /** /s/<slug>[/<page>]: the app's page with the published page's title and description in its <head>, so links preview
  *  and search engines (when indexing is on) read them; the app then shows the page as on #/public/…. */
 export function sitePage(slug, pageId, html) {
@@ -1652,6 +1676,6 @@ if (process.argv[1] === import.meta.filename) {
   purgeTrash()
   setInterval(() => purgeTrash(), 6 * 3600 * 1000).unref()
   if (BACKUP_KEEP > 0) { backup(); setInterval(() => backup(), 24 * 3600 * 1000).unref() }
-  setInterval(() => sendReminders(), 60 * 1000).unref()
+  setInterval(() => { sendReminders(); runRepeats() }, 60 * 1000).unref()
   server.listen(PORT, HOST, () => console.log(`Bloki on http://${HOST === '127.0.0.1' ? 'localhost' : HOST}:${PORT}`))
 }

@@ -543,3 +543,18 @@ test('reminders on date mentions fire once, to the person who set them, while th
   assert.equal(n[0].kind, 'reminder')
   assert.equal(s.sendReminders(now + 3601e3), 1)
 })
+
+test('repeating templates add a page when due, then wait for the next time', () => {
+  const d = s.createPage(member, { title: 'Meetings', kind: 'db', section: 'workspace', schema: { props: [{ id: 'k', name: 'Kind', type: 'text' }] } })
+  const now = Date.now()
+  const t = s.createPage(member, { parent_id: d.id, title: 'Weekly sync', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Agenda' }] }], props: { _template: true, k: 'sync', _repeat: { every: 'week', next: now - 1000 } } })
+  const rows = () => s.listPages(member).filter(p => p.parent_id === d.id && !p.props?._template)
+  assert.equal(s.runRepeats(now), 1)
+  const [row] = rows()
+  assert.match(row.title, /^Weekly sync \w{3} \d+$/)
+  assert.equal(row.props.k, 'sync')
+  assert.equal(row.props._repeat, undefined)
+  assert.equal(s.getPage(member, row.id).content[0].content[0].text, 'Agenda')
+  assert.equal(s.runRepeats(now), 0) // next is a week on
+  assert.ok(s.getPage(member, t.id).props._repeat.next > now + 6 * 864e5)
+})

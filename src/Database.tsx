@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, LayoutDashboard, Newspaper, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
+  ArrowDownUp, ArrowUpRight, BarChart3, Calendar, Repeat, LayoutDashboard, Newspaper, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
   Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
 } from 'lucide-react'
 import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
@@ -194,7 +194,19 @@ function TemplateMenu({ db, templates, isDefault, use, empty, edit, create, setD
   use: (id: string) => void; empty: () => void; edit: (t: Page) => void; create: () => void
   setDefault: (id: string) => void; duplicate: (id: string) => void; remove: (id: string) => void
 }) {
+  const store = useStore()
   const [more, setMore] = useState<{ el: HTMLElement; t: Page } | null>(null)
+  // Repeat: the server adds a page from the template at 9:00 (this browser's time) every day, week (today's weekday) or month.
+  const repeatOf = (t: Page) => (t.props as { _repeat?: { every: 'day' | 'week' | 'month' } } | undefined)?._repeat?.every
+  const setRepeat = (t: Page, every: 'day' | 'week' | 'month' | null) => {
+    const { _repeat, ...rest } = (t.props ?? {}) as Record<string, unknown>
+    void _repeat
+    if (!every) return store.patch(t.id, { props: rest })
+    const next = new Date(); next.setHours(9, 0, 0, 0)
+    while (next.getTime() <= Date.now()) { if (every === 'month') next.setMonth(next.getMonth() + 1); else next.setDate(next.getDate() + (every === 'week' ? 7 : 1)) }
+    return store.patch(t.id, { props: { ...rest, _repeat: { every, next: next.getTime() } } })
+  }
+  const REPEAT = { day: 'Daily', week: 'Weekly', month: 'Monthly' }
   return (
     <div className="menu-list template-menu">
       <div className="template-head"><b>Templates for <span>{iconOf(db, 16)} {label(db)}</span></b>
@@ -203,6 +215,7 @@ function TemplateMenu({ db, templates, isDefault, use, empty, edit, create, setD
         <div key={t.id} className="option-row template-row" onClick={() => use(t.id)}>
           <span className="menu-icon">{iconOf(t, 16)}</span><span className="menu-label">{label(t)}</span>
           {isDefault(t.id) && <span className="template-default">Default</span>}
+          {repeatOf(t) && <span className="template-default" title="Adds a page from this template at 9:00"><Repeat size={12} /> {REPEAT[repeatOf(t)!]}</span>}
           <button className="ghost option-more" title="Template options" onClick={e => { e.stopPropagation(); setMore({ el: e.currentTarget, t }) }}><MoreHorizontal size={14} /></button>
         </div>
       ))}
@@ -213,6 +226,10 @@ function TemplateMenu({ db, templates, isDefault, use, empty, edit, create, setD
         {more && <Menu onClose={() => { setMore(null); close() }} items={[
           { label: isDefault(more.t.id) ? 'Remove as default' : 'Set as default', onClick: () => setDefault(more.t.id) },
           { icon: <PenLine size={15} />, label: 'Edit', onClick: () => edit(more.t) },
+          { icon: <Repeat size={15} />, label: 'Repeat', hint: (repeatOf(more.t) ? REPEAT[repeatOf(more.t)!] : 'Off') + ' ›', submenu: () => <Menu onClose={() => { setMore(null); close() }} items={[
+            { label: 'Off', checked: !repeatOf(more.t), onClick: () => setRepeat(more.t, null) },
+            ...(['day', 'week', 'month'] as const).map(k => ({ label: REPEAT[k], checked: repeatOf(more.t) === k, onClick: () => setRepeat(more.t, k) })),
+          ]} /> },
           { icon: <Copy size={15} />, label: 'Duplicate', onClick: () => duplicate(more.t.id) },
           { icon: <Trash2 size={15} />, label: 'Delete', danger: true, onClick: () => remove(more.t.id) },
         ]} />}
