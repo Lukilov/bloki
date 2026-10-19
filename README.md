@@ -59,6 +59,12 @@ BLOKI_OIDC_AUTO_JOIN=1          # optional: new emails join as members (of BLOKI
 
 The login screen then offers "Continue with SSO". People are matched by their verified email. SAML isn't supported; most SAML providers also speak OpenID Connect.
 
+## SCIM provisioning
+Identity providers can add, update and remove members and groups. Workspace owners generate a SCIM token in
+Settings → Connections; give your provider the base URL `https://bloki.example.com/scim/v2` and the token.
+Users and Groups (Bloki's permission groups) are supported; deactivating or deleting a user removes them from the workspace
+and its groups, but keeps their account. Provisioned people sign in with single sign-on (or Forgot password).
+
 ## Web clipper
 Settings → Connections has a **Save to Bloki** button: drag it to your bookmarks bar. On any web page, click it to save a bookmark
 of the page (and any text you selected, as a quote) to your private pages, after you confirm.

@@ -307,7 +307,7 @@ const AUDIT_LABELS: Record<string, string> = {
   'page.deleted_forever': 'Deleted a page forever', 'page.moved': 'Moved a page', 'page.shared': 'Changed sharing', 'token.created': 'Created an API token',
   'token.revoked': 'Revoked an API token', 'webhook.created': 'Added a webhook', 'webhook.deleted': 'Deleted a webhook', 'user.2fa_on': 'Turned on 2-step verification',
   'user.2fa_off': 'Turned off 2-step verification', 'user.password_reset': 'Reset their password', 'group.saved': 'Changed a group', 'group.deleted': 'Deleted a group',
-  'teamspace.created': 'Created a teamspace', 'teamspace.deleted': 'Deleted a teamspace', 'workspace.exported': 'Exported the workspace',
+  'teamspace.created': 'Created a teamspace', 'scim.token_created': 'Created a SCIM token', 'scim.token_revoked': 'Revoked a SCIM token', 'teamspace.deleted': 'Deleted a teamspace', 'workspace.exported': 'Exported the workspace',
 }
 
 /** Settings → Audit log (owners): who did what in this workspace, newest first, filterable and exportable as CSV. */
@@ -406,11 +406,12 @@ function SiteSettings({ slug, indexed, update }: { slug: string; indexed: boolea
 function Connections({ owner }: { owner: boolean }) {
   const [tokens, setTokens] = useState<ApiToken[]>([])
   const [hooks, setHooks] = useState<Webhook[]>([])
+  const [scimTokens, setScimTokens] = useState<{ id: string; created: number; last_used: number | null }[]>([])
   const [shown, setShown] = useState<{ label: string; value: string } | null>(null)
   const [name, setName] = useState('')
   const [hook, setHook] = useState({ url: '', events: ['page.created', 'page.updated'] as string[] })
   const { error, busy, run } = useAction()
-  const load = useCallback(() => { api.tokens().then(setTokens); if (owner) api.webhooks().then(setHooks) }, [owner])
+  const load = useCallback(() => { api.tokens().then(setTokens); if (owner) { api.webhooks().then(setHooks); api.scimTokens().then(setScimTokens) } }, [owner])
   useEffect(load, [load])
   const EVENTS = ['page.created', 'page.updated', 'page.deleted', 'comment.created']
   return <>
@@ -446,6 +447,17 @@ function Connections({ owner }: { owner: boolean }) {
           ))}</span>
           <button disabled={busy || !hook.url || !hook.events.length} onClick={() => run(async () => { const r = await api.createWebhook(hook.url, hook.events); setShown({ label: 'Signing secret', value: r.secret }); setHook({ ...hook, url: '' }); load() })}>Add webhook</button>
         </span>
+      </Row>
+    </Section>}
+    {owner && <Section title="SCIM provisioning" desc="Let your identity provider (Okta, Microsoft Entra ID, OneLogin…) add, update and remove members and groups. Deactivated people leave this workspace; their account stays.">
+      <Row label="SCIM base URL" desc="Paste this into your identity provider."><Copy text={`${location.origin}/scim/v2`} /></Row>
+      {scimTokens.map(t => (
+        <Row key={t.id} label="SCIM token" desc={`Created ${new Date(t.created).toLocaleDateString()} · ${t.last_used ? 'last used ' + new Date(t.last_used).toLocaleDateString() : 'never used'}`}>
+          <button className="danger" onClick={() => run(async () => { await api.deleteScimToken(t.id); load() })}>Revoke</button>
+        </Row>
+      ))}
+      <Row label="New SCIM token" desc="Your identity provider sends it as a bearer token.">
+        <button disabled={busy} onClick={() => run(async () => { const r = await api.createScimToken(); setShown({ label: 'SCIM token', value: r.token }); load() })}>Generate token</button>
       </Row>
     </Section>}
     {error && <p className="danger small">{error}</p>}

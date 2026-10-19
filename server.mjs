@@ -7,6 +7,7 @@ import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, creat
 import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
 import { mailer } from './mail.mjs'
+import { createScim } from './scim.mjs'
 
 const ROOT = import.meta.dirname
 const DATA = process.env.BLOKI_DATA || join(ROOT, 'data')
@@ -150,6 +151,8 @@ db.exec(`
   -- Audit log: who did what in a workspace (owners read it in Settings).
   CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT, user_id TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, ip TEXT, at INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS audit_ws ON audit(workspace_id, at);
+  CREATE TABLE IF NOT EXISTS scim_tokens (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, last_used INTEGER);
+  CREATE TABLE IF NOT EXISTS scim_users (workspace_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (workspace_id, user_id));
   CREATE TABLE IF NOT EXISTS page_views (page_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS page_views_page ON page_views(page_id, at);
   CREATE TABLE IF NOT EXISTS reminders_sent (key TEXT PRIMARY KEY, at INTEGER NOT NULL);
@@ -1466,6 +1469,19 @@ export function sendReminders(now = Date.now()) {
   return sent
 }
 
+/* ---------- SCIM provisioning ---------- */
+
+export const scim = createScim({ db, sha, token, hashPassword, audit, liveReload: wsId => liveReload(wsId) })
+export function listScimTokens(user) { needOwner(user, user.workspaceId); return db.prepare('SELECT id, created, last_used FROM scim_tokens WHERE workspace_id = ? ORDER BY created').all(user.workspaceId) }
+export function createScimToken(user) {
+  needOwner(user, user.workspaceId)
+  const raw = 'scim_' + token()
+  db.prepare('INSERT INTO scim_tokens VALUES (?, ?, ?, ?, NULL)').run(randomUUID(), user.workspaceId, sha(raw), Date.now())
+  audit(user.workspaceId, user.id, 'scim.token_created')
+  return { token: raw } // shown once
+}
+export function deleteScimToken(user, id) { needOwner(user, user.workspaceId); db.prepare('DELETE FROM scim_tokens WHERE id = ? AND workspace_id = ?').run(id, user.workspaceId); audit(user.workspaceId, user.id, 'scim.token_revoked', id); return { ok: true } }
+
 /* ---------- Audit log ---------- */
 
 /** The workspace's audit log for its owners, newest first; `before` pages back, `action` filters by prefix (page., member.…). */
@@ -1622,6 +1638,9 @@ const routes = [
   ['POST', /^\/api\/pages\/([\w-]+)\/notify$/, async (c, id) => notifyFromButton(c.user, id, await c.body())],
   ['POST', /^\/api\/pages\/([\w-]+)\/view$/, (c, id) => recordView(c.user, id)],
   ['GET', /^\/api\/pages\/([\w-]+)\/analytics$/, (c, id) => pageAnalytics(c.user, id)],
+  ['GET', /^\/api\/scim-tokens$/, c => listScimTokens(c.user)],
+  ['POST', /^\/api\/scim-tokens$/, c => createScimToken(c.user)],
+  ['DELETE', /^\/api\/scim-tokens\/([\w-]+)$/, (c, id) => deleteScimToken(c.user, id)],
   ['GET', /^\/api\/audit$/, c => auditLog(c.user, { before: c.url.searchParams.get('before'), action: c.url.searchParams.get('action') })],
   ['GET', /^\/api\/groups$/, c => listGroups(c.user)],
   ['POST', /^\/api\/groups$/, async c => saveGroup(c.user, null, await c.body())],
@@ -1737,6 +1756,22 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://x')
   const send = (data, status = 200, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(data)) }
 
+  // SCIM: identity providers manage members and groups with a workspace's SCIM token (no cookies, no CSRF header).
+  if (url.pathname.startsWith('/scim/v2/')) {
+    const out = (status, body) => { res.writeHead(status, { 'content-type': 'application/scim+json', 'cache-control': 'no-store' }); res.end(body == null ? '' : JSON.stringify(body)) }
+    const raw = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
+    const ws = scim.workspaceFor(raw)
+    if (!ws) return out(401, { schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'], status: '401', detail: 'Invalid SCIM token' })
+    db.prepare('UPDATE scim_tokens SET last_used = ? WHERE token_hash = ?').run(Date.now(), sha(raw))
+    try {
+      const body = ['POST', 'PUT', 'PATCH'].includes(req.method) ? JSON.parse((await readBody(req, MAX_JSON)).toString() || '{}') : {}
+      return out(...await scim.handle(ws, req.method, url.pathname, url.searchParams, body))
+    } catch (e) {
+      if (e.scim) return out(e.status, e.scim)
+      if (e instanceof SyntaxError) return out(400, { schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'], status: '400', detail: 'Invalid JSON' })
+      throw e
+    }
+  }
   // Single sign-on: plain browser redirects to the provider and back, outside the JSON API.
   if (url.pathname === '/api/auth/oidc/start' || url.pathname === '/api/auth/oidc/callback') {
     try {
@@ -1763,7 +1798,7 @@ async function handle(req, res) {
     // they can't manage the account (password, 2-step verification, tokens) or sign in.
     const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
     if (bearer) {
-      if (req.method !== 'GET' && /^\/api\/(me|tokens|auth|webhooks)(\/|$)/.test(url.pathname)) return send({ error: 'API tokens can’t change account settings.' }, 403)
+      if (req.method !== 'GET' && /^\/api\/(me|tokens|auth|webhooks|scim-tokens)(\/|$)/.test(url.pathname)) return send({ error: 'API tokens can’t change account settings.' }, 403)
     } else if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'bloki') return send({ error: 'Missing request header.' }, 403)
     const user = bearer ? tokenUser(bearer) : sessionUser(readCookie(req, 'bloki_session'))
     if (bearer && !user) return send({ error: 'Invalid API token.' }, 401)
