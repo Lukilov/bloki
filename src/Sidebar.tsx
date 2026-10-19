@@ -410,6 +410,53 @@ export function importNotion(store: Store) {
   input.click()
 }
 
+/** Imports from Trello (board JSON), Asana (CSV), Evernote (.enex) and Confluence (HTML export .zip). */
+export function importFrom(store: Store, kind: 'trello' | 'asana' | 'evernote' | 'confluence') {
+  const accept = { trello: '.json,application/json', asana: '.csv,text/csv', evernote: '.enex', confluence: '.zip,application/zip' }[kind]
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept })
+  input.onchange = async () => {
+    const f = input.files?.[0]
+    if (!f) return
+    try {
+      store.toast('Importing…')
+      const im = await import('./importers')
+      const { fromMarkdown, htmlToBlocks } = await import('./Editor')
+      const parse = (src: string, type: DOMParserSupportedType) => new DOMParser().parseFromString(src, type)
+      let first: string | undefined, count = 0
+      const makeDb = async (plan: Awaited<ReturnType<typeof im.planTrello>>) => {
+        const db = await api.create({ kind: 'db', title: plan.title, section: 'private', schema: { titleName: 'Name', props: plan.props as never, views: [{ id: uid(), name: 'Table', type: 'table' }] } })
+        first = db.id
+        for (const r of plan.rows) { await api.create({ parent_id: db.id, title: r.title, props: r.props, ...(r.md.trim() ? { content: await fromMarkdown(r.md) as never } : {}) }); count++ }
+      }
+      const makePages = async (plans: Awaited<ReturnType<typeof im.planEvernote>>, parent_id: string | null) => {
+        for (const p of plans) {
+          const page = await api.create({ title: p.title, ...(parent_id ? { parent_id } : { section: 'private' as const }), content: await htmlToBlocks(p.html) as never })
+          first ??= page.id; count++
+          await makePages(p.children, page.id)
+        }
+      }
+      if (kind === 'trello') await makeDb(im.planTrello(JSON.parse(await f.text()), uid))
+      if (kind === 'asana') await makeDb(im.planAsana(await f.text(), f.name.replace(/\.csv$/i, ''), uid))
+      if (kind === 'evernote') {
+        // Several notes go under one page named after the notebook file.
+        const notes = im.planEvernote(await f.text(), parse)
+        if (notes.length > 1) await makePages([{ title: f.name.replace(/\.enex$/i, ''), html: '', children: notes }], null)
+        else await makePages(notes, null)
+      }
+      if (kind === 'confluence') {
+        const { unzip } = await import('./notionZip')
+        const tree = im.planConfluence(await unzip(await f.arrayBuffer()), parse)
+        if (!tree.length) throw new Error('No Confluence pages in this file. Export the space as HTML.')
+        await makePages(tree, null)
+      }
+      await store.reload()
+      store.toast(`Imported ${count} page${count === 1 ? '' : 's'}`)
+      if (first) store.go(first)
+    } catch (e) { store.setError((e as Error).message) }
+  }
+  input.click()
+}
+
 function InboxPanel({ setUnread, close }: { setUnread: (n: number) => void; close: () => void }) {
   const store = useStore()
   const [items, setItems] = useState<Notice[] | null>(null)

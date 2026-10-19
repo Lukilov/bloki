@@ -102,7 +102,7 @@ and `comment.created`, with `X-Bloki-Signature: sha256=<HMAC-SHA256 of the body 
 - **Live sidebar and databases**: edits by others appear without reloading; only the changed page is fetched, and only by people who can see it.
 - **Search**: full-text index (SQLite FTS5) over titles and page text, matching word starts and ignoring accents; titles rank first.
 - **Fast with big databases**: long tables only render the rows on screen; the editor downloads separately from the app shell.
-- **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, CSV, Markdown, HTML).
+- **Settings**: My account (with 2-step verification: authenticator-app codes and one-time recovery codes), My settings (appearance, week start, start page), My notifications, workspace settings, People, Import (Notion export .zip, Trello JSON, Asana CSV, Evernote .enex, Confluence HTML export, CSV, Markdown, HTML).
 
 ## Not like Notion
 No AI or map view. On phones Bloki installs as an app from the browser (Add to Home Screen); there are no App Store apps. Comments are plain text. Hosted Notion's icon set, fonts and branding aren't copied.

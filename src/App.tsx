@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ChevronsRight, Clock, Globe, LayoutTemplate, Lock, Menu as MenuIcon, Star, Users } from 'lucide-react'
 import { api, setPublicRoot, type Me } from './api'
 import { iconOf, label, parseHash, StoreProvider, useStore } from './store'
-import { applyTemplate, importCSV, importHTML, importMarkdown, importNotion, Sidebar } from './Sidebar'
+import { applyTemplate, importCSV, importFrom, importHTML, importMarkdown, importNotion, Sidebar } from './Sidebar'
 import { SearchDialog } from './Search'
 import { AcceptInvite, AuthScreen, ClipScreen, personName, ResetScreen, SettingsDialog } from './Access'
 import { Avatar } from './Comments'
@@ -150,7 +150,7 @@ function Shell({ dark }: { dark: boolean }) {
   const [width, setWidth] = useState(() => readNumber('sidebarWidth', 248))
   // Settings → Import; here rather than in the sidebar, which isn't mounted while it's collapsed.
   useEffect(() => {
-    const on: [string, () => void][] = [['bloki:import', () => importMarkdown(store)], ['bloki:import-csv', () => importCSV(store)], ['bloki:import-html', () => importHTML(store)], ['bloki:import-notion', () => importNotion(store)]]
+    const on: [string, () => void][] = [['bloki:import', () => importMarkdown(store)], ['bloki:import-csv', () => importCSV(store)], ['bloki:import-html', () => importHTML(store)], ['bloki:import-notion', () => importNotion(store)], ...(['trello', 'asana', 'evernote', 'confluence'] as const).map(k => [`bloki:import-${k}`, () => importFrom(store, k)] as [string, () => void])]
     for (const [e, f] of on) addEventListener(e, f)
     return () => { for (const [e, f] of on) removeEventListener(e, f) }
   }, [store])

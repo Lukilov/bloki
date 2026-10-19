@@ -694,6 +694,9 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
             <Section title="File-based imports" desc="Imported files become private pages you can then move anywhere.">
               <div className="import-tiles">
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-notion')) }}><FileArchive size={20} /><span><b>Notion</b><small>Import a Markdown & CSV export (.zip)</small></span></button>
+                {([['trello', 'Trello', 'A board exported as JSON'], ['asana', 'Asana', 'A project exported as CSV'], ['evernote', 'Evernote', 'Notes exported as .enex'], ['confluence', 'Confluence', 'A space exported as HTML (.zip)']] as const).map(([k, l, d]) => (
+                  <button key={k} className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent(`bloki:import-${k}`)) }}><FileArchive size={20} /><span><b>{l}</b><small>{d}</small></span></button>
+                ))}
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-csv')) }}><Table2 size={20} /><span><b>CSV</b><small>Import structured data from spreadsheets</small></span></button>
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import')) }}><FileText size={20} /><span><b>Text & Markdown</b><small>Import plain text and formatted notes</small></span></button>
                 <button className="import-tile" onClick={() => { close(); dispatchEvent(new CustomEvent('bloki:import-html')) }}><FileCode size={20} /><span><b>HTML</b><small>Import web pages and structured content</small></span></button>
