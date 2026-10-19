@@ -45,6 +45,20 @@ With that, inviting an email address without an account emails them the invite, 
 (each person can turn that off in Settings → Notifications), and the login screen offers "Forgot password?".
 Without it, invites are links you pass on and nothing is emailed.
 
+## Single sign-on
+Bloki signs people in through any OpenID Connect provider (Google Workspace, Microsoft Entra ID, Okta, Authentik, Keycloak…).
+Register Bloki there with the redirect URL `https://bloki.example.com/api/auth/oidc/callback`, then set:
+
+```bash
+BLOKI_URL=https://bloki.example.com
+BLOKI_OIDC_ISSUER=https://accounts.google.com
+BLOKI_OIDC_CLIENT_ID=…
+BLOKI_OIDC_CLIENT_SECRET=…
+BLOKI_OIDC_AUTO_JOIN=1          # optional: new emails join as members (of BLOKI_OIDC_WORKSPACE or the first workspace)
+```
+
+The login screen then offers "Continue with SSO". People are matched by their verified email. SAML isn't supported; most SAML providers also speak OpenID Connect.
+
 ## Web clipper
 Settings → Connections has a **Save to Bloki** button: drag it to your bookmarks bar. On any web page, click it to save a bookmark
 of the page (and any text you selected, as a quote) to your private pages, after you confirm.

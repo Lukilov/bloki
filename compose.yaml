@@ -10,6 +10,11 @@ services:
       # Optional email: set these in .env too (see README → Email).
       BLOKI_SMTP_URL: ${BLOKI_SMTP_URL:-}
       BLOKI_MAIL_FROM: ${BLOKI_MAIL_FROM:-}
+      # Optional single sign-on (see README → Single sign-on).
+      BLOKI_OIDC_ISSUER: ${BLOKI_OIDC_ISSUER:-}
+      BLOKI_OIDC_CLIENT_ID: ${BLOKI_OIDC_CLIENT_ID:-}
+      BLOKI_OIDC_CLIENT_SECRET: ${BLOKI_OIDC_CLIENT_SECRET:-}
+      BLOKI_OIDC_AUTO_JOIN: ${BLOKI_OIDC_AUTO_JOIN:-}
     volumes:
       - bloki:/data
   caddy:

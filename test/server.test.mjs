@@ -25,6 +25,28 @@ await new Promise(r => smtpServer.once('listening', r))
 smtpServer.unref()
 process.env.BLOKI_SMTP_URL = `smtp://u:p@127.0.0.1:${smtpServer.address().port}`
 process.env.BLOKI_URL = 'https://bloki.test'
+// A pretend OpenID Connect provider: discovery, its signing key, and a token endpoint that signs what each code asks for.
+const { generateKeyPairSync, sign: cryptoSign } = await import('node:crypto')
+const { createServer: httpServer } = await import('node:http')
+const idp = { keys: generateKeyPairSync('rsa', { modulusLength: 2048 }), other: generateKeyPairSync('rsa', { modulusLength: 2048 }), lastNonce: '' }
+const idpServer = httpServer((req, res) => {
+  const base = `http://127.0.0.1:${idpServer.address().port}`
+  const json = v => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)) }
+  if (req.url === '/.well-known/openid-configuration') return json({ issuer: base, authorization_endpoint: base + '/auth', token_endpoint: base + '/token', jwks_uri: base + '/jwks' })
+  if (req.url === '/jwks') return json({ keys: [{ ...idp.keys.publicKey.export({ format: 'jwk' }), kid: 'k1', alg: 'RS256' }] })
+  let body = ''; req.on('data', d => (body += d)); req.on('end', () => {
+    const q = new URLSearchParams(body), [email, how] = q.get('code').split('|')
+    const enc = o => Buffer.from(JSON.stringify(o)).toString('base64url')
+    const head = enc({ alg: 'RS256', kid: 'k1' }), claims = enc({ iss: base, aud: process.env.BLOKI_OIDC_CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 300, nonce: how === 'nonce' ? 'wrong' : idp.lastNonce, email, email_verified: true, name: 'SSO Person' })
+    const sig = cryptoSign('RSA-SHA256', Buffer.from(`${head}.${claims}`), (how === 'forged' ? idp.other : idp.keys).privateKey).toString('base64url')
+    json({ id_token: `${head}.${claims}.${sig}` })
+  })
+}).listen(0, '127.0.0.1')
+await new Promise(r => idpServer.once('listening', r))
+idpServer.unref()
+process.env.BLOKI_OIDC_ISSUER = `http://127.0.0.1:${idpServer.address().port}`
+process.env.BLOKI_OIDC_CLIENT_ID = 'bloki-test'
+process.env.BLOKI_OIDC_CLIENT_SECRET = 'secret'
 const s = await import('../server.mjs')
 const { db } = s
 
@@ -604,4 +626,19 @@ test('audit log records who did what, for owners only', () => {
   assert.equal(log.find(e => e.target === p.id).name, 'member@x.si')
   assert.ok(s.auditLog(owner, { action: 'page.' }).every(e => e.action.startsWith('page.')))
   throws403(() => s.auditLog(member, {}))
+})
+
+test('single sign-on: OIDC code flow with PKCE, signature, nonce and audience checks', async () => {
+  const start = async () => { const { url, state } = await s.oidcStart(); const q = new URL(url).searchParams; idp.lastNonce = q.get('nonce'); assert.equal(q.get('code_challenge_method'), 'S256'); return state }
+  let state = await start()
+  assert.equal(await s.oidcCallback({ code: 'owner@x.si', state, cookieState: state }), owner.id)
+  state = await start()
+  await assert.rejects(s.oidcCallback({ code: 'owner@x.si', state, cookieState: 'other-browser' }), e => e.status === 400) // state must come back to the same browser
+  state = await start()
+  await assert.rejects(s.oidcCallback({ code: 'owner@x.si|forged', state, cookieState: state }), e => e.status === 401)
+  state = await start()
+  await assert.rejects(s.oidcCallback({ code: 'owner@x.si|nonce', state, cookieState: state }), e => e.status === 401)
+  state = await start()
+  await assert.rejects(s.oidcCallback({ code: 'stranger@x.si', state, cookieState: state }), e => e.status === 403) // no auto-join
+  await assert.rejects(s.oidcCallback({ code: 'owner@x.si', state, cookieState: state }), e => e.status === 400) // a state works once
 })

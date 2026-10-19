@@ -68,11 +68,14 @@ export function AuthScreen({ invite, onDone, stay }: { invite?: string; onDone: 
   const [form, setForm] = useState({ email: '', name: '', password: '', code: '' })
   const [needCode, setNeedCode] = useState(false)
   const [canMail, setCanMail] = useState(false)
+  const [canSso, setCanSso] = useState(false)
+  // A failed single sign-on comes back as #/sso-error/<message>.
+  const [ssoError] = useState(() => location.hash.startsWith('#/sso-error/') ? decodeURIComponent(location.hash.slice(12)) : '')
   const [sent, setSent] = useState(false)
   const { error, busy, run } = useAction()
 
   useEffect(() => {
-    api.status().then(s => { setHasUsers(s.hasUsers); setCanMail(!!s.mail); if (!s.hasUsers) setMode('register') })
+    api.status().then(s => { setHasUsers(s.hasUsers); setCanMail(!!s.mail); setCanSso(!!s.sso); if (!s.hasUsers) setMode('register') })
     if (invite) api.inviteInfo(invite).then(i => { setInfo(i); setMode('register') }).catch(() => setInfo(null))
   }, [invite])
 
@@ -114,9 +117,14 @@ export function AuthScreen({ invite, onDone, stay }: { invite?: string; onDone: 
         {mode === 'register' && <label>Name<input autoComplete="name" required value={form.name} onChange={set('name')} /></label>}
         <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 8 : undefined} value={form.password} onChange={set('password')} /></label>
         {mode === 'login' && canMail && <button type="button" className="ghost link forgot-link" onClick={() => setMode('forgot')}>Forgot password?</button>}
+        {ssoError && <p className="danger">{ssoError}</p>}
         {needCode && mode === 'login' && <label>Verification code<input autoFocus inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code or a recovery code" required value={form.code} onChange={set('code')} /></label>}
         {error && <p className="danger">{error}</p>}
         <button className="primary" disabled={busy}>{mode === 'login' ? 'Continue' : 'Sign up'}</button>
+        {canSso && mode === 'login' && <>
+          <div className="auth-or"><span>or</span></div>
+          <a className="button wide sso-button" href="/api/auth/oidc/start">Continue with SSO</a>
+        </>}
         {canRegister && hasUsers && (
           <button type="button" className="ghost link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}

@@ -1527,3 +1527,6 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .audit-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .audit-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .audit-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.auth-or { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.sso-button { display: flex; justify-content: center; align-items: center; height: 36px; border-radius: 6px; box-shadow: var(--line) 0 0 0 1px inset; color: var(--text); text-decoration: none; font-weight: 500; }

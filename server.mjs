@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, createReadStream, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname, normalize } from 'node:path'
-import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac } from 'node:crypto'
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHash, createHmac, createPublicKey, verify as cryptoVerify } from 'node:crypto'
 import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
 import { mailer } from './mail.mjs'
@@ -429,6 +429,72 @@ export function resetPassword(t, password) {
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(r.user_id) // every device signs in again
   for (const m of db.prepare('SELECT workspace_id FROM members WHERE user_id = ?').all(r.user_id)) audit(m.workspace_id, r.user_id, 'user.password_reset')
   return { ok: true }
+}
+
+/* ---------- Single sign-on (OpenID Connect) ---------- */
+// BLOKI_OIDC_ISSUER, _CLIENT_ID, _CLIENT_SECRET (and BLOKI_URL for the redirect) turn on "Continue with SSO".
+// Accounts are matched by verified email; with BLOKI_OIDC_AUTO_JOIN=1 a new email joins BLOKI_OIDC_WORKSPACE
+// (or the first workspace) as a member, otherwise it needs an invite first.
+
+const OIDC = { issuer: (process.env.BLOKI_OIDC_ISSUER ?? '').replace(/\/+$/, ''), client: process.env.BLOKI_OIDC_CLIENT_ID, secret: process.env.BLOKI_OIDC_CLIENT_SECRET }
+export const ssoEnabled = !!(OIDC.issuer && OIDC.client && APP_URL)
+const oidcRedirect = () => `${APP_URL}/api/auth/oidc/callback`
+let oidcConfig = null
+const oidcDiscover = async () => (oidcConfig ??= await (await fetch(`${OIDC.issuer}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(10000) })).json())
+const oidcPending = new Map() // state → { nonce, verifier, at }; ponytail: in memory, so a restart mid-login means trying again
+
+export async function oidcStart() {
+  if (!ssoEnabled) throw new HttpError(404, 'Single sign-on is not set up.')
+  const cfg = await oidcDiscover()
+  const state = token(), nonce = token(), verifier = token()
+  for (const [k, v] of oidcPending) if (Date.now() - v.at > 10 * 60 * 1000) oidcPending.delete(k)
+  oidcPending.set(state, { nonce, verifier, at: Date.now() })
+  const challenge = createHash('sha256').update(verifier).digest('base64url')
+  const q = new URLSearchParams({ response_type: 'code', client_id: OIDC.client, redirect_uri: oidcRedirect(), scope: 'openid email profile', state, nonce, code_challenge: challenge, code_challenge_method: 'S256' })
+  return { url: `${cfg.authorization_endpoint}?${q}`, state }
+}
+
+async function verifyIdToken(idToken, cfg, nonce) {
+  const [h, p, sig] = String(idToken).split('.')
+  const header = JSON.parse(Buffer.from(h, 'base64url')), claims = JSON.parse(Buffer.from(p, 'base64url'))
+  const { keys = [] } = await (await fetch(cfg.jwks_uri, { signal: AbortSignal.timeout(10000) })).json()
+  const jwk = keys.find(k => k.kid === header.kid) ?? (keys.length === 1 ? keys[0] : null)
+  if (!jwk) throw new HttpError(401, 'Unknown signing key.')
+  const key = createPublicKey({ key: jwk, format: 'jwk' }), data = Buffer.from(`${h}.${p}`), signature = Buffer.from(sig, 'base64url')
+  const ok = header.alg === 'RS256' ? cryptoVerify('RSA-SHA256', data, key, signature)
+    : header.alg === 'ES256' ? cryptoVerify('SHA256', data, { key, dsaEncoding: 'ieee-p1363' }, signature)
+    : false // other algorithms (and "none") are refused
+  const aud = [claims.aud].flat()
+  if (!ok) throw new HttpError(401, 'The sign-in token has a bad signature.')
+  if (claims.iss !== (cfg.issuer ?? OIDC.issuer) || !aud.includes(OIDC.client) || !(claims.exp * 1000 > Date.now()) || claims.nonce !== nonce)
+    throw new HttpError(401, 'The sign-in token is not for this server or has expired.')
+  if (!claims.email || claims.email_verified === false) throw new HttpError(401, 'Your sign-in provider did not confirm an email address.')
+  return claims
+}
+
+export async function oidcCallback({ code, state, cookieState }) {
+  if (!ssoEnabled) throw new HttpError(404, 'Single sign-on is not set up.')
+  const pending = state && state === cookieState ? oidcPending.get(state) : null
+  oidcPending.delete(state)
+  if (!pending) throw new HttpError(400, 'This sign-in link expired. Try again.')
+  const cfg = await oidcDiscover()
+  const res = await fetch(cfg.token_endpoint, { method: 'POST', signal: AbortSignal.timeout(10000), headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code: String(code ?? ''), redirect_uri: oidcRedirect(), client_id: OIDC.client, client_secret: OIDC.secret ?? '', code_verifier: pending.verifier }) })
+  const tok = await res.json()
+  if (!res.ok || !tok.id_token) throw new HttpError(401, 'Your sign-in provider refused the login.')
+  const claims = await verifyIdToken(tok.id_token, cfg, pending.nonce)
+  const email = cleanEmail(claims.email)
+  let user = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+  if (!user) {
+    const ws = process.env.BLOKI_OIDC_WORKSPACE || db.prepare('SELECT id FROM workspaces ORDER BY created LIMIT 1').get()?.id
+    if (process.env.BLOKI_OIDC_AUTO_JOIN !== '1' || !ws) throw new HttpError(403, 'No account uses this email yet. Ask a workspace owner for an invite.')
+    const id = randomUUID()
+    db.prepare('INSERT INTO users (id, email, name, pass, created) VALUES (?, ?, ?, ?, ?)').run(id, email, String(claims.name || email.split('@')[0]).slice(0, 100), hashPassword(token()), Date.now())
+    db.prepare("INSERT INTO members VALUES (?, ?, 'member')").run(ws, id)
+    audit(ws, id, 'member.joined', null, 'via SSO')
+    user = { id }
+  }
+  return user.id
 }
 
 /* ---------- Two-step verification (TOTP, RFC 6238: 6 digits, 30 seconds, SHA-1, as authenticator apps expect) ---------- */
@@ -1544,7 +1610,7 @@ const routes = [
     c.setSession('', 0)
     return { ok: true }
   }, true],
-  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get(), mail: mailEnabled }), true],
+  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get(), mail: mailEnabled, sso: ssoEnabled }), true],
   ['POST', /^\/api\/auth\/forgot$/, async c => forgotPassword((await c.body()).email), true],
   ['POST', /^\/api\/auth\/reset$/, async c => { const b = await c.body(); return resetPassword(b.token, b.password) }, true],
   ['GET', /^\/api\/invites\/([\w-]+)$/, (c, t) => inviteInfo(t), true],
@@ -1671,6 +1737,26 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://x')
   const send = (data, status = 200, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(data)) }
 
+  // Single sign-on: plain browser redirects to the provider and back, outside the JSON API.
+  if (url.pathname === '/api/auth/oidc/start' || url.pathname === '/api/auth/oidc/callback') {
+    try {
+      if (url.pathname.endsWith('/start')) {
+        const { url: to, state } = await oidcStart()
+        res.writeHead(302, { location: to, 'set-cookie': `bloki_oidc=${state}; HttpOnly; SameSite=Lax; Path=/api/auth/oidc; Max-Age=600${SECURE_COOKIE ? '; Secure' : ''}` })
+        return res.end()
+      }
+      const userId = await oidcCallback({ code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieState: readCookie(req, 'bloki_oidc') })
+      const t = startSession(userId)
+      audit(db.prepare('SELECT workspace_id FROM sessions WHERE token_hash = ?').get(sha(t))?.workspace_id, userId, 'user.login', null, 'SSO')
+      res.writeHead(302, { location: '/', 'set-cookie': [cookie('bloki_session', t, SESSION_DAYS * 86400), `bloki_oidc=; Path=/api/auth/oidc; Max-Age=0`] })
+      return res.end()
+    } catch (e) {
+      const msg = e instanceof HttpError ? e.message : 'Single sign-on failed.'
+      if (!(e instanceof HttpError)) console.error('SSO:', e)
+      res.writeHead(302, { location: '/#/sso-error/' + encodeURIComponent(msg) })
+      return res.end()
+    }
+  }
   if (url.pathname.startsWith('/api/')) {
     // Cross-site pages can't set custom headers without a CORS preflight, which this server never allows.
     // API tokens come in the Authorization header, which browsers never add on their own, so they need no CSRF header;

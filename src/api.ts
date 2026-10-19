@@ -174,7 +174,7 @@ export const api = {
   inbox: () => call<{ items: Notice[]; unread: number }>('GET', 'inbox'),
   updateInbox: (b: { ids?: string[]; all?: boolean; read?: boolean; archived?: boolean }) => call<{ items: Notice[]; unread: number }>('PATCH', 'inbox', b),
 
-  status: () => call<{ hasUsers: boolean; mail?: boolean }>('GET', 'auth/status'),
+  status: () => call<{ hasUsers: boolean; mail?: boolean; sso?: boolean }>('GET', 'auth/status'),
   forgotPassword: (email: string) => call('POST', 'auth/forgot', { email }),
   resetPassword: (token: string, password: string) => call('POST', 'auth/reset', { token, password }),
   login: (email: string, password: string, code?: string) => call<{ ok: boolean }>('POST', 'auth/login', { email, password, code }),
