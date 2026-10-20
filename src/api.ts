@@ -27,7 +27,7 @@ export type View = {
   sort?: { prop: string; dir: 'asc' | 'desc' }[]; filters?: Filter[]; hidden?: string[]
   order?: string[]; widths?: Record<string, number>; calcs?: Record<string, string>; wrap?: boolean
   hiddenGroups?: string[]; collapsedGroups?: string[]; cardSize?: 's' | 'm' | 'l'; cardPreview?: 'content' | 'cover' | 'none'
-  open?: 'peek' | 'center' | 'page'; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
+  open?: 'peek' | 'center' | 'page'; limit?: 10 | 25 | 50 | 100; scale?: 'week' | 'month' | 'quarter'; showEmptyGroups?: boolean
   freeze?: string; hideIcon?: boolean; colors?: ColorRule[]
   widgets?: string[]
   chart?: { type: 'bar' | 'hbar' | 'line' | 'donut'; x?: string; y?: string; fn?: 'sum' | 'average'; sort?: 'x' | 'desc' | 'asc'; dateBy?: 'day' | 'week' | 'month' | 'year' }

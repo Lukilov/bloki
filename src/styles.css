@@ -811,6 +811,10 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .open-btn { position: absolute; right: 6px; display: none; align-items: center; gap: 6px; height: 20px; font-size: 12px; font-weight: 500; color: var(--icon); background: var(--card); box-shadow: none; border: none; border-radius: 4px; padding: 0 4px; letter-spacing: 0.5px; }
 .tr:hover .open-btn { display: inline-flex; }
 .new-row { display: flex; align-items: center; gap: 7px; border: none; color: var(--muted); padding: 0 8px; height: 37px; width: 100%; text-align: left; font-size: 14px; border-radius: 0; box-shadow: var(--line) 0 -1px 0 inset; }
+.load-more { display: flex; align-items: center; gap: 7px; border: none; background: none; color: var(--muted); padding: 0 8px; height: 34px; width: 100%; text-align: left; font-size: 14px; border-radius: 4px; }
+.load-more:hover { background: var(--hover); }
+.table-view .load-more { border-radius: 0; height: 37px; box-shadow: var(--line) 0 -1px 0 inset; }
+.gallery .load-more { grid-column: 1 / -1; }
 .calc-row { color: var(--muted); font-size: 12px; }
 .calc-row .row-gutter { position: static; width: 0; opacity: 0; }
 .calc-cell { height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 8px; cursor: pointer; }

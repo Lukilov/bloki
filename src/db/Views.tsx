@@ -37,6 +37,17 @@ function reorder(store: Store, rows: Page[], id: string, beforeId: string | null
 /* ---------- Table ---------- */
 
 /** Background for a Conditional color result (the same tints as block backgrounds). */
+/** Notion's load limit: a view shows the first N pages of each group (10, 25, 50 or 100; 50 by default) and "Load more" adds N more. */
+function useLimit(view: View) {
+  const n = view.limit ?? 50
+  const [extra, setExtra] = useState<Record<string, number>>({})
+  const cap = (key: string, rows: Page[]) => rows.slice(0, n + (extra[key] ?? 0))
+  const more = (key: string, rows: Page[]) => rows.length > n + (extra[key] ?? 0) && (
+    <button className="load-more" onClick={() => setExtra(x => ({ ...x, [key]: (x[key] ?? 0) + n }))}><ArrowDown size={14} /> Load more</button>
+  )
+  return { cap, more }
+}
+
 const tint = (c?: string): React.CSSProperties | undefined => (c ? { background: `var(--c-${c})` } : undefined)
 
 function HeaderMenu({ prop, p, close }: { prop: Prop; p: ViewProps; close: () => void }) {
@@ -250,6 +261,7 @@ export function TableView(p: ViewProps) {
   }
   const width = (id: string) => view.widths?.[id] ?? (id === 'title' ? 280 : 180)
   const stick = frozen(cols, view, width)
+  const limit = useLimit(view)
 
   return (
     <div className="table-view">
@@ -283,7 +295,8 @@ export function TableView(p: ViewProps) {
               </div>
             )}
             {!collapsed.has(g.key) && <>
-              <TableBody p={{ ...p, view: { ...view, widths: Object.fromEntries(cols.map(c => [c.id, width(c.id)])) } }} rows={g.rows} cols={cols} selected={selected} setSelected={setSelected} fresh={fresh} />
+              <TableBody p={{ ...p, view: { ...view, widths: Object.fromEntries(cols.map(c => [c.id, width(c.id)])) } }} rows={limit.cap(g.key, g.rows)} cols={cols} selected={selected} setSelected={setSelected} fresh={fresh} />
+              {limit.more(g.key, g.rows)}
               {p.perm.rows && <button className="new-row" onClick={() => p.addRow(groupProp && g.key !== '*' ? { [groupProp.id]: groupProp.type === 'multi_select' || groupProp.type === 'person' ? (g.key ? [g.key] : []) : groupProp.type === 'checkbox' ? g.key === 'true' : g.key || null } : {}, false).then(r => setFresh(r?.id ?? null))}><Plus size={14} /> New page</button>}
             </>}
           </Fragment>
@@ -343,6 +356,7 @@ export function BoardView(p: ViewProps) {
   const hidden = new Set(view.hiddenGroups ?? [])
   const shown = groups.filter(g => !hidden.has(g.key) && (g.key !== '' || g.rows.length))
   const cardProps = p.props.filter(x => x.id !== group.id)
+  const limit = useLimit(view)
   const valueFor = (key: string) => group.type === 'multi_select' || group.type === 'person' || group.type === 'relation' ? (key ? [key] : []) : group.type === 'checkbox' ? key === 'true' : key || null
 
   const drop = (key: string, e: React.DragEvent, beforeId: string | null) => {
@@ -371,7 +385,8 @@ export function BoardView(p: ViewProps) {
               {p.perm.rows && <button className="ghost" onClick={() => p.addRow({ [group.id]: valueFor(g.key) })}><Plus size={14} /></button>}
             </span>
           </div>
-          {g.rows.map(r => <div key={r.id} onDrop={e => { e.stopPropagation(); drop(g.key, e, r.id) }}><Card row={r} p={{ ...p, props: cardProps }} /></div>)}
+          {limit.cap(g.key, g.rows).map(r => <div key={r.id} onDrop={e => { e.stopPropagation(); drop(g.key, e, r.id) }}><Card row={r} p={{ ...p, props: cardProps }} /></div>)}
+          {limit.more(g.key, g.rows)}
           {p.perm.rows && <button className="new-row" onClick={() => p.addRow({ [group.id]: valueFor(g.key) })}><Plus size={14} /> New page</button>}
         </div>
       ))}
@@ -416,9 +431,10 @@ export function GalleryView(p: ViewProps) {
   const [over, setOver] = useState<string | null>(null)
   // Cards reorder by dragging, unless the view is sorted (then the sort decides the order, as in Notion).
   const sorted = !!p.view.sort?.length
+  const limit = useLimit(p.view)
   return (
     <div className={'gallery size-' + (p.view.cardSize ?? 'm')}>
-      {p.rows.map(r => (
+      {limit.cap('*', p.rows).map(r => (
         <div key={r.id} className={'gallery-slot' + (over === r.id ? ' drop-before' : '')}
           onDragOver={e => { if (!sorted && p.perm.rows && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
           onDragLeave={() => setOver(null)}
@@ -427,6 +443,7 @@ export function GalleryView(p: ViewProps) {
         </div>
       ))}
       {p.perm.rows && <button className="card new-card" onClick={() => p.addRow()}><Plus size={16} /> New page</button>}
+      {limit.more('*', p.rows)}
     </div>
   )
 }
@@ -435,9 +452,10 @@ export function ListView(p: ViewProps) {
   const store = useStore()
   const [over, setOver] = useState<string | null>(null)
   const sorted = !!p.view.sort?.length
+  const limit = useLimit(p.view)
   return (
     <div className="list-view">
-      {p.rows.map(r => (
+      {limit.cap('*', p.rows).map(r => (
         <div key={r.id} className={'list-row' + (over === r.id ? ' drop-above' : '')} style={tint(rowColors(r, p.view.colors, p.db.schema, ctxOf(store), store.me?.user.id).row)} onClick={() => p.openRow(r)} draggable={p.perm.rows} onDragStart={e => e.dataTransfer.setData('text/row', r.id)}
           onDragOver={e => { if (!sorted && p.perm.rows && e.dataTransfer.types.includes('text/row')) { e.preventDefault(); setOver(r.id) } }}
           onDragLeave={() => setOver(null)}
@@ -446,6 +464,7 @@ export function ListView(p: ViewProps) {
           <span className="list-props"><CardProps row={r} props={p.props} db={p.db} /></span>
         </div>
       ))}
+      {limit.more('*', p.rows)}
       {p.perm.rows && <button className="new-row" onClick={() => p.addRow()}><Plus size={14} /> New page</button>}
     </div>
   )

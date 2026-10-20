@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownUp, ArrowUpRight, BarChart3, Calendar, Repeat, LayoutDashboard, Newspaper, ListTree, Waypoints, ClipboardPen, ChevronDown, ChevronsRight, Copy, Eye, EyeOff, Filter as FilterIcon, GanttChart, Group, Kanban, LayoutGrid, Link2, List,
-  Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot,
+  Check, Database as DbIcon, FileText, Lock, Palette, Zap, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Search, Settings2, SquareSplitHorizontal, Table, Trash2, X, PenLine, ChevronUp, CircleCheck, CircleDashed, CircleDot, ListOrdered,
 } from 'lucide-react'
 import { api, can, COLORS, uid, type Automation, type ColorRule, type Filter, type Option, type Page, type Prop, type Schema, type View, type ViewType } from './api'
 import { iconOf, label, useStore } from './store'
@@ -395,6 +395,7 @@ function ViewSettings({ db, view, setView, setSchema, views, close, setViewId, n
       { icon: <LayoutGrid size={15} />, label: 'Card size', hint: { s: 'Small', m: 'Medium', l: 'Large' }[view.cardSize ?? 'm'], onClick: () => setView({ cardSize: view.cardSize === 's' ? 'm' : view.cardSize === 'l' ? 's' : 'l' }) },
     ] as Item[] : []),
     ...(view.type === 'table' ? [{ icon: <Settings2 size={15} />, label: 'Wrap all columns', checked: !!view.wrap, onClick: () => setView({ wrap: !view.wrap }) }] : []),
+    ...(['table', 'board', 'list', 'gallery'].includes(view.type) ? [{ icon: <ListOrdered size={15} />, label: 'Load limit', hint: `${view.limit ?? 50} ›`, submenu: () => <Menu onClose={() => {}} items={([10, 25, 50, 100] as const).map(n => ({ label: String(n), checked: (view.limit ?? 50) === n, onClick: () => setView({ limit: n }) }))} /> }] as Item[] : []),
     { icon: <PanelRight size={15} />, label: 'Open pages in', hint: { peek: 'Side peek', center: 'Center peek', page: 'Full page' }[view.open ?? 'peek'] + ' ›', onClick: () => setPage('open') },
     { divider: true },
     { icon: <Palette size={15} />, label: 'Conditional color', hint: `${view.colors?.length || ''} ›`.trim(), onClick: () => setPage('colors') },
