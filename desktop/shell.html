@@ -46,6 +46,14 @@
   .tab.active { background: var(--page); color: var(--title-active); box-shadow: inset 1px 0 0 var(--line), inset -1px 0 0 var(--line); }
   .tab .icon { width: 16px; height: 16px; margin-right: 8px; flex: none; display: grid; place-items: center; font-size: 14px; line-height: 16px; opacity: 0.75; }
   .tab.active .icon { opacity: 1; }
+  /* Tab groups: Notion-style colours on the label and a line under the group's tabs. */
+  .group-chip { -webkit-app-region: no-drag; flex: none; align-self: center; height: 20px; min-width: 12px; margin: 0 4px 0 8px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 20px; color: #fff; background: var(--gc); cursor: pointer; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .group-chip:empty { padding: 0; width: 12px; min-width: 12px; border-radius: 50%; height: 12px; }
+  .group-chip.collapsed { opacity: 0.8; }
+  .group-chip input { width: 110px; border: none; outline: none; background: transparent; color: inherit; font: inherit; padding: 0; }
+  .tab.grouped::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; border-radius: 2px; background: var(--gc); }
+  .c-gray { --gc: #8f8f8a; } .c-blue { --gc: #2f80ed; } .c-green { --gc: #43a06b; } .c-yellow { --gc: #cb9b2f; }
+  .c-orange { --gc: #d9730d; } .c-red { --gc: #d44c47; } .c-pink { --gc: #c14c8a; } .c-purple { --gc: #9065b0; }
   .tab .icon svg { width: 16px; height: 16px; }
   .tab .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
   .tab.pinned { flex: none; width: 36px; padding: 0; justify-content: center; }
@@ -140,10 +148,51 @@
     document.getElementById('back').disabled = !state.canBack
     document.getElementById('forward').disabled = !state.canForward
     // The strip asks for full-width tabs and shrinks them only when the window is too narrow.
-    tabsEl.style.flexBasis = state.tabs.reduce((w, t) => w + (t.pinned ? 36 : 200), 0) + 'px'
-    tabsEl.replaceChildren(...state.tabs.map((t, i) => {
+    const groups = new Map((state.groups ?? []).map(g => [g.id, g]))
+    const hidden = t => t.group && groups.get(t.group)?.collapsed && t.id !== state.active
+    tabsEl.style.flexBasis = state.tabs.reduce((w, t) => w + (hidden(t) ? 0 : t.pinned ? 36 : 200), 0) + 'px'
+    // Tab groups: a coloured label before each group's first tab; clicking it collapses or expands the group.
+    const chip = g => {
       const el = document.createElement('div')
-      el.className = 'tab' + (t.id === state.active ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.loading ? ' loading' : '')
+      el.className = `group-chip c-${g.color}` + (g.collapsed ? ' collapsed' : '')
+      el.title = (g.name || 'Unnamed group') + (g.collapsed ? ' (collapsed)' : '')
+      if (state.renameGroup === g.id) {
+        const input = Object.assign(document.createElement('input'), { value: g.name, placeholder: 'Name this group', maxLength: 40 })
+        let sent = false
+        const done = () => { if (!sent) { sent = true; send('group-rename', g.id, input.value.trim()) } }
+        input.onkeydown = e => { if (e.key === 'Escape') input.value = g.name; if (e.key === 'Enter' || e.key === 'Escape') done() }
+        input.onblur = done
+        el.append(input)
+        setTimeout(() => { input.focus(); input.select() })
+        state.renameGroup = null
+      } else el.textContent = g.name
+      el.onclick = () => { if (!el.querySelector('input')) send('group-toggle', g.id) }
+      el.oncontextmenu = e => { e.preventDefault(); send('group-menu', g.id) }
+      return el
+    }
+    const seen = new Set()
+    tabsEl.replaceChildren(...state.tabs.flatMap((t, i) => {
+      const before = t.group && groups.has(t.group) && !seen.has(t.group) ? (seen.add(t.group), [chip(groups.get(t.group))]) : []
+      if (hidden(t)) return before
+      return [...before, tabEl(t, i)]
+    }))
+  }
+
+  // A tab dragged out of a tab bar carries its id, so another window's bar can take it.
+  const TAB_TYPE = 'application/x-bloki-tab'
+  tabsEl.ondragover = e => { if (e.dataTransfer.types.includes(TAB_TYPE)) e.preventDefault() }
+  tabsEl.ondrop = e => {
+    if (e.target !== tabsEl) return
+    e.preventDefault()
+    const id = e.dataTransfer.getData(TAB_TYPE)
+    if (id && !dragId) send('adopt', id, state.tabs.length)
+  }
+
+  function tabEl(t, i) {
+    {
+      const el = document.createElement('div')
+      const g = (state.groups ?? []).find(x => x.id === t.group)
+      el.className = 'tab' + (t.id === state.active ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.loading ? ' loading' : '') + (g ? ` grouped c-${g.color}` : '')
       el.role = 'tab'
       el.title = t.title
       el.draggable = true
@@ -170,12 +219,21 @@
       el.onmousedown = e => { if (e.button === 0) send('activate', t.id) }
       el.onauxclick = e => { if (e.button === 1) send('close', t.id) }
       el.oncontextmenu = e => { e.preventDefault(); send('menu', t.id) }
-      el.ondragstart = e => { dragId = t.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move' }
-      el.ondragend = () => { dragId = null; el.classList.remove('dragging') }
-      el.ondragover = e => { if (dragId) e.preventDefault() }
-      el.ondrop = e => { e.preventDefault(); if (dragId && dragId !== t.id) send('move', dragId, i) }
+      el.ondragstart = e => { dragId = t.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData(TAB_TYPE, t.id) }
+      el.ondragend = e => {
+        dragId = null; el.classList.remove('dragging')
+        // Dropped outside every window: tear the tab off into a window of its own, as browsers do.
+        const outside = e.screenX < screenX || e.screenX > screenX + outerWidth || e.screenY < screenY || e.screenY > screenY + outerHeight
+        if (e.dataTransfer.dropEffect === 'none' && outside && state.tabs.length > 1) send('tearoff', t.id, [e.screenX, e.screenY])
+      }
+      el.ondragover = e => { if (e.dataTransfer.types.includes(TAB_TYPE)) e.preventDefault() }
+      el.ondrop = e => {
+        e.preventDefault(); e.stopPropagation()
+        if (dragId && dragId !== t.id) send('move', dragId, i)
+        else if (!dragId) { const id = e.dataTransfer.getData(TAB_TYPE); if (id) send('adopt', id, i) }
+      }
       return el
-    }))
+    }
   }
 
   window.blokiShell.onState(s => {

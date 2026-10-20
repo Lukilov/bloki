@@ -77,7 +77,8 @@ function sendState(w, extra = {}) {
   const t = w.state.tabs.find(x => x.id === w.state.active)
   w.win.webContents.send('bloki:state', {
     platform: process.platform, theme, fullscreen: w.win.isFullScreen(),
-    tabs: w.state.tabs.map(x => ({ id: x.id, title: x.title, pinned: x.pinned, loading: x.loading })),
+    tabs: w.state.tabs.map(x => ({ id: x.id, title: x.title, pinned: x.pinned, loading: x.loading, group: x.group ?? null })),
+    groups: w.state.groups ?? [],
     active: w.state.active, ready: !!t?.ready,
     canBack: !!v?.webContents.navigationHistory.canGoBack(), canForward: !!v?.webContents.navigationHistory.canGoForward(),
     chrome: chromeOf.get(w.state.active) ?? null,
@@ -102,7 +103,11 @@ function layout(w) {
 }
 
 function activate(w, id) {
-  if (!w.state.tabs.some(t => t.id === id)) return
+  const tab = w.state.tabs.find(t => t.id === id)
+  if (!tab) return
+  // Showing a tab opens its group if it was collapsed, as in Chrome.
+  const g = w.state.groups?.find(x => x.id === tab.group)
+  if (g) g.collapsed = false
   w.state.active = id
   layout(w)
   if (w.win.isFocused()) views.get(id).webContents.focus()
@@ -116,9 +121,9 @@ function markReady(t) {
 }
 
 /** A new tab: either a fresh view loading `url`, or an existing view moved here (`view`). */
-function openTab(w, { url, pinned = false, view, title = 'Bloki', ready = false } = {}, opts) {
+function openTab(w, { url, pinned = false, view, title = 'Bloki', ready = false, group } = {}, opts) {
   const id = String(nextTabId++)
-  const t = { id, title, pinned, ready, loading: false }
+  const t = { id, title, pinned, ready, loading: false, ...(group && w.state.groups?.some(g => g.id === group) ? { group } : {}) }
   if (!view) {
     view = new WebContentsView({ webPreferences: secure('preload.cjs') })
     view.setBackgroundColor(pageColor())
@@ -146,6 +151,7 @@ function closeTab(w, id, { remember = true } = {}) {
   if (w.win.contentView.children.includes(v)) w.win.contentView.removeChildView(v)
   views.delete(id)
   v.webContents.close()
+  tabs.prune(w.state)
   if (!w.state.tabs.length) { saveSession(); w.win.close() }
   else activate(w, w.state.active)
 }
@@ -163,16 +169,54 @@ function reopenClosedTab() {
   }
 }
 
-function moveTabToNewWindow(w, id) {
-  if (w.state.tabs.length < 2) return
+/** Takes a tab (and its page, still loaded) out of its window; the window closes if that was its last tab. */
+function detachTab(w, id) {
   const v = views.get(id)
-  const { tab } = tabs.remove(w.state, id)
+  const removed = tabs.remove(w.state, id)
+  if (!removed) return null
   views.delete(id)
+  chromeOf.delete(id)
   if (w.win.contentView.children.includes(v)) w.win.contentView.removeChildView(v)
-  activate(w, w.state.active)
+  tabs.prune(w.state)
+  if (!w.state.tabs.length) w.win.close()
+  else activate(w, w.state.active)
+  return { view: v, title: removed.tab.title, pinned: removed.tab.pinned, ready: true }
+}
+
+function moveTabToNewWindow(w, id, at) {
+  if (w.state.tabs.length < 2) return
   const [x, y] = w.win.getPosition()
   const [width, height] = w.win.getSize()
-  createWindow({ bounds: { x: x + 30, y: y + 30, width, height }, tabs: [{ view: v, title: tab.title, pinned: tab.pinned, ready: true }] })
+  const item = detachTab(w, id)
+  // Torn off by dragging: the new window opens under the pointer.
+  createWindow({ bounds: { x: at ? Math.round(at[0] - 100) : x + 30, y: at ? Math.round(at[1] - 18) : y + 30, width, height }, tabs: [item] })
+}
+
+/** A tab dragged from another window's tab bar lands here at `index`. */
+function adoptTab(to, id, index) {
+  const from = [...windows.values()].find(x => x.state.tabs.some(t => t.id === id))
+  if (!from) return
+  if (from === to) { tabs.move(to.state, id, index); layout(to); return }
+  const item = detachTab(from, id)
+  const t = openTab(to, item)
+  tabs.move(to.state, t.id, index)
+  activate(to, t.id)
+  to.win.focus()
+}
+
+function groupMenu(w, gid) {
+  const g = w.state.groups?.find(x => x.id === gid)
+  if (!g) return
+  const members = w.state.tabs.filter(t => t.group === gid).map(t => t.id)
+  Menu.buildFromTemplate([
+    { label: 'Rename Group…', click: () => sendState(w, { renameGroup: gid }) },
+    { label: 'Color', submenu: tabs.GROUP_COLORS.map(c => ({ label: c[0].toUpperCase() + c.slice(1), type: 'radio', checked: g.color === c, click: () => { g.color = c; layout(w); saveSessionSoon() } })) },
+    { label: g.collapsed ? 'Expand Group' : 'Collapse Group', click: () => { g.collapsed = !g.collapsed; layout(w) } },
+    { type: 'separator' },
+    { label: 'New Tab in Group', click: () => { const t = openTab(w, {}, { after: members.at(-1) }); tabs.group(w.state, t.id, gid); layout(w) } },
+    { label: 'Ungroup', click: () => { for (const id of members) tabs.ungroup(w.state, id); layout(w); saveSessionSoon() } },
+    { label: 'Close Group', click: () => { for (const id of members) closeTab(w, id) } },
+  ]).popup({ window: w.win })
 }
 
 function closeTabs(w, id, which) {
@@ -188,6 +232,10 @@ function tabMenu(w, id) {
     { label: 'Duplicate Tab', click: () => openTab(w, { url: views.get(id).webContents.getURL(), pinned: t.pinned }, { after: id }) },
     { label: t.pinned ? 'Unpin Tab' : 'Pin Tab', click: () => { tabs.setPinned(w.state, id, !t.pinned); layout(w) } },
     { label: 'Move Tab to New Window', enabled: w.state.tabs.length > 1, click: () => moveTabToNewWindow(w, id) },
+    { type: 'separator' },
+    { label: 'Add Tab to New Group', enabled: !t.pinned, click: () => { const g = tabs.group(w.state, id, null); layout(w); if (g) sendState(w, { renameGroup: g.id }); saveSessionSoon() } },
+    ...((w.state.groups ?? []).filter(g => g.id !== t.group).length && !t.pinned ? [{ label: 'Add Tab to Group', submenu: w.state.groups.filter(g => g.id !== t.group).map(g => ({ label: g.name || `Unnamed group (${g.color})`, click: () => { tabs.group(w.state, id, g.id); layout(w); saveSessionSoon() } })) }] : []),
+    ...(t.group ? [{ label: 'Remove from Group', click: () => { tabs.ungroup(w.state, id); layout(w); saveSessionSoon() } }] : []),
     { type: 'separator' },
     { label: 'Close Tab', click: () => closeTab(w, id) },
     { label: 'Close Other Tabs', enabled: tabs.closable(w.state, id, 'others').length > 0, click: () => closeTabs(w, id, 'others') },
@@ -240,7 +288,7 @@ function wireTab(wc) {
   })
 }
 
-function createWindow({ bounds, tabs: list = [{}], active = 0, snapshot } = {}) {
+function createWindow({ bounds, tabs: list = [{}], active = 0, snapshot, groups = [] } = {}) {
   const win = new BrowserWindow({
     ...(bounds ?? config.bounds ?? { width: 1280, height: 820 }),
     minWidth: 600,
@@ -253,7 +301,7 @@ function createWindow({ bounds, tabs: list = [{}], active = 0, snapshot } = {}) 
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: secure('shell-preload.cjs'),
   })
-  const w = { win, state: { tabs: [], active: null } }
+  const w = { win, state: { tabs: [], active: null, groups: groups.map(g => ({ ...g })) } }
   windows.set(win.id, w)
   lastFocused = w
 
@@ -265,6 +313,7 @@ function createWindow({ bounds, tabs: list = [{}], active = 0, snapshot } = {}) 
   win.once('ready-to-show', () => win.show())
 
   for (const [i, item] of list.entries()) openTab(w, item, { activate: i === active })
+  tabs.prune(w.state)
   for (const ev of ['resize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, () => layout(w))
   win.on('focus', () => { lastFocused = w; activeView(w)?.webContents.focus() })
   // Back/forward mouse buttons and swipes, as in Notion.
@@ -305,7 +354,8 @@ function saveSession() {
   config.session = keepSession ? {
     windows: order.map(w => ({
       bounds: w.win.getNormalBounds(),
-      tabs: w.state.tabs.map(t => ({ url: views.get(t.id).webContents.getURL(), pinned: t.pinned })),
+      tabs: w.state.tabs.map(t => ({ url: views.get(t.id).webContents.getURL(), pinned: t.pinned, ...(t.group ? { group: t.group } : {}) })),
+      groups: w.state.groups ?? [],
       active: w.state.tabs.findIndex(t => t.id === w.state.active),
     })),
   } : null
@@ -504,6 +554,11 @@ function onShell(e, cmd, id, arg) {
   else if (cmd === 'close') closeTab(w, id)
   else if (cmd === 'new') openTab(w)
   else if (cmd === 'move' && arg != null) { tabs.move(w.state, id, arg); layout(w) }
+  else if (cmd === 'adopt' && arg != null) adoptTab(w, String(id), Number(arg))
+  else if (cmd === 'tearoff') moveTabToNewWindow(w, id, Array.isArray(arg) ? arg.map(Number) : undefined)
+  else if (cmd === 'group-toggle') { const g = w.state.groups?.find(x => x.id === id); if (g) { g.collapsed = !g.collapsed; layout(w) } }
+  else if (cmd === 'group-menu') groupMenu(w, id)
+  else if (cmd === 'group-rename') { const g = w.state.groups?.find(x => x.id === id); if (g) { g.name = String(arg ?? '').slice(0, 40); layout(w); saveSessionSoon() } }
   else if (cmd === 'menu') tabMenu(w, id)
   else if (cmd === 'back') h?.goBack()
   else if (cmd === 'forward') h?.goForward()

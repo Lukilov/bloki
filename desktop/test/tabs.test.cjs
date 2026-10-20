@@ -52,7 +52,27 @@ test('restoring saved tabs', () => {
     { bounds: { x: 1 }, tabs: [{ url: 'https://s.io/#/a', pinned: true }, { url: 'https://evil.io/#/a' }, { url: 'https://s.io.evil.io/' }, { url: 'file:///etc/passwd' }], active: 3 },
     { tabs: [{ url: 'https://other.io/' }] },
   ] }
-  assert.deepEqual(tabs.restorable(session, server), [{ bounds: { x: 1 }, tabs: [{ url: 'https://s.io/#/a', pinned: true }], active: 0 }])
+  assert.deepEqual(tabs.restorable(session, server), [{ bounds: { x: 1 }, tabs: [{ url: 'https://s.io/#/a', pinned: true }], groups: [], active: 0 }])
+  // Groups come back with their tabs; a tab pointing at a group that wasn't saved loses it.
+  const grouped = { windows: [{ tabs: [{ url: 'https://s.io/#/b', group: 'g1' }, { url: 'https://s.io/#/c', group: 'gone' }], groups: [{ id: 'g1', name: 'Work', color: 'blue', collapsed: true }, { id: 'g2', color: '<script>' }] }] }
+  assert.deepEqual(tabs.restorable(grouped, server)[0], { bounds: undefined, tabs: [{ url: 'https://s.io/#/b', pinned: false, group: 'g1' }, { url: 'https://s.io/#/c', pinned: false }], groups: [{ id: 'g1', name: 'Work', color: 'blue', collapsed: true }, { id: 'g2', name: '', color: 'gray', collapsed: false }], active: 0 })
   assert.deepEqual(tabs.restorable(null, server), [])
   assert.deepEqual(tabs.restorable(session, null), [])
+})
+
+test('tab groups keep their tabs together, and empty groups go away', () => {
+  const s = { tabs: [], active: null }
+  for (const id of ['a', 'b', 'c', 'd']) tabs.add(s, { id, pinned: false })
+  const g = tabs.group(s, 'a', null, 'Work')
+  assert.equal(g.name, 'Work')
+  tabs.group(s, 'd', g.id) // d jumps next to a
+  assert.deepEqual(s.tabs.map(t => t.id + (t.group ? '*' : '')), ['a*', 'd*', 'b', 'c'])
+  tabs.group(s, 'c', g.id)
+  assert.deepEqual(s.tabs.map(t => t.id), ['a', 'd', 'c', 'b'])
+  tabs.ungroup(s, 'a') // leaves at the group's end
+  assert.deepEqual(s.tabs.map(t => t.id + (t.group ? '*' : '')), ['d*', 'c*', 'a', 'b'])
+  tabs.ungroup(s, 'd'); tabs.ungroup(s, 'c')
+  assert.equal(s.groups.length, 0)
+  tabs.setPinned(s, 'b', true)
+  assert.equal(tabs.group(s, 'b', null), null) // pinned tabs don't group
 })

@@ -59,9 +59,40 @@ function restorable(session, server) {
   if (!server || !Array.isArray(session?.windows)) return []
   const ours = url => typeof url === 'string' && (url === server || url.startsWith(server + '/'))
   return session.windows.map(w => {
-    const tabs = (Array.isArray(w?.tabs) ? w.tabs : []).filter(t => ours(t?.url)).map(t => ({ url: t.url, pinned: !!t.pinned }))
-    return { bounds: w.bounds, tabs, active: Math.min(Math.max(0, Number(w.active) || 0), Math.max(0, tabs.length - 1)) }
+    const groups = (Array.isArray(w?.groups) ? w.groups : []).filter(g => typeof g?.id === 'string').map(g => ({ id: g.id, name: String(g.name ?? '').slice(0, 40), color: GROUP_COLORS.includes(g.color) ? g.color : 'gray', collapsed: !!g.collapsed }))
+    const tabs = (Array.isArray(w?.tabs) ? w.tabs : []).filter(t => ours(t?.url)).map(t => ({ url: t.url, pinned: !!t.pinned, ...(groups.some(g => g.id === t.group) ? { group: t.group } : {}) }))
+    return { bounds: w.bounds, tabs, groups, active: Math.min(Math.max(0, Number(w.active) || 0), Math.max(0, tabs.length - 1)) }
   }).filter(w => w.tabs.length)
 }
 
-module.exports = { add, remove, move, setPinned, closable, nth, step, restorable }
+/* Tab groups: { id, name, color, collapsed } in s.groups; a tab's `group` names one. A group's tabs stay side by side. */
+const GROUP_COLORS = ['gray', 'blue', 'green', 'yellow', 'orange', 'red', 'pink', 'purple']
+
+/** Put a tab in a group (a new one when `gid` is null), right after the group's other tabs. Pinned tabs don't group. */
+function group(s, id, gid = null, name = '') {
+  const tab = s.tabs[indexOf(s, id)]
+  if (!tab || tab.pinned) return null
+  s.groups ??= []
+  let g = s.groups.find(x => x.id === gid)
+  if (!g) { g = { id: gid ?? 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, color: GROUP_COLORS[s.groups.length % GROUP_COLORS.length], collapsed: false }; s.groups.push(g) }
+  const last = s.tabs.reduce((at, t, i) => (t.group === g.id && t.id !== id ? i : at), -1)
+  tab.group = g.id
+  if (last >= 0) move(s, id, last + (indexOf(s, id) > last ? 1 : 0))
+  return g
+}
+
+/** Take a tab out of its group (moving it to the group's end); a group left empty disappears. */
+function ungroup(s, id) {
+  const tab = s.tabs[indexOf(s, id)]
+  if (!tab?.group) return
+  const gid = tab.group
+  const last = s.tabs.reduce((at, t, i) => (t.group === gid ? i : at), -1)
+  delete tab.group
+  move(s, id, last)
+  prune(s)
+}
+
+/** Groups with no tabs left are dropped. */
+function prune(s) { s.groups = (s.groups ?? []).filter(g => s.tabs.some(t => t.group === g.id)) }
+
+module.exports = { add, remove, move, setPinned, closable, nth, step, restorable, group, ungroup, prune, GROUP_COLORS }

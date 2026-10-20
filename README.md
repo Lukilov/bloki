@@ -120,8 +120,8 @@ No AI or map view. On phones Bloki installs as an app from the browser (Add to H
 - **Open at Login** in the app menu (installed app only).
 - ⌘L copies the link to the current page, ⌘⌥L a link titled with the page name; ⌘R reloads, ⌘, opens Settings.
 - Back/forward (also mouse buttons and swipes), new windows, spell check, `bloki://<page id>` links, the tab bar follows the page's light/dark theme.
-
-Not yet as in Notion: tab groups / Tab Spaces, dragging a tab into another window.
+- **Tab groups**: right-click a tab → Add Tab to New Group; name and colour it, click the label to collapse it. Groups come back after a restart.
+- **Drag tabs between windows**: drop a tab on another window's tab bar, or outside every window to give it a window of its own; the page stays loaded.
 On first launch it asks for the server address (it must be `https://`, except `localhost` on the same computer);
 change it later from the workspace menu or the app menu. Nothing of the server runs inside the app.
 
