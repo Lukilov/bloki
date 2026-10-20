@@ -6,6 +6,10 @@ import { useStore } from './store'
 import { copyText, Menu, Popover, timeAgo, usePopover } from './ui'
 import { pageUrl } from './pageActions'
 
+// Notion: "Just now", "5m", "3h", then the date ("Oct 15").
+const commentTime = (t: number) => Date.now() - t < 864e5 ? timeAgo(t).replace(/ ago$/, '')
+  : new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(new Date(t).getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) })
+
 export type Thread = { root: Comment; replies: Comment[] }
 export const threads = (all: Comment[]): Thread[] =>
   all.filter(c => !c.thread_id).map(root => ({ root, replies: all.filter(c => c.thread_id === root.id) }))
@@ -83,7 +87,7 @@ function CommentRow({ c, page, isRoot, setAll, quote }: { c: Comment; page: Page
       <div className="comment-head">
         <Avatar name={c.name} size={24} />
         <b>{c.name}</b>
-        <span className="muted small">{timeAgo(c.created).replace(/ ago$/, '')}</span>
+        <span className="muted small">{commentTime(c.created)}</span>
         <span className="comment-actions">
           {can(page, 'comment') && <button className="ghost" title="Add reaction" onClick={e => openReact(e.currentTarget)}><SmilePlus size={14} /></button>}
           {isRoot && can(page, 'comment') && (
