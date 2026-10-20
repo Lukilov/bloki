@@ -711,7 +711,7 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
           <SideMenuController sideMenu={props => <SideMenu {...props} dragHandleMenu={BlockMenu} />} />
           <FormattingToolbarController formattingToolbar={Toolbar} floatingUIOptions={{ useFloatingOptions: { placement: 'bottom-start' } }} />
           {/* data-suggest lets CSS give the @ / [[ menu Notion's denser mention layout. */}
-          <SuggestionMenuController triggerCharacter="/" getItems={async q => { document.documentElement.dataset.suggest = 'slash'; return filterSuggestionItems(slashItems(editor), q) }} />
+          <SuggestionMenuController triggerCharacter="/" getItems={async q => { document.documentElement.dataset.suggest = 'slash'; document.documentElement.toggleAttribute('data-slash-empty', !q); return filterSuggestionItems(slashItems(editor), q) }} />
           <SuggestionMenuController triggerCharacter="@" getItems={async q => { document.documentElement.dataset.suggest = 'mention'; return mentionItems(q) }} />
           <SuggestionMenuController triggerCharacter="[[" getItems={async q => { document.documentElement.dataset.suggest = 'mention'; return mentionItems(q, true) }} />
         </BlockNoteView>

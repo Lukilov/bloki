@@ -573,7 +573,15 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .bn-container .bn-suggestion-menu, .bn-container .bn-menu-dropdown, .bn-container .bn-toolbar {
   background: var(--card) !important; border: none !important; box-shadow: var(--shadow) !important; border-radius: 10px !important;
 }
-.bn-container .bn-suggestion-menu { width: 324px; max-height: 406px; padding: 4px 0 !important; animation: pop-in 200ms ease; transform-origin: top left; }
+.bn-container .bn-suggestion-menu { width: 324px; max-height: 40vh !important; padding: 4px 0 0 !important; animation: pop-in 200ms ease; transform-origin: top left; }
+/* As in Notion: at most 40% of the window tall, "Close menu esc" pinned at the bottom, "Type to search" after a bare slash. */
+[data-suggest='slash'] .bn-container .bn-suggestion-menu::after {
+  content: 'Close menu'; position: sticky; bottom: 0; flex: none; display: flex; align-items: center; height: 40px; margin-top: 4px; padding: 0 12px;
+  background: var(--card) linear-gradient(var(--line), var(--line)) top / 100% 1px no-repeat; color: var(--text); font-size: 14px;
+}
+[data-suggest='slash'] .bn-container .bn-suggestion-menu::before { content: 'esc'; position: sticky; order: 1; bottom: 20px; align-self: flex-end; height: 0; margin-right: 12px; z-index: 1; color: var(--muted); font-size: 12px; line-height: 0; }
+[data-slash-empty] .bn-suggestion-decorator::after { content: 'Type to search'; color: var(--faint); }
+.bn-container .bn-inline-content::before { font-style: normal !important; }
 .bn-container .bn-suggestion-menu-label { font-size: 12px !important; font-weight: 500 !important; line-height: 14px !important; color: var(--label) !important; padding: 6px 12px 10px !important; margin: 0 !important; }
 .bn-container .bn-suggestion-menu-item + .bn-suggestion-menu-label { margin-top: 15px !important; }
 .bn-container .bn-suggestion-menu-item { width: auto !important; min-height: 32px !important; height: auto !important; padding: 0 8px !important; margin: 0 4px 1px !important; border-radius: 6px !important; gap: 8px !important; flex-wrap: nowrap !important; transition: background 20ms ease-in; }
