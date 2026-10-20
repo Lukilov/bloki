@@ -1007,13 +1007,18 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 
 /* Settings measured on Notion: a near-full-window card, a 224px menu of 28px rows under 12px group labels,
    48px content padding, medium-weight setting names with 13px descriptions, 28px controls. */
-.dialog.settings { width: min(865px, calc(100vw - 96px)); height: min(914px, calc(100vh - 100px)); background: var(--peek-bg); border-radius: 12px; }
-.settings-tabs { width: 240px; padding: 48px 8px 8px; gap: 2px; background: transparent; }
-.settings-tabs button { height: 28px; padding: 4px 6px; gap: 6px; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.dialog.settings { width: 90vw; height: calc(100vh - 100px); background: var(--bg); border-radius: 12px; overflow: hidden; }
+.settings-tabs { width: 240px; padding: 8px; gap: 2px; background: var(--side); }
+.settings-search { flex: none; height: 28px; margin-bottom: 4px; padding: 0 8px 0 28px; border-radius: 6px; font-size: 14px; background: var(--input-bg, var(--hover)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23999' stroke-width='1.6' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") 7px center / 14px no-repeat; }
+.settings-tabs.searching .menu-heading { display: none; }
+.settings-search + .menu-heading { margin-top: 0 !important; }
+.settings-tabs button { height: 28px; padding: 4px 8px; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.settings-tabs button > svg, .settings-tabs button > .avatar { width: 20px; min-width: 20px; }
 .settings-tabs button.active { background: var(--hover); color: var(--text); }
 .settings-tabs .menu-heading { height: 28px; padding: 6px 8px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--muted); }
 .settings-tabs .menu-heading:not(:first-child) { margin-top: 10px; }
 .settings-body { padding: 36px 48px; }
+.settings-body > * { max-width: 800px; margin-left: auto !important; margin-right: auto !important; }
 .set-row > div:first-child > div:first-child { font-weight: 500; }
 .set-row .muted.small { font-size: 13px; line-height: 18px; color: var(--icon); }
 .set-control button { height: 28px; padding: 0 8px; }
@@ -1294,7 +1299,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 @media (max-width: 760px) {
   .dialog.settings { width: 100vw; height: 100dvh; max-width: none; border-radius: 0; flex-direction: column; }
   .settings-tabs { width: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 48px 8px 8px; gap: 4px; box-shadow: var(--line) 0 -1px 0 inset; flex-shrink: 0; }
-  .settings-tabs .menu-heading { display: none; }
+  .settings-tabs .menu-heading, .settings-search { display: none; }
   .settings-tabs button { flex: none; white-space: nowrap; width: auto; }
   .settings-body { padding: 20px 16px 40px; }
   .set-row { flex-direction: column; align-items: flex-start; gap: 8px; }

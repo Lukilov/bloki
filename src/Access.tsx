@@ -259,6 +259,18 @@ export function WorkspaceMenu({ openSettings }: { openSettings: (tab?: string) =
 /* ---------- Settings & members ---------- */
 
 type Tab = 'account' | 'settings' | 'notifications' | 'workspace' | 'people' | 'import' | 'connections' | 'audit' | 'public' | 'offline'
+const SETTING_WORDS: Record<Tab, string> = {
+  account: 'account profile name photo email password 2-step verification two-factor log out devices',
+  settings: 'preferences appearance theme dark light language start week monday',
+  notifications: 'notifications email mentions reminders',
+  workspace: 'general workspace name icon export delete danger',
+  people: 'people members guests invite groups roles',
+  import: 'import notion trello asana evernote confluence csv markdown html',
+  connections: 'connections api tokens webhooks scim web clipper integrations',
+  audit: 'audit log security events',
+  public: 'public pages sites publish domain',
+  offline: 'offline downloads',
+}
 
 /** The web clipper's landing page: what the bookmarklet sent, saved as a private page only when you say so. */
 export function ClipScreen({ clip }: { clip: { u?: string; t?: string; s?: string } }) {
@@ -530,13 +542,18 @@ export function SettingsDialog({ close, initialTab = 'account' }: { close: () =>
   const done = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 2500) }
   const savePrefs = (p: object) => run(async () => { await api.updateMe({ prefs: { ...prefs, ...p } }); await store.reloadMe() })
   const theme_ = (t: string) => { setThemeState(t); try { localStorage.setItem('theme', t) } catch { /* private mode */ } dispatchEvent(new CustomEvent('bloki:theme')) }
-  const nav = (t: Tab, label: string, icon: React.ReactNode) => <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{icon}{label}</button>
+  // Search settings, as in Notion: narrows the menu to the pages whose name or settings match.
+  const [find, setFind] = useState('')
+  const nav = (t: Tab, label: string, icon: React.ReactNode) => (label + ' ' + SETTING_WORDS[t]).toLowerCase().includes(find.trim().toLowerCase())
+    ? <button className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{icon}{label}</button> : null
   const shownPeople = people.filter(p => (peopleTab === 'guests' ? p.role === 'guest' : p.role !== 'guest') && (p.name + ' ' + (p.email ?? '')).toLowerCase().includes(q.toLowerCase()))
 
   return (
     <div className="overlay" onClick={close}>
       <div className="dialog settings" onClick={e => e.stopPropagation()}>
-        <nav className="settings-tabs">
+        <nav className={'settings-tabs' + (find.trim() ? ' searching' : '')}>
+          <input className="settings-search" placeholder="Search settings" value={find} onChange={e => setFind(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget.parentElement?.querySelector('button') as HTMLButtonElement | null)?.click() }} />
           {/* Notion's settings navigation: the account row, then Preferences, Notifications; Workspace; Features. */}
           <div className="menu-heading">Account</div>
           {nav('account', me.user.name, <span className="avatar small">{me.user.name[0]}</span>)}
