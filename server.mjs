@@ -8,6 +8,7 @@ import { WebSocketServer } from 'ws'
 import { createCollab } from './collab.mjs'
 import { mailer } from './mail.mjs'
 import { createScim } from './scim.mjs'
+import { SAML, ValidateInResponseTo } from '@node-saml/node-saml'
 
 const ROOT = import.meta.dirname
 const DATA = process.env.BLOKI_DATA || join(ROOT, 'data')
@@ -441,6 +442,7 @@ export function resetPassword(t, password) {
 
 const OIDC = { issuer: (process.env.BLOKI_OIDC_ISSUER ?? '').replace(/\/+$/, ''), client: process.env.BLOKI_OIDC_CLIENT_ID, secret: process.env.BLOKI_OIDC_CLIENT_SECRET }
 export const ssoEnabled = !!(OIDC.issuer && OIDC.client && APP_URL)
+const ssoKind = () => (ssoEnabled ? 'oidc' : samlEnabled ? 'saml' : false)
 const oidcRedirect = () => `${APP_URL}/api/auth/oidc/callback`
 let oidcConfig = null
 const oidcDiscover = async () => (oidcConfig ??= await (await fetch(`${OIDC.issuer}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(10000) })).json())
@@ -486,18 +488,62 @@ export async function oidcCallback({ code, state, cookieState }) {
   const tok = await res.json()
   if (!res.ok || !tok.id_token) throw new HttpError(401, 'Your sign-in provider refused the login.')
   const claims = await verifyIdToken(tok.id_token, cfg, pending.nonce)
-  const email = cleanEmail(claims.email)
+  return ssoUser(claims.email, claims.name)
+}
+
+/** The account a provider-confirmed email signs in to; a new email joins only with BLOKI_SSO_AUTO_JOIN=1. */
+function ssoUser(rawEmail, name) {
+  const email = cleanEmail(rawEmail)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(401, 'Your sign-in provider did not send an email address.')
   let user = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
   if (!user) {
-    const ws = process.env.BLOKI_OIDC_WORKSPACE || db.prepare('SELECT id FROM workspaces ORDER BY created LIMIT 1').get()?.id
-    if (process.env.BLOKI_OIDC_AUTO_JOIN !== '1' || !ws) throw new HttpError(403, 'No account uses this email yet. Ask a workspace owner for an invite.')
+    const env = k => process.env[`BLOKI_SSO_${k}`] ?? process.env[`BLOKI_OIDC_${k}`]
+    const ws = env('WORKSPACE') || db.prepare('SELECT id FROM workspaces ORDER BY created LIMIT 1').get()?.id
+    if (env('AUTO_JOIN') !== '1' || !ws) throw new HttpError(403, 'No account uses this email yet. Ask a workspace owner for an invite.')
     const id = randomUUID()
-    db.prepare('INSERT INTO users (id, email, name, pass, created) VALUES (?, ?, ?, ?, ?)').run(id, email, String(claims.name || email.split('@')[0]).slice(0, 100), hashPassword(token()), Date.now())
+    db.prepare('INSERT INTO users (id, email, name, pass, created) VALUES (?, ?, ?, ?, ?)').run(id, email, String(name || email.split('@')[0]).slice(0, 100), hashPassword(token()), Date.now())
     db.prepare("INSERT INTO members VALUES (?, ?, 'member')").run(ws, id)
     audit(ws, id, 'member.joined', null, 'via SSO')
     user = { id }
   }
   return user.id
+}
+
+/* ---------- Single sign-on (SAML 2.0) ---------- */
+// BLOKI_SAML_ENTRY_POINT (the provider's sign-in URL) and BLOKI_SAML_CERT (its signing certificate, PEM text or a file path)
+// turn it on; Bloki's entity ID is BLOKI_SAML_ISSUER or BLOKI_URL. The provider gets Bloki's metadata from /api/auth/saml/metadata.
+// Signatures, audience, time and InResponseTo are checked by node-saml (XML signature checking is not something to write by hand).
+
+const samlCert = () => { const c = process.env.BLOKI_SAML_CERT ?? ''; return c.includes('BEGIN CERTIFICATE') || !c ? c : readFileSync(c, 'utf8') }
+export const samlEnabled = !!(process.env.BLOKI_SAML_ENTRY_POINT && process.env.BLOKI_SAML_CERT && APP_URL)
+let samlClient = null
+const saml = () => (samlClient ??= new SAML({
+  entryPoint: process.env.BLOKI_SAML_ENTRY_POINT, idpCert: samlCert(),
+  issuer: process.env.BLOKI_SAML_ISSUER || APP_URL, audience: process.env.BLOKI_SAML_ISSUER || APP_URL,
+  callbackUrl: `${APP_URL}/api/auth/saml/callback`,
+  identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+  // Only answers to a login Bloki started (no unsolicited responses), each once; both the response and the assertion signed
+  // unless the provider signs only one (BLOKI_SAML_SIGNED=assertion|response).
+  validateInResponseTo: ValidateInResponseTo.always, requestIdExpirationPeriodMs: 10 * 60 * 1000,
+  wantAuthnResponseSigned: process.env.BLOKI_SAML_SIGNED !== 'assertion', wantAssertionsSigned: process.env.BLOKI_SAML_SIGNED !== 'response',
+  acceptedClockSkewMs: 60000,
+}))
+
+export async function samlStart() {
+  if (!samlEnabled) throw new HttpError(404, 'Single sign-on is not set up.')
+  return saml().getAuthorizeUrlAsync('', undefined, {})
+}
+export const samlMetadata = () => saml().generateServiceProviderMetadata(null, null)
+
+export async function samlCallback(body) {
+  if (!samlEnabled) throw new HttpError(404, 'Single sign-on is not set up.')
+  let profile
+  try { ({ profile } = await saml().validatePostResponseAsync({ SAMLResponse: String(body.SAMLResponse ?? '') })) }
+  catch (e) { console.error('SAML:', e.message); throw new HttpError(401, 'Your sign-in provider’s answer could not be verified.') }
+  const a = k => profile?.[k] ?? profile?.attributes?.[k]
+  const email = a('email') ?? a('mail') ?? a('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress') ?? (String(profile?.nameID).includes('@') ? profile.nameID : '')
+  const name = a('displayName') ?? a('http://schemas.microsoft.com/identity/claims/displayname') ?? [a('firstName') ?? a('givenName'), a('lastName') ?? a('sn')].filter(Boolean).join(' ')
+  return ssoUser([email].flat()[0], [name].flat()[0])
 }
 
 /* ---------- Two-step verification (TOTP, RFC 6238: 6 digits, 30 seconds, SHA-1, as authenticator apps expect) ---------- */
@@ -1626,7 +1672,7 @@ const routes = [
     c.setSession('', 0)
     return { ok: true }
   }, true],
-  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get(), mail: mailEnabled, sso: ssoEnabled }), true],
+  ['GET', /^\/api\/auth\/status$/, () => ({ hasUsers: !!db.prepare('SELECT 1 FROM users LIMIT 1').get(), mail: mailEnabled, sso: ssoKind() }), true],
   ['POST', /^\/api\/auth\/forgot$/, async c => forgotPassword((await c.body()).email), true],
   ['POST', /^\/api\/auth\/reset$/, async c => { const b = await c.body(); return resetPassword(b.token, b.password) }, true],
   ['GET', /^\/api\/invites\/([\w-]+)$/, (c, t) => inviteInfo(t), true],
@@ -1773,14 +1819,24 @@ async function handle(req, res) {
     }
   }
   // Single sign-on: plain browser redirects to the provider and back, outside the JSON API.
-  if (url.pathname === '/api/auth/oidc/start' || url.pathname === '/api/auth/oidc/callback') {
+  if (url.pathname === '/api/auth/saml/metadata' && samlEnabled) {
+    res.writeHead(200, { 'content-type': 'application/samlmetadata+xml' })
+    return res.end(samlMetadata())
+  }
+  if (/^\/api\/auth\/(oidc|saml)\/(start|callback)$/.test(url.pathname)) {
     try {
-      if (url.pathname.endsWith('/start')) {
+      if (url.pathname === '/api/auth/saml/start') { res.writeHead(302, { location: await samlStart() }); return res.end() }
+      // The provider posts its signed answer here from its own site; InResponseTo ties it to a login Bloki started.
+      let samlUser = null
+      if (url.pathname === '/api/auth/saml/callback') {
+        if (req.method !== 'POST') throw new HttpError(405, 'Sign in again.')
+        samlUser = await samlCallback(Object.fromEntries(new URLSearchParams((await readBody(req, MAX_JSON)).toString())))
+      } else if (url.pathname.endsWith('/start')) {
         const { url: to, state } = await oidcStart()
         res.writeHead(302, { location: to, 'set-cookie': `bloki_oidc=${state}; HttpOnly; SameSite=Lax; Path=/api/auth/oidc; Max-Age=600${SECURE_COOKIE ? '; Secure' : ''}` })
         return res.end()
       }
-      const userId = await oidcCallback({ code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieState: readCookie(req, 'bloki_oidc') })
+      const userId = samlUser ?? await oidcCallback({ code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieState: readCookie(req, 'bloki_oidc') })
       const t = startSession(userId)
       audit(db.prepare('SELECT workspace_id FROM sessions WHERE token_hash = ?').get(sha(t))?.workspace_id, userId, 'user.login', null, 'SSO')
       res.writeHead(302, { location: '/', 'set-cookie': [cookie('bloki_session', t, SESSION_DAYS * 86400), `bloki_oidc=; Path=/api/auth/oidc; Max-Age=0`] })

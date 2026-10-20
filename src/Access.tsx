@@ -68,14 +68,14 @@ export function AuthScreen({ invite, onDone, stay }: { invite?: string; onDone: 
   const [form, setForm] = useState({ email: '', name: '', password: '', code: '' })
   const [needCode, setNeedCode] = useState(false)
   const [canMail, setCanMail] = useState(false)
-  const [canSso, setCanSso] = useState(false)
+  const [canSso, setCanSso] = useState<'oidc' | 'saml' | false>(false)
   // A failed single sign-on comes back as #/sso-error/<message>.
   const [ssoError] = useState(() => location.hash.startsWith('#/sso-error/') ? decodeURIComponent(location.hash.slice(12)) : '')
   const [sent, setSent] = useState(false)
   const { error, busy, run } = useAction()
 
   useEffect(() => {
-    api.status().then(s => { setHasUsers(s.hasUsers); setCanMail(!!s.mail); setCanSso(!!s.sso); if (!s.hasUsers) setMode('register') })
+    api.status().then(s => { setHasUsers(s.hasUsers); setCanMail(!!s.mail); setCanSso(s.sso || false); if (!s.hasUsers) setMode('register') })
     if (invite) api.inviteInfo(invite).then(i => { setInfo(i); setMode('register') }).catch(() => setInfo(null))
   }, [invite])
 
@@ -123,7 +123,7 @@ export function AuthScreen({ invite, onDone, stay }: { invite?: string; onDone: 
         <button className="primary" disabled={busy}>{mode === 'login' ? 'Continue' : 'Sign up'}</button>
         {canSso && mode === 'login' && <>
           <div className="auth-or"><span>or</span></div>
-          <a className="button wide sso-button" href="/api/auth/oidc/start">Continue with SSO</a>
+          <a className="button wide sso-button" href={`/api/auth/${canSso}/start`}>Continue with SSO</a>
         </>}
         {canRegister && hasUsers && (
           <button type="button" className="ghost link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>

@@ -47,6 +47,10 @@ idpServer.unref()
 process.env.BLOKI_OIDC_ISSUER = `http://127.0.0.1:${idpServer.address().port}`
 process.env.BLOKI_OIDC_CLIENT_ID = 'bloki-test'
 process.env.BLOKI_OIDC_CLIENT_SECRET = 'secret'
+// SAML: a test-only provider certificate; responses are signed below with its key.
+const fixture = f => new URL(`./fixtures/${f}`, import.meta.url).pathname
+process.env.BLOKI_SAML_ENTRY_POINT = 'https://idp.test/sso'
+process.env.BLOKI_SAML_CERT = fixture('saml-idp.crt')
 const s = await import('../server.mjs')
 const { db } = s
 
@@ -641,6 +645,37 @@ test('single sign-on: OIDC code flow with PKCE, signature, nonce and audience ch
   state = await start()
   await assert.rejects(s.oidcCallback({ code: 'stranger@x.si', state, cookieState: state }), e => e.status === 403) // no auto-join
   await assert.rejects(s.oidcCallback({ code: 'owner@x.si', state, cookieState: state }), e => e.status === 400) // a state works once
+})
+
+test('single sign-on: SAML answers must be signed, for this server, and to a login it started', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { inflateRawSync } = await import('node:zlib')
+  const { SignedXml } = await import('xml-crypto')
+  const key = readFileSync(fixture('saml-idp.key'), 'utf8')
+  const start = async () => inflateRawSync(Buffer.from(new URL(await s.samlStart()).searchParams.get('SAMLRequest'), 'base64')).toString().match(/ID="([^"]+)"/)[1]
+  const iso = ms => new Date(Date.now() + ms).toISOString()
+  const respond = (inResponseTo, email, { audience = 'https://bloki.test', tamper } = {}) => {
+    const irt = inResponseTo ? ` InResponseTo="${inResponseTo}"` : ''
+    const assertion = `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a${Date.now()}" Version="2.0" IssueInstant="${iso(0)}"><saml:Issuer>https://idp.test</saml:Issuer><saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">${email}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData${irt} NotOnOrAfter="${iso(300000)}" Recipient="https://bloki.test/api/auth/saml/callback"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="${iso(-60000)}" NotOnOrAfter="${iso(300000)}"><saml:AudienceRestriction><saml:Audience>${audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions><saml:AuthnStatement AuthnInstant="${iso(0)}"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:Password</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement></saml:Assertion>`
+    const sign = (xml, node) => {
+      const sig = new SignedXml({ privateKey: key, signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256', canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#' })
+      sig.addReference({ xpath: `//*[local-name(.)='${node}']`, transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'], digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256' })
+      sig.computeSignature(xml, { location: { reference: `//*[local-name(.)='Issuer']`, action: 'after' } })
+      return sig.getSignedXml()
+    }
+    let xml = sign(`<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_r${Date.now()}" Version="2.0" IssueInstant="${iso(0)}" Destination="https://bloki.test/api/auth/saml/callback"${irt}><saml:Issuer>https://idp.test</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>${sign(assertion, 'Assertion')}</samlp:Response>`, 'Response')
+    if (tamper) xml = xml.replace(email, tamper)
+    return { SAMLResponse: Buffer.from(xml).toString('base64') }
+  }
+  const id = await start()
+  const ok = respond(id, 'owner@x.si')
+  assert.equal(await s.samlCallback(ok), owner.id)
+  await assert.rejects(s.samlCallback(ok), e => e.status === 401) // an answer works once
+  await assert.rejects(s.samlCallback(respond(await start(), 'owner@x.si', { tamper: 'stranger@x.si' })), e => e.status === 401) // edited after signing
+  await assert.rejects(s.samlCallback(respond(null, 'owner@x.si')), e => e.status === 401) // unsolicited
+  await assert.rejects(s.samlCallback(respond(await start(), 'owner@x.si', { audience: 'https://other.test' })), e => e.status === 401)
+  await assert.rejects(s.samlCallback(respond(await start(), 'stranger@x.si')), e => e.status === 403) // no account, no auto-join
+  assert.match(s.samlMetadata(), /AssertionConsumerService[^>]+https:\/\/bloki\.test\/api\/auth\/saml\/callback/)
 })
 
 test('SCIM: providers create, find, deactivate users and manage groups in their own workspace', async () => {

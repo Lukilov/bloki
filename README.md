@@ -54,10 +54,20 @@ BLOKI_URL=https://bloki.example.com
 BLOKI_OIDC_ISSUER=https://accounts.google.com
 BLOKI_OIDC_CLIENT_ID=…
 BLOKI_OIDC_CLIENT_SECRET=…
-BLOKI_OIDC_AUTO_JOIN=1          # optional: new emails join as members (of BLOKI_OIDC_WORKSPACE or the first workspace)
+BLOKI_SSO_AUTO_JOIN=1           # optional: new emails join as members (of BLOKI_SSO_WORKSPACE or the first workspace)
 ```
 
-The login screen then offers "Continue with SSO". People are matched by their verified email. SAML isn't supported; most SAML providers also speak OpenID Connect.
+The login screen then offers "Continue with SSO". People are matched by their verified email.
+
+SAML 2.0 works too (Okta, Entra ID, OneLogin, ADFS…). Give the provider Bloki's metadata, `https://bloki.example.com/api/auth/saml/metadata` (entity ID is your BLOKI_URL, the reply URL ends in `/api/auth/saml/callback`, the NameID or an `email` attribute is the email), then set:
+
+```sh
+BLOKI_SAML_ENTRY_POINT=https://idp.example.com/sso/saml   # the provider's sign-in URL
+BLOKI_SAML_CERT=/path/to/idp-signing.crt                  # or the PEM text itself
+BLOKI_SAML_SIGNED=assertion                               # optional, if the provider signs only the assertion (or: response)
+```
+
+Bloki accepts only signed answers to logins it started, each once, addressed to itself and within their time window.
 
 ## SCIM provisioning
 Identity providers can add, update and remove members and groups. Workspace owners generate a SCIM token in
