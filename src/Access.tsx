@@ -521,6 +521,8 @@ function Row({ label, desc, children }: { label: React.ReactNode; desc?: string;
 
 export function SettingsDialog({ close, initialTab = 'account' }: { close: () => void; initialTab?: string }) {
   const store = useStore()
+  // Escape closes settings, as in Notion (an open menu inside catches it first).
+  useEffect(() => { const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }; addEventListener('keydown', key); return () => removeEventListener('keydown', key) }, [close])
   const me = store.me!
   const ws = me.workspaces.find(w => w.id === me.workspaceId)
   const owner = me.role === 'owner'

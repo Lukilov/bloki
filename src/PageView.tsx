@@ -367,24 +367,6 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
             </div>
           )}
           {row && <RowProperties db={row} row={meta} readOnly={!edit} />}
-          {row && edit && !hintGone && !isTemplate(meta) && emptyContent(page.content) && (() => {
-            // As in Notion, an empty row offers the database's templates (or making one) before you start typing.
-            const tpls = store.children(row.id).filter(isTemplate)
-            const useTemplate = async (tid: string) => {
-              const t = await api.get(tid)
-              const { _template, ...props } = (t.props ?? {}) as Record<string, unknown>
-              void _template
-              await api.update(id, { content: t.content, props: { ...(meta.props ?? {}), ...props }, ...(meta.icon ? {} : { icon: t.icon }) })
-              await store.reload(); setVersion(v => v + 1)
-            }
-            const makeTemplate = async () => { const t = await store.create({ parent_id: row.id, title: 'New template', props: { _template: true } }, false); store.go(t.id) }
-            return (
-              <div className="empty-row-hint">
-                <span>Press <kbd>Enter</kbd> to continue with an empty page, or <button className="link" onClick={makeTemplate}>create a template</button></span>
-                {tpls.length > 0 && <div className="empty-row-templates">{tpls.map(t => <button key={t.id} onClick={() => useTemplate(t.id).catch(e => store.setError(e.message))}>{iconOf(t, 16)} {label(t)}</button>)}</div>}
-              </div>
-            )
-          })()}
 
           {verify && (() => {
             const expired = !!verify.until && verify.until < Date.now()
@@ -403,6 +385,24 @@ export function PageView({ id, dark, sidebarCollapsed, peek }: { id: string; dar
           {(layout.discussions ?? 'expanded') !== 'off' && !store.published && row?.schema.layout?.discussions !== false && (
             <PageDiscussions page={meta} all={comments} setAll={setComments} composing={composing} setComposing={setComposing} isRow={!!row} />
           )}
+          {row && edit && !hintGone && !isTemplate(meta) && emptyContent(page.content) && (() => {
+            // As in Notion, under the comments an empty row offers the database's templates (or making one) before you start typing.
+            const tpls = store.children(row.id).filter(isTemplate)
+            const useTemplate = async (tid: string) => {
+              const t = await api.get(tid)
+              const { _template, ...props } = (t.props ?? {}) as Record<string, unknown>
+              void _template
+              await api.update(id, { content: t.content, props: { ...(meta.props ?? {}), ...props }, ...(meta.icon ? {} : { icon: t.icon }) })
+              await store.reload(); setVersion(v => v + 1)
+            }
+            const makeTemplate = async () => { const t = await store.create({ parent_id: row.id, title: 'New template', props: { _template: true } }, false); store.go(t.id) }
+            return (
+              <div className="empty-row-hint">
+                <span>Press <kbd>Enter</kbd> to continue with an empty page, or <button className="link" onClick={makeTemplate}>create a template</button></span>
+                {tpls.length > 0 && <div className="empty-row-templates">{tpls.map(t => <button key={t.id} onClick={() => useTemplate(t.id).catch(e => store.setError(e.message))}>{iconOf(t, 16)} {label(t)}</button>)}</div>}
+              </div>
+            )
+          })()}
 
           {meta.kind === 'db'
             ? <Database id={id} />

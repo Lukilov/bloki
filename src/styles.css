@@ -585,7 +585,7 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 }
 [data-suggest='slash'] .bn-container .bn-suggestion-menu::before { content: 'esc'; position: sticky; order: 1; bottom: 20px; align-self: flex-end; height: 0; margin-right: 12px; z-index: 1; color: var(--muted); font-size: 12px; line-height: 0; }
 [data-slash-empty] .bn-suggestion-decorator::after { content: 'Type to search'; color: var(--faint); }
-.bn-container .bn-inline-content::before { font-style: normal !important; }
+.bn-container .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after { font-style: normal; }
 .bn-container .bn-suggestion-menu-label { font-size: 12px !important; font-weight: 500 !important; line-height: 14px !important; color: var(--label) !important; padding: 6px 12px 10px !important; margin: 0 !important; }
 .bn-container .bn-suggestion-menu-item + .bn-suggestion-menu-label { margin-top: 15px !important; }
 .bn-container .bn-suggestion-menu-item { width: auto !important; min-height: 32px !important; height: auto !important; padding: 0 8px !important; margin: 0 4px 1px !important; border-radius: 6px !important; gap: 8px !important; flex-wrap: nowrap !important; transition: background 20ms ease-in; }
@@ -965,13 +965,16 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .peek .page-wrap { min-height: auto; }
 .peek .topbar { position: absolute; top: -40px; right: 4px; left: auto; z-index: 30; height: 36px; padding: 0 8px; background: transparent; }
 .peek .page-wrap { position: relative; }
-.peek-overlay.side .peek { border-left: 1px solid var(--line); }
+/* Notion docks the side peek on the right half: the page beside it narrows and stays usable. */
+.peek-overlay.side { left: auto; width: 50vw; }
+.peek-overlay.side .peek { width: 100%; }
+:root:has(.peek-overlay.side) main { margin-right: 50vw; }
 .peek .page-body { padding: 0 74px 120px; }
 /* Measured on Notion's side peek: Add icon 4px under the bar, title at x76, a 170px property-name column. */
 .peek .page-head { padding-top: 0; }
 .peek .prop-name { width: 170px; }
 .peek .right-panel { height: auto; }
-@media (max-width: 760px) { .peek { width: 100vw; } }
+@media (max-width: 760px) { .peek, .peek-overlay.side { width: 100vw; } :root:has(.peek-overlay.side) main { margin-right: 0; } }
 .page.db-page .page-body { padding: 0 96px 120px; }
 
 /* Settings */
@@ -1135,7 +1138,9 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 .reaction.add { padding: 0 6px; color: var(--icon); }
 /* Composer tools measured on Notion: 24px buttons, 20px muted icons, 6px apart, before the send circle. */
 /* As in Notion, an empty comment box shows its buttons only while you write in it. */
-.composer:not(:focus-within):has(textarea:placeholder-shown) .composer-tool { visibility: hidden; }
+.composer:not(:focus-within):has(textarea:placeholder-shown) :is(.composer-tool, .send) { visibility: hidden; }
+/* The empty-row hint stands in for the editor's placeholder, as in Notion. */
+.page-body:has(.empty-row-hint) .bn-block-content[data-is-only-empty-block]::after { content: none !important; }
 .composer-tool { width: 24px; height: 24px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 6px; }
 .composer { align-items: flex-start; }
 .composer > .composer-tool + .composer-tool, .composer > .composer-tool + input + .composer-tool { margin-left: -0px; }
