@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownUp, CornerDownLeft, FileText, Search as SearchIcon, User } from 'lucide-react'
 import { api, type Page } from './api'
 import { ancestors, iconOf, label, useStore } from './store'
-import { coverStyle, mod, shift } from './ui'
+import { copyText, coverStyle, mod, shift } from './ui'
+import { pageUrl } from './pageActions'
 
 const desktop = typeof window !== 'undefined' && 'blokiDesktop' in window
 
@@ -62,6 +63,7 @@ export function SearchDialog({ close, onPick }: { close: () => void; onPick?: (i
               if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, sorted.length - 1)) }
               if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)) }
               if (e.key === 'Enter' && sorted[sel]) pick(sorted[sel], e.metaKey || e.ctrlKey)
+              if (e.key.toLowerCase() === 'l' && (e.metaKey || e.ctrlKey) && sorted[sel]) { e.preventDefault(); copyText(pageUrl(sorted[sel].id)); store.toast('Copied link to clipboard') }
             }} />
         </div>
         <div className="chips">
@@ -100,7 +102,7 @@ export function SearchDialog({ close, onPick }: { close: () => void; onPick?: (i
           )}
         </div>
         <div className="search-foot muted small">
-          <span>↑↓ Select</span><span>↵ Open</span><span>{mod}↵ Open in new tab</span>{desktop && <span>{shift}{mod}K Command Search</span>}
+          <span><kbd>{mod}↵</kbd> Open in new tab</span><span><kbd>{mod}L</kbd> Copy link</span>{desktop && <span><kbd>{shift}{mod}K</kbd> Command Search</span>}
         </div>
         </div>
         {/* Notion previews the highlighted page beside the results when the window is wide enough. */}

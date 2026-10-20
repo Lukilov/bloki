@@ -267,14 +267,16 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .settings-tabs button.active { background: var(--side-active); color: var(--text); }
 
 /* Search */
-.search-overlay { padding-top: 10vh; }
+.search-overlay { padding-top: 9vh; }
 /* Search measured on Notion: frosted 20px-cornered card, 48px search row, 24px filter chips, 36px results. */
 .dialog.search { padding: 0; width: min(755px, 94vw); display: flex; flex-direction: column; max-height: 72vh; border-radius: 20px; background: var(--search-bg); backdrop-filter: blur(40px); box-shadow: var(--search-shadow); }
 .search-input { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; color: var(--icon); }
 .search-input > svg { width: 22px; height: 22px; }
 .search-input input { flex: 1; border: none; background: none; font-size: 16px; padding: 0; color: var(--text); box-shadow: none; }
-.dialog.search .chips { padding: 10px 12px; }
-.dialog.search .chip-btn { height: 24px; padding: 0 8px; gap: 6px; font-size: 14px; color: var(--icon); border: none; background: var(--hover); }
+.dialog.search .chips { padding: 12px 12px 20px; }
+.dialog.search .chip-btn { height: 24px; padding: 0 8px; gap: 6px; font-size: 14px; color: var(--icon); border: none; background: none; }
+.dialog.search .chip-btn:hover { background: var(--hover); }
+.dialog.search .chip-btn.on { color: var(--accent); background: var(--accent-soft); }
 .search-results { flex: 1; overflow: auto; padding: 0 10px 8px; }
 .search-results .menu-heading { padding: 10px 12px; font-size: 12px; line-height: 14px; color: var(--icon); }
 .hit { display: flex; align-items: center; gap: 9px; width: calc(100% - 8px); min-height: 36px; margin: 0 4px 1px; text-align: left; border: none; border-radius: 12px; padding: 4px 8px; transition: background 20ms ease-in; }
@@ -287,7 +289,8 @@ main { flex: 1; overflow: auto; position: relative; min-width: 0; }
 .hit-snippet { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hit-enter { color: var(--faint); }
 .search-empty { padding: 24px 16px; color: var(--muted); text-align: center; }
-.search-foot { display: flex; gap: 16px; padding: 8px 16px; box-shadow: var(--line) 0 -1px 0; }
+.search-foot { display: flex; align-items: center; gap: 24px; height: 40px; flex: none; padding: 0 16px; font-size: 12px; color: var(--faint); box-shadow: var(--line) 0 -1px 0; }
+.search-foot kbd { font: inherit; margin-right: 4px; }
 .dialog.shortcuts { width: min(720px, 94vw); }
 .shortcut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; }
 .shortcut { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -1038,12 +1041,15 @@ fieldset.props { margin: 8px 0 16px; padding-bottom: 12px; border-bottom: 1px so
 /* Search preview measured on Notion: a 357px page card beside the 600px results, shown when there is room. */
 .search-main { display: flex; flex-direction: column; min-width: 0; flex: 1; max-height: inherit; }
 .search-preview { display: none; }
+/* Wide: the search field, filters and footer span the dialog; results (600px) and the 376px preview share the middle. */
 @media (min-width: 1080px) {
-  .dialog.search { width: 1006px; flex-direction: row; height: min(700px, 72vh); max-height: none; }
-  .dialog.search .search-main { flex: 0 0 600px; }
-  .search-preview { display: block; flex: 1; padding: 32px 14px 0 25px; }
+  .dialog.search { width: 1006px; display: grid; grid-template: auto auto minmax(0, 1fr) auto / 600px 1fr; height: 80vh; max-height: 708px; }
+  .dialog.search .search-main { display: contents; }
+  .dialog.search .search-input, .dialog.search .chips, .dialog.search .search-foot { grid-column: 1 / -1; }
+  .dialog.search .search-results { grid-area: 3 / 1; }
+  .search-preview { display: block; grid-area: 3 / 2; min-height: 0; padding: 34px 14px 10px 16px; }
 }
-.preview-card { position: relative; width: 357px; height: 494px; max-height: calc(100% - 32px); border-radius: 12px; background: var(--bg); box-shadow: var(--peek-shadow); overflow: hidden; }
+.preview-card { position: relative; width: 100%; height: 100%; border-radius: 12px; background: var(--bg); box-shadow: var(--peek-shadow); overflow: hidden; }
 .preview-cover { height: 76px; background: var(--side) center / cover no-repeat; }
 .preview-icon { position: absolute; left: 23px; top: 44px; height: 48px; display: flex; align-items: center; font-size: 48px; line-height: 48px; }
 .preview-title { position: absolute; left: 23px; right: 23px; top: 103px; font-size: 20px; font-weight: 600; line-height: 24px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
