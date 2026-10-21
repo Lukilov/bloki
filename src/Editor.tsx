@@ -691,6 +691,29 @@ export function PageEditor({ page, dark, editable, onComment, comments = [], ope
           e.preventDefault()
           duplicateBlock(editor, editor.getTextCursorPosition().block as unknown as AnyBlock)
         }
+        // ⌘↵ ticks a to-do or opens/closes a toggle under the cursor; ⌘⌥T opens every toggle (or closes them all), as in Notion.
+        if (m && !e.shiftKey && !e.altKey && e.key === 'Enter' && editable) {
+          const block = editor.getTextCursorPosition().block as unknown as AnyBlock & { props: { checked?: boolean } }
+          const button = e.currentTarget.querySelector<HTMLElement>(`[data-id="${block.id}"] .bn-toggle-button`)
+          if (block.type === 'checkListItem') { e.preventDefault(); editor.updateBlock(block.id, { props: { checked: !block.props.checked } } as never) }
+          else if (button) { e.preventDefault(); button.click() }
+        }
+        if (m && e.altKey && e.code === 'KeyT') {
+          e.preventDefault()
+          const all = [...e.currentTarget.querySelectorAll<HTMLElement>('.bn-toggle-wrapper')]
+          const opening = all.some(w => w.dataset.showChildren === 'false')
+          for (const w of all) if ((w.dataset.showChildren === 'false') === opening) w.querySelector<HTMLElement>('.bn-toggle-button')?.click()
+        }
+        // ⌘⇧H applies the colour used last (text or highlight) to the selection, or to the block without one.
+        if (m && e.shiftKey && e.key.toLowerCase() === 'h' && editable) {
+          const last = (() => { try { return JSON.parse(localStorage.getItem('lastColor') ?? 'null') as { kind: 'text' | 'background'; c: string } | null } catch { return null } })()
+          if (last) {
+            e.preventDefault()
+            const key = last.kind === 'text' ? 'textColor' : 'backgroundColor'
+            if (editor.getSelectedText()) editor.addStyles({ [key]: last.c } as never)
+            else editor.updateBlock(editor.getTextCursorPosition().block.id, { props: { [key]: last.c } } as never)
+          }
+        }
         // Notion's turn-into shortcuts: ⌘⌥0 text, 1–3 headings, 4 to-do, 5 bullets, 6 numbers, 7 toggle, 8 code, 9 page.
         const digit = /^Digit(\d)$/.exec(e.code)?.[1]
         if (m && e.altKey && !e.shiftKey && digit && editable) {

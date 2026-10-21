@@ -122,6 +122,9 @@ const SHORTCUTS: [string, string][] = [
   [`${mod}B`, 'Bold'], [`${mod}I`, 'Italic'], [`${mod}U`, 'Underline'], [`${mod}${shift}S`, 'Strikethrough'], [`${mod}E`, 'Inline code'], [`${mod}K (in text)`, 'Add link'],
   [`${mod}${alt}0`, 'Text'], [`${mod}${alt}1–3`, 'Heading 1–3'], [`${mod}${alt}4`, 'To-do'], [`${mod}${alt}5`, 'Bulleted list'], [`${mod}${alt}6`, 'Numbered list'], [`${mod}${alt}7`, 'Toggle list'], [`${mod}${alt}8`, 'Code'], [`${mod}${alt}9`, 'Page'],
   ['/', 'Insert a block'], ['@', 'Mention a person or page'], ['[[', 'Link to a page'], ['---', 'Divider'], ['# / ## / ### / ####', 'Headings'], ['[]', 'To-do'], ['>', 'Toggle'], ['"', 'Quote'],
+  [`${mod}${shift}U`, 'Go to parent page'], [`${mod}L`, 'Copy page link'], [`${mod}D`, 'Duplicate block'], [`${mod}${shift}↑/↓`, 'Move block'],
+  [`${mod}↵`, 'Check to-do / open toggle'], [`${mod}${alt}T`, 'Expand / collapse all toggles'], [`${mod}${shift}H`, 'Last used colour'],
+  [`${mod}${shift}M`, 'Comment'], [`${mod}${shift}E`, 'Inline equation'],
   ['Tab / Shift+Tab', 'Indent / outdent'], [`${mod}Z`, 'Undo'], [`${mod}${shift}Z`, 'Redo'], ['Esc', 'Select block'],
 ]
 
@@ -210,6 +213,8 @@ function Shell({ dark }: { dark: boolean }) {
       if (m && e.key === '\\') { e.preventDefault(); setCollapsed(c => !c); setPeek(false) }
       if (m && e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); setTheme(dark ? 'light' : 'dark') }
       if (m && e.shiftKey && e.key.toLowerCase() === 'n' && store.me?.role !== 'guest') { e.preventDefault(); store.create({ section: 'private' }) }
+      // ⌘⇧U: up to the parent page.
+      if (m && e.shiftKey && e.key.toLowerCase() === 'u') { const up = store.current ? store.byId.get(store.current)?.parent_id : null; if (up && store.byId.get(up)) { e.preventDefault(); store.go(up) } }
       if (m && e.key === '[') { e.preventDefault(); history.back() }
       if (m && e.key === ']') { e.preventDefault(); history.forward() }
       if (m && e.key === '/' && !(e.target as HTMLElement).closest?.('.bn-editor')) { e.preventDefault(); setDialog({ kind: 'shortcuts' }) }

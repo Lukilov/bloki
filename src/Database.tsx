@@ -433,7 +433,7 @@ function selfPair(db: Page, nameA: string, nameB: string, mark: (a: string, b: s
 function Peek({ row, mode, close, rows, setRow, dark }: { row: Page; mode: 'peek' | 'center'; close: () => void; rows: Page[]; setRow: (r: Page) => void; dark: boolean }) {
   const store = useStore()
   const i = rows.findIndex(r => r.id === row.id)
-  useEffect(() => { if (mode === 'peek') dispatchEvent(new CustomEvent('bloki:narrow', { detail: Math.min(960, innerWidth * 0.6) })) }, [mode])
+  useEffect(() => { if (mode === 'peek') dispatchEvent(new CustomEvent('bloki:narrow', { detail: innerWidth * 0.5 })) }, [mode])
   useEffect(() => {
     const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.popover')) close() }
     addEventListener('keydown', on)
