@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, EyeOff, Filter as FilterIcon, GripVertical, Maximize2, MoreHorizontal, Plus, Trash2, X,
+  ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, EyeOff, Filter as FilterIcon, GripVertical, Maximize2, MoreHorizontal, PanelRight, Plus, Trash2, X,
   ArrowLeftToLine, ArrowRightToLine, WrapText, ArrowDownUp, Calculator, Snowflake, FileText,
   Group as GroupIcon, ListTree,
 } from 'lucide-react'
@@ -221,7 +221,7 @@ function TableBody({ p, rows: all, cols, selected, setSelected, fresh }: { p: Vi
                       : <span className="row-twisty" />)}
                     {!p.view.hideIcon && <span className="row-icon">{iconOf(r, 16)}</span>}
                     <Cell prop={c} row={r} db={p.db} readOnly={!p.perm.rows} wrap={p.view.wrap} className="title-value" autoEdit={r.id === fresh} />
-                    <button className="open-btn" onClick={() => p.openRow(r)}><Maximize2 size={12} /> OPEN</button>
+                    <button className="open-btn" onClick={() => p.openRow(r)}>{(p.view.open ?? 'peek') === 'peek' ? <PanelRight size={12} /> : <Maximize2 size={12} />} OPEN</button>
                   </div>
                 : <Cell prop={c} row={r} db={p.db} readOnly={!p.perm.rows} wrap={p.view.wrap} />}
             </div>
